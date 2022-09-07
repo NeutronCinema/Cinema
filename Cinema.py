@@ -1,8 +1,8 @@
 """
-Lumache - Python library for cooks and food lovers.
+Cinema - China Spallation Neutron Source Monte Carlo System.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.0.1"
 
 
 class InvalidKindError(Exception):
@@ -16,7 +16,7 @@ def get_random_ingredients(kind=None):
 
     :param kind: Optional "kind" of ingredients.
     :type kind: list[str] or None
-    :raise lumache.InvalidKindError: If the kind is invalid.
+    :raise Cinema.InvalidKindError: If the kind is invalid.
     :return: The ingredients list.
     :rtype: list[str]
     """

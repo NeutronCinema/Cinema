@@ -22,7 +22,7 @@ The cross section generators for crystalline materials *PiXiu* and liquids *Tak*
    theory/index
    methodology/index
    usersmanual/index
-   pubications
+   publications
    references
 
 

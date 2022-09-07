@@ -2,5 +2,7 @@ Installation
 =================
 
 Cinema is now available on PyPI:
-.. code-block:: 
+
+.. code-block:: python
+
     pip install neutron-cinema
