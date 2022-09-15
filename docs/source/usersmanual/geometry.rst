@@ -17,7 +17,7 @@ Geometry
    
    
     import pyvista
-    reader = pyvista.get_reader("20_LV_Cube1.ply")
+    reader = pyvista.get_reader("docs/source/_static/20_LV_Cube1.ply")
     mesh = reader.read()
 
     plotter = pyvista.Plotter()    # instantiate the plotter
