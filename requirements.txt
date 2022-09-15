@@ -5,4 +5,3 @@ readthedocs-sphinx-search==0.1.1
 jupyter-sphinx
 pyvista
 pythreejs
-os
