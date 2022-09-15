@@ -17,6 +17,9 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
+    'jupyter_sphinx',
+    "pyvista.ext.plot_directive",
+    "pyvista.ext.coverage",
 ]
 
 intersphinx_mapping = {
