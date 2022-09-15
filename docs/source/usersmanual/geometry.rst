@@ -16,13 +16,17 @@ Geometry
 .. jupyter-execute::
    
    
-    import pyvista
-    reader = pyvista.get_reader("docs/source/_static/20_LV_Cube1.ply")
-    mesh = reader.read()
+   import pyvista
+   import os
 
-    plotter = pyvista.Plotter()    # instantiate the plotter
-    plotter.add_mesh(mesh)    # add a mesh to the scene
-    plotter.view_zy()
-    plotter.show_axes()
-    plotter.show_grid()
-    plotter.show()            # show the rendering window
+   print(os.getcwd())
+   reader = pyvista.get_reader("./docs/source/_static/20_LV_Cube1.ply")
+   print(reader.path)
+   mesh = reader.read()
+   mesh.plot()
+   plotter = pyvista.Plotter()    # instantiate the plotter
+   plotter.add_mesh(mesh)    # add a mesh to the scene
+   plotter.view_zy()
+   plotter.show_axes()
+   plotter.show_grid()
+   plotter.show()            # show the rendering window
