@@ -20,7 +20,6 @@ The cross section generators for crystalline materials *PiXiu* and liquids *Tak*
    installation
    tutorial/index
    theory/index
-   methodology/index
    usersmanual/index
    publications
    references

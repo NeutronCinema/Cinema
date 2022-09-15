@@ -1,9 +1,6 @@
-Template for the Read the Docs tutorial
+Cinema(China Spallation Neutron Source Monte Carlo System): a neutron transport simulation system
 =======================================
 
-This GitHub template includes fictional Python library
-with some basic Sphinx docs.
+Documentation:
 
-Read the tutorial here:
-
-https://docs.readthedocs.io/en/stable/tutorial/
+https://cinema-docs.readthedocs.io/en/latest/
