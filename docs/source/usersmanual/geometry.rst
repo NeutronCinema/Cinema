@@ -18,12 +18,11 @@ Geometry
    
    import pyvista
    import os
-
-   print(os.getcwd())
-   reader = pyvista.get_reader("./docs/source/_static/20_LV_Cube1.ply")
-   print(reader.path)
-   mesh = reader.read()
-   mesh.plot()
+   filepath = os.path.abspath("./docs/source/_static/20_LV_Cube1.ply")
+   mesh = pyvista.read(filepath)
+   #print(reader.path)
+   #mesh = reader.read()
+   #mesh.plot()
    plotter = pyvista.Plotter()    # instantiate the plotter
    plotter.add_mesh(mesh)    # add a mesh to the scene
    plotter.view_zy()
