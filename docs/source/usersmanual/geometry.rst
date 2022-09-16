@@ -5,7 +5,8 @@ Geometry
    :hide-code:
 
    # Configure for pythreejs
-   import pyvista
+   from pickletools import pybool
+import pyvista
    pyvista.set_jupyter_backend('pythreejs')
    pyvista.global_theme.background = 'white'
    pyvista.global_theme.window_size = [600, 400]
@@ -18,8 +19,10 @@ Geometry
    
    import pyvista
    import os
-   filepath = os.path.abspath("./_static/20_LV_Cube1.ply")
-   mesh = pyvista.read(filepath)
+   #filepath = os.path.abspath("./_static/20_LV_Cube1.ply")
+   #mesh = pyvista.read(filepath)
+   
+   mesh = pyvista.Box(-1,1,-1,1,-1,1)
 
    plotter = pyvista.Plotter()    # instantiate the plotter
    plotter.add_mesh(mesh)    # add a mesh to the scene
