@@ -17,7 +17,15 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
+    'sphinx.ext.imgmath',
 ]
+
+imgmath_image_format = 'svg'
+imgmath_font_size = 14
+imgmath_use_preview = True
+
+# if png format is required
+# imgmath_dvipng_args = ['-gamma', '1.5', '-D', '110', '-bg', 'Transparent']
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
