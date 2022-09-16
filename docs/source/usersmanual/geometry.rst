@@ -6,7 +6,7 @@ Geometry
 
    # Configure for pythreejs
    from pickletools import pybool
-import pyvista
+   import pyvista
    pyvista.set_jupyter_backend('pythreejs')
    pyvista.global_theme.background = 'white'
    pyvista.global_theme.window_size = [600, 400]
@@ -16,12 +16,11 @@ import pyvista
 
 .. jupyter-execute::
    
-   
    import pyvista
    import os
    #filepath = os.path.abspath("./_static/20_LV_Cube1.ply")
    #mesh = pyvista.read(filepath)
-   
+
    mesh = pyvista.Box()
 
    plotter = pyvista.Plotter()    # instantiate the plotter
