@@ -18,7 +18,7 @@ Geometry
    
    import pyvista
    import os
-   filepath = os.path.abspath("./docs/source/_static/20_LV_Cube1.ply")
+   filepath = os.path.abspath("./_static/20_LV_Cube1.ply")
    mesh = pyvista.read(filepath)
    #print(reader.path)
    #mesh = reader.read()
