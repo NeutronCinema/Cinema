@@ -20,9 +20,7 @@ Geometry
    import os
    filepath = os.path.abspath("./_static/20_LV_Cube1.ply")
    mesh = pyvista.read(filepath)
-   #print(reader.path)
-   #mesh = reader.read()
-   #mesh.plot()
+   mesh.plot()
    plotter = pyvista.Plotter()    # instantiate the plotter
    plotter.add_mesh(mesh)    # add a mesh to the scene
    plotter.view_zy()
