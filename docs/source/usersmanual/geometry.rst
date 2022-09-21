@@ -21,7 +21,7 @@ Geometry
    #filepath = os.path.abspath("./_static/20_LV_Cube1.ply")
    #mesh = pyvista.read(filepath)
 
-   mesh = pyvista.Box()
+   mesh = pyvista.Cube()
 
    plotter = pyvista.Plotter()    # instantiate the plotter
    plotter.add_mesh(mesh)    # add a mesh to the scene
