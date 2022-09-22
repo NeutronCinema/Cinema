@@ -10,3 +10,4 @@ nbsphinx
 ipykernel
 ipywidgets==8.0.2
 matplotlib
+pydata-sphinx-theme==0.10.1
