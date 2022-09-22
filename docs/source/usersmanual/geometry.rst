@@ -4,8 +4,5 @@ Geometry
 .. jupyter-execute::
    :raises:
 
-   import pyvista as pv
-   pv.set_jupyter_backend('pythreejs')
-
-   mesh = pv.Cube()
-   mesh.plot(show_edges=True)
+   %%bash
+   promptpy --gdml guide_1.gdml --visualize --neutronNum 100
