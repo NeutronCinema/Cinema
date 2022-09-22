@@ -2,9 +2,10 @@
 sphinx>=5.1.1
 sphinx_rtd_theme==1.0.0
 readthedocs-sphinx-search==0.1.1
-jupyter_sphinx
-jupyterlab
+jupyter-sphinx==0.4.0
+jupyterlab==3.4.7
 pyvista
 pythreejs
 nbsphinx
 ipykernel
+ipywidgets==8.0.2

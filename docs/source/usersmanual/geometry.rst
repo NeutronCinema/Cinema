@@ -29,3 +29,4 @@ Geometry
    plotter.show_axes()
    plotter.show_grid()
    plotter.show(jupyter_backend='pythreejs')            # show the rendering window
+
