@@ -4,26 +4,30 @@ Geometry
 .. jupyter-execute::
    :raises:
 
+   import sys
+   print(sys.prefix)
    import Cinema
+   from Cinema.Prompt import Launcher, Visualiser
    import matplotlib.pyplot as plt
    import numpy as np
+   from Cinema.Interface.Utils import findData
    import os
 
    inputfile='guide_1.gdml'
    printTraj=False
 
    if not os.path.isfile(inputfile):
-      inputfile=Cinema.Interface.Utils.findData(f'gdml/{inputfile}', '.')
+      inputfile=findData(f'gdml/{inputfile}', '.')
       if not os.path.isfile(inputfile):
          raise IOError(f'The input GDML file is not found.')
 
-   myLcher=Cinema.Prompt.Launcher()
+   myLcher=Launcher()
    myLcher.loadGeometry(inputfile)
    visualize = True
    neutronNum = 100
 
    if visualize is True:
-      v = Cinema.Prompt.Visualiser(None, printWorld=False, dumpMesh=True)
+      v = Visualiser('+', printWorld=False)
       for i in range(int(neutronNum)):
          myLcher.go(1, recordTrj=True)
          if printTraj:
