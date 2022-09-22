@@ -5,4 +5,4 @@ Geometry
    :raises:
 
    import subprocess
-   subprocess.check_call(['promptpy', '--gdml guide_1.gdml', '--visualize', '--neutronNum', '100'])
+   subprocess.check_call(['promptpy', '--gdml', 'guide_1.gdml', '--visualize', '--neutronNum', '100'])
