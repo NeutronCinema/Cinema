@@ -23,6 +23,11 @@ extensions = [
     "pyvista.ext.coverage",
 ]
 
+import os
+
+package_path = os.path.abspath('../..')
+os.environ['PYTHONPATH'] = ':'.join((package_path, os.environ.get('PYTHONPATH', '')))
+
 # intersphinx_mapping = {
 #     'python': ('https://docs.python.org/3/', None),
 #     'sphinx': ('https://www.sphinx-doc.org/en/master/', None),
