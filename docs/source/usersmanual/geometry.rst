@@ -5,7 +5,7 @@ Geometry
    :raises:
 
    import pyvista as pv
-   pv.set_jupyter_backend('ipygany')
+   pv.set_jupyter_backend('pythreejs')
 
    mesh = pv.Cube()
    mesh.plot(show_edges=True)
