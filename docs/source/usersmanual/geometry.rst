@@ -4,11 +4,11 @@ Geometry
 .. jupyter-execute::
    :raises:
 
-
-   from neutron-cinema.Prompt import Launcher, Visualiser
+   import Cinema
+   from Cinema.Prompt import Launcher, Visualiser
    import matplotlib.pyplot as plt
    import numpy as np
-   from neutron-cinema.Interface.Utils import findData
+   from Cinema.Interface.Utils import findData
    import os
 
    inputfile='guide_1.gdml'
