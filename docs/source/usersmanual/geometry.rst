@@ -31,6 +31,7 @@ Geometry
    plotter.show(jupyter_backend='pythreejs')            # show the rendering window
 
 .. jupyter-execute::
+   
    import matplotlib.pyplot as plt
 
    fig, ax = plt.subplots()
