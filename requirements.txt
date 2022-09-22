@@ -9,3 +9,4 @@ pythreejs
 nbsphinx
 ipykernel
 ipywidgets==8.0.2
+ipyvtklink
