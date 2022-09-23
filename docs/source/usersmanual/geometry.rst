@@ -9,7 +9,7 @@ Geometry
 	import os
 	print(os.environ.get('PYTHONPATH'))
 	import pyvista
-	pyvista.set_jupyter_backend('panel')
+	pyvista.set_jupyter_backend('pythreejs')
 
 	import Cinema
 	from Cinema.Prompt import Launcher, Visualiser
