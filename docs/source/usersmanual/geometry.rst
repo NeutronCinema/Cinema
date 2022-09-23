@@ -6,7 +6,7 @@ Geometry
 
 	import pyvista as pv
 	from pyvista import examples
-	pv.set_jupyter_backend('panel')
+	pv.set_jupyter_backend('ipygany')
 	mesh = pv.Cube()
 	mesh.plot(show_edges=True)
 
