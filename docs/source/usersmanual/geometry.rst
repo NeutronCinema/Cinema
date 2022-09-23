@@ -6,7 +6,7 @@ Geometry
 
 	import pyvista as pv
 	from pyvista import examples
-	pv.set_jupyter_backend('pythreejs')
+	pv.set_jupyter_backend('panel')
 	mesh = pv.Cube()
 	mesh.plot(show_edges=True)
 
