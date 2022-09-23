@@ -8,6 +8,8 @@ Geometry
 	print(sys.path)
 	import os
 	print(os.environ.get('PYTHONPATH'))
+	import pyvista
+	pyvista.set_jupyter_backend('ipygany')
 	import Cinema
 	from Cinema.Prompt import Launcher, Visualiser
 	import matplotlib.pyplot as plt
@@ -22,25 +24,9 @@ Geometry
 		if not os.path.isfile(inputfile):
 			raise IOError(f'The input GDML file is not found.')
 
-	myLcher=Launcher()
-	myLcher.loadGeometry(inputfile)
 	visualize = True
-	neutronNum = 10
 
 	if visualize is True:
 		v = Visualiser('+', printWorld=False)
-		for i in range(int(neutronNum)):
-			myLcher.go(1, recordTrj=True)
-			if printTraj:
-				print(f'trajectory size {myLcher.getTrajSize()}')
-			trj = myLcher.getTrajectory()
-			try:
-				v.addLine(trj)
-			except ValueError:
-				print("skip ValueError in File '/Prompt/scripts/promptpy', in <module>, v.addLine(trj)")
-			if printTraj:
-				print(trj)
 		v.show()
-	else:
-		myLcher.go(int(neutronNum), recordTrj=False)
 
