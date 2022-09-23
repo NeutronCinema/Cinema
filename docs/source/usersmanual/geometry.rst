@@ -4,36 +4,40 @@ Geometry
 .. jupyter-execute:: 
 	:raises:
 
-	import pyvista as pv
-	from pyvista import examples
-	pv.set_jupyter_backend('ipygany')
-	mesh = pv.Cube()
-	mesh.plot(show_edges=True)
+	# import pyvista as pv
+	# from pyvista import examples
+	# pv.set_jupyter_backend('ipygany')
+	# mesh = pv.Cube()
+	# mesh.plot(show_edges=True)
 
-	# import sys
-	# print(sys.path)
-	# import os
-	# print(os.environ.get('PYTHONPATH'))
-	# #import pyvista
-	# #pyvista.set_jupyter_backend('pythreejs')
+	import sys
+	print(sys.path)
+	import os
+	print(os.environ.get('PYTHONPATH'))
+	import pyvista
+	pyvista.set_jupyter_backend('ipygany')
 
-	# import Cinema
-	# from Cinema.Prompt import Launcher, Visualiser
-	# import matplotlib.pyplot as plt
-	# import numpy as np
-	# from Cinema.Interface.Utils import findData
+	import Cinema
+	from Cinema.Prompt import Launcher, Visualiser
+	import matplotlib.pyplot as plt
+	import numpy as np
+	from Cinema.Interface.Utils import findData
 
-	# inputfile='guide_1.gdml'
-	# printTraj=False
+	inputfile='guide_1.gdml'
+	printTraj=False
 
-	# if not os.path.isfile(inputfile):
-	# 	inputfile=findData(f'gdml/{inputfile}', '.')
-	# 	if not os.path.isfile(inputfile):
-	# 		raise IOError(f'The input GDML file is not found.')
+	if not os.path.isfile(inputfile):
+		inputfile=findData(f'gdml/{inputfile}', '.')
+		if not os.path.isfile(inputfile):
+			raise IOError(f'The input GDML file is not found.')
 
-	# visualize = True
+	myLcher=Launcher()
+	myLcher.setSeed(1)
+	myLcher.loadGeometry(inputfile)
 
-	# if visualize is True:
-	# 	v = Visualiser('+', printWorld=False)
-	# 	v.show()
+	visualize = True
+
+	if visualize is True:
+		v = Visualiser('+', printWorld=False)
+		v.show()
 
