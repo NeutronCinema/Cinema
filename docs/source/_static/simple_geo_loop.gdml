@@ -23,7 +23,7 @@
         </material>
 
         <material name="Cd">
-          <atom value="../ncmat/Cd.ncmat"/>
+          <atom value="Cd.ncmat"/>
         </material>
 
         <material name="HeavyWater">
@@ -32,11 +32,11 @@
         </material>
 
         <material name="Vacuum">
-          <atom value="../ncmat/vacuum.ncmat"/>
+          <atom value="vacuum.ncmat"/>
         </material>
 
         <material name="Air">
-          <atom value="../ncmat/ambient_air.ncmat"/>
+          <atom value="ambient_air.ncmat"/>
         </material>
 
         <material name="Al">
@@ -49,7 +49,7 @@
         </material>
 
         <material name="SiPower">
-          <atom value="../ncmat/Si_640f.ncmat;packfact=0.5"/>
+          <atom value="Si_640f.ncmat;packfact=0.5"/>
         </material>
 
         <material name="Al2O3">
@@ -57,7 +57,7 @@
         </material>
 
         <material name="G4_He">
-            <atom value="../ncmat/He3_Gas_10bar.ncmat" />
+            <atom value="He3_Gas_10bar.ncmat" />
             <D value="1"/>
         </material>
 

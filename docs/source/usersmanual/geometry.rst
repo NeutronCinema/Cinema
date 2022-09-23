@@ -20,7 +20,8 @@ Geometry
 	print(os.environ.get('PYTHONPATH'))
 	import pyvista
 	pyvista.set_jupyter_backend('panel')
-
+	pyvista.global_theme.axes.show = True
+	pyvista.global_theme.show_edges = True
 	import Cinema
 	from Cinema.Prompt import Launcher, Visualiser
 	import matplotlib.pyplot as plt

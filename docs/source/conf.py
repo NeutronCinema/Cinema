@@ -25,6 +25,8 @@ extensions = [
 
 import os
 import pyvista
+
+# To start framebuffer: required if built in VM or docker (where is the case of readthedocs)
 pyvista.start_xvfb()
 
 # package_path = os.path.abspath('../..')
