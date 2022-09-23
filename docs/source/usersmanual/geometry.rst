@@ -19,7 +19,7 @@ Geometry
 	import os
 	print(os.environ.get('PYTHONPATH'))
 	import pyvista
-	pyvista.set_jupyter_backend('ipyvtklink')
+	pyvista.set_jupyter_backend('panel')
 
 	import Cinema
 	from Cinema.Prompt import Launcher, Visualiser
