@@ -4,30 +4,36 @@ Geometry
 .. jupyter-execute:: 
 	:raises:
 
-	import sys
-	print(sys.path)
-	import os
-	print(os.environ.get('PYTHONPATH'))
-	import pyvista
-	pyvista.set_jupyter_backend('pythreejs')
+	import pyvista as pv
+	from pyvista import examples
+	pv.set_jupyter_backend('pythreejs')
+	mesh = pv.Cube()
+	mesh.plot(show_edges=True)
 
-	import Cinema
-	from Cinema.Prompt import Launcher, Visualiser
-	import matplotlib.pyplot as plt
-	import numpy as np
-	from Cinema.Interface.Utils import findData
+	# import sys
+	# print(sys.path)
+	# import os
+	# print(os.environ.get('PYTHONPATH'))
+	# #import pyvista
+	# #pyvista.set_jupyter_backend('pythreejs')
 
-	inputfile='guide_1.gdml'
-	printTraj=False
+	# import Cinema
+	# from Cinema.Prompt import Launcher, Visualiser
+	# import matplotlib.pyplot as plt
+	# import numpy as np
+	# from Cinema.Interface.Utils import findData
 
-	if not os.path.isfile(inputfile):
-		inputfile=findData(f'gdml/{inputfile}', '.')
-		if not os.path.isfile(inputfile):
-			raise IOError(f'The input GDML file is not found.')
+	# inputfile='guide_1.gdml'
+	# printTraj=False
 
-	visualize = True
+	# if not os.path.isfile(inputfile):
+	# 	inputfile=findData(f'gdml/{inputfile}', '.')
+	# 	if not os.path.isfile(inputfile):
+	# 		raise IOError(f'The input GDML file is not found.')
 
-	if visualize is True:
-		v = Visualiser('+', printWorld=False)
-		v.show()
+	# visualize = True
+
+	# if visualize is True:
+	# 	v = Visualiser('+', printWorld=False)
+	# 	v.show()
 
