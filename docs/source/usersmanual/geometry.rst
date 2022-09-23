@@ -14,34 +14,34 @@ Geometry
 	#pyvista.global_theme.window_size = [600, 600]
 	#pyvista.global_theme.antialiasing = True
 
-import sys
-print(sys.path)
-import os
-print(os.environ.get('PYTHONPATH'))
-import pyvista
-pyvista.set_jupyter_backend('panel')
+	import sys
+	print(sys.path)
+	import os
+	print(os.environ.get('PYTHONPATH'))
+	import pyvista
+	pyvista.set_jupyter_backend('panel')
 
-import Cinema
-from Cinema.Prompt import Launcher, Visualiser
-import matplotlib.pyplot as plt
-import numpy as np
-from Cinema.Interface.Utils import findData
+	import Cinema
+	from Cinema.Prompt import Launcher, Visualiser
+	import matplotlib.pyplot as plt
+	import numpy as np
+	from Cinema.Interface.Utils import findData
 
-inputfile=os.path.join('_static', 'simple_geo.gdml')
-printTraj=False
+	inputfile=os.path.join('_static', 'simple_geo.gdml')
+	printTraj=False
 
-if not os.path.isfile(inputfile):
-	inputfile=findData(f'gdml/{inputfile}', '.')
 	if not os.path.isfile(inputfile):
-		raise IOError(f'The input GDML file is not found.')
+		inputfile=findData(f'gdml/{inputfile}', '.')
+		if not os.path.isfile(inputfile):
+			raise IOError(f'The input GDML file is not found.')
 
-myLcher=Launcher()
-myLcher.setSeed(1)
-myLcher.loadGeometry(inputfile)
+	myLcher=Launcher()
+	myLcher.setSeed(1)
+	myLcher.loadGeometry(inputfile)
 
-visualize = True
+	visualize = True
 
-if visualize is True:
-	v = Visualiser('+', printWorld=False)
-	v.show()
+	if visualize is True:
+		v = Visualiser('+', printWorld=False)
+		v.show()
 
