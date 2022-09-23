@@ -10,5 +10,6 @@ ipywidgets==7.7.2
 neutron-cinema
 ipygany
 panel
+ipyvtklink
 # matplotlib
 # numpy
