@@ -8,5 +8,6 @@ jupyterlab==3.4.7
 pythreejs==2.4.1
 ipywidgets==7.7.2
 neutron-cinema
+ipygany
 # matplotlib
 # numpy
