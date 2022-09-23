@@ -1,0 +1,103 @@
+<?xml version='1.0' encoding='utf-8'?>
+<gdml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://service-spi.web.cern.ch/service-spi/app/releases/GDML/schema/gdml.xsd">
+
+    <userinfo>
+      <!-- <auxiliary auxtype="PrimaryGun" auxvalue="MaxwellianGun;Neutron;300.;600, 600, -30000, 10, 10, -1000" /> -->
+      <!-- <auxiliary auxtype="PrimaryGun" auxvalue="MPIGun;Neutron;500, 500, -30000, 20, 40, 0" /> -->
+      <!-- <auxiliary auxtype="PrimaryGun" auxvalue="SimpleThermalGun;Neutron;1.5; 0,0,-30000; 0,0,1" /> -->
+      <auxiliary auxtype="PrimaryGun" auxvalue="SimpleThermalGun;Neutron;2.0; 0,0,-500; 0,0,1" />
+    </userinfo>
+
+    <define>
+        <constant name="HALFPI" value="pi/2." />
+        <constant name="PI" value="1.*pi" />
+        <constant name="TWOPI" value="2.*pi" />
+        <variable name="i" value="0" />
+        <variable name="num" value="3" />
+    </define>
+
+    <materials>
+        <material name="Water">
+          <atom value="LiquidWaterH2O_T293.6K.ncmat"/>
+          <D value="1"/>
+        </material>
+
+        <material name="Cd">
+          <atom value="../ncmat/Cd.ncmat"/>
+        </material>
+
+        <material name="HeavyWater">
+          <atom value="LiquidHeavyWaterD2O_T293.6K.ncmat"/>
+          <D value="1"/>
+        </material>
+
+        <material name="Vacuum">
+          <atom value="../ncmat/vacuum.ncmat"/>
+        </material>
+
+        <material name="Air">
+          <atom value="../ncmat/ambient_air.ncmat"/>
+        </material>
+
+        <material name="Al">
+          <atom value="Al_sg225.ncmat"/>
+        </material>
+
+        <material name="V">
+          <atom value="V_sg229.ncmat;bragg=0"/>
+          <D value="1"/>
+        </material>
+
+        <material name="SiPower">
+          <atom value="../ncmat/Si_640f.ncmat;packfact=0.5"/>
+        </material>
+
+        <material name="Al2O3">
+          <atom value="Al2O3_sg167_Corundum.ncmat"/>
+        </material>
+
+        <material name="G4_He">
+            <atom value="../ncmat/He3_Gas_10bar.ncmat" />
+            <D value="1"/>
+        </material>
+
+    </materials>
+
+    <solids>
+        <box lunit="mm" name="WorldBox" x="30000.0" y="30000.0" z="65000.0" />
+        <box lunit="mm" name="MonitorIn" x="40.0" y="40.0" z="10.0" />
+    </solids>
+
+    <structure>
+        <volume name="LV_MonitorIn">
+            <solidref ref="MonitorIn" />
+            <materialref ref="Vacuum" />
+            <auxiliary auxtype="Color" auxvalue="#00ff1700" />
+        </volume>
+
+        <volume name="worldVOL">
+            <solidref ref="WorldBox" />
+            <materialref ref="Vacuum" />
+            <auxiliary auxtype="Color" auxvalue="#ff9f0000" />
+
+            <physvol name="LV_MonitorIn">
+                <volumeref ref="LV_MonitorIn" />
+                <position name="P_MonitorIn1" unit="mm" x="0.0" y="0.0" z="-357.0" />
+            </physvol>
+
+            <physvol name="LV_MonitorIn">
+                <volumeref ref="LV_MonitorIn" />
+                <position name="P_MonitorIn2" unit="mm" x="0.0" y="0.0" z="-257.0" />
+            </physvol>
+
+            <physvol name="LV_MonitorIn">
+                <volumeref ref="LV_MonitorIn" />
+                <position name="P_MonitorIn3" unit="mm" x="0.0" y="0.0" z="-157.0" />
+            </physvol>
+        </volume>
+    </structure>
+
+    <setup name="Default" version="1.0">
+        <world ref="worldVOL" />
+    </setup>
+</gdml>
