@@ -22,6 +22,7 @@ Geometry
 	pyvista.set_jupyter_backend('panel')
 	pyvista.global_theme.axes.show = True
 	pyvista.global_theme.show_edges = True
+	pyvista.global_theme.background = 'white'
 	import Cinema
 	from Cinema.Prompt import Launcher, Visualiser
 	import matplotlib.pyplot as plt
