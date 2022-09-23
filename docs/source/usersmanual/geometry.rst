@@ -9,7 +9,8 @@ Geometry
 	import os
 	print(os.environ.get('PYTHONPATH'))
 	import pyvista
-	pyvista.set_jupyter_backend('ipygany')
+	pyvista.set_jupyter_backend('panel')
+
 	import Cinema
 	from Cinema.Prompt import Launcher, Visualiser
 	import matplotlib.pyplot as plt
