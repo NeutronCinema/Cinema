@@ -3,27 +3,13 @@ Geometry
 
 .. jupyter-execute:: 
 	:raises:
-	:hide-output:
 
-	# import pyvista as pv
-	# from pyvista import examples
-	# pv.set_jupyter_backend('pythreejs')
-	# mesh = pv.Cube()
-	# mesh.plot(show_edges=True)
-
-	#import pyvista
-	#pyvista.global_theme.window_size = [600, 600]
-	#pyvista.global_theme.antialiasing = True
-
-	import sys
-	print(sys.path)
-	import os
-	print(os.environ.get('PYTHONPATH'))
 	import pyvista
 	pyvista.set_jupyter_backend('panel')
 	pyvista.global_theme.axes.show = True
 	pyvista.global_theme.show_edges = True
 	pyvista.global_theme.background = 'white'
+	
 	import Cinema
 	from Cinema.Prompt import Launcher, Visualiser
 	import matplotlib.pyplot as plt
