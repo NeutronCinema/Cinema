@@ -10,6 +10,10 @@ Geometry
 	# mesh = pv.Cube()
 	# mesh.plot(show_edges=True)
 
+	import pyvista
+	pyvista.global_theme.window_size = [600, 600]
+	pyvista.global_theme.antialiasing = True
+
 	import sys
 	print(sys.path)
 	import os
