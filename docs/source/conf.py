@@ -24,6 +24,8 @@ extensions = [
 ]
 
 import os
+import pyvista
+pyvista.start_xvfb()
 
 # package_path = os.path.abspath('../..')
 # os.environ['PYTHONPATH'] = ':'.join((package_path, os.environ.get('PYTHONPATH', '')))
