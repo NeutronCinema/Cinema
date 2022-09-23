@@ -6,7 +6,6 @@ jupyter-sphinx==0.4.0
 jupyterlab==3.4.7
 # pyvista==0.36.1
 pythreejs==2.4.1
-ipykernel==6.15.3
 ipywidgets==7.7.2
 neutron-cinema
 # matplotlib
