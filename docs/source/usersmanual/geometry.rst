@@ -3,6 +3,7 @@ Geometry
 
 .. jupyter-execute:: 
 	:raises:
+	:hide-output:
 
 	# import pyvista as pv
 	# from pyvista import examples
