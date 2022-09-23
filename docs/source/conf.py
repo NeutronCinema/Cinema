@@ -25,8 +25,8 @@ extensions = [
 
 import os
 
-package_path = os.path.abspath('../..')
-os.environ['PYTHONPATH'] = ':'.join((package_path, os.environ.get('PYTHONPATH', '')))
+# package_path = os.path.abspath('../..')
+# os.environ['PYTHONPATH'] = ':'.join((package_path, os.environ.get('PYTHONPATH', '')))
 
 # intersphinx_mapping = {
 #     'python': ('https://docs.python.org/3/', None),
