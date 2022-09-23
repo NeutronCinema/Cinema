@@ -5,7 +5,7 @@ Geometry
 	:raises:
 
 	import sys
-	print(sys.executable)
+	print(sys.path)
 	import os
 	print(os.environ.get('PYTHONPATH'))
 	import Cinema
@@ -25,7 +25,7 @@ Geometry
 	myLcher=Launcher()
 	myLcher.loadGeometry(inputfile)
 	visualize = True
-	neutronNum = 100
+	neutronNum = 10
 
 	if visualize is True:
 		v = Visualiser('+', printWorld=False)
