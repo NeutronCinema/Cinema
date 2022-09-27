@@ -4,6 +4,7 @@ Geometry
 .. jupyter-execute:: 
 	:raises:
 
+	%%capture
 	import os
 	import pyvista
 	import stdout_redirect as rd
