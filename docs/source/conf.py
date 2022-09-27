@@ -26,6 +26,9 @@ extensions = [
 import os
 import pyvista
 
+os.environ["CDOCROOT"] = os.path.dirname(__file__)
+os.environ["CDOCGDML"] = os.path.join(os.getenv("CDOCROOT"), 'usersmanual', 'geometry')
+
 # To start framebuffer: required if built in VM or docker (where is the case of readthedocs)
 pyvista.start_xvfb()
 
