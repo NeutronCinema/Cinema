@@ -6,6 +6,8 @@ Geometry
 
 	import os
 	import pyvista
+	import stdout_redirect as rd
+
 	pyvista.set_jupyter_backend('panel')
 	pyvista.global_theme.axes.show = True
 	pyvista.global_theme.show_edges = True
@@ -24,14 +26,14 @@ Geometry
 		inputfile=findData(f'gdml/{inputfile}', '.')
 		if not os.path.isfile(inputfile):
 			raise IOError(f'The input GDML file is not found.')
+	with open('output.txt', 'w') as f, rd.stdout_redirected(f):
+		myLcher=Launcher()
+		myLcher.setSeed(1)
+		myLcher.loadGeometry(inputfile)
 
-	myLcher=Launcher()
-	myLcher.setSeed(1)
-	myLcher.loadGeometry(inputfile)
+		visualize = True
 
-	visualize = True
-
-	if visualize is True:
-		v = Visualiser('+', printWorld=False)
-		v.show()
+		if visualize is True:
+			v = Visualiser('+', printWorld=False)
+			v.show()
 
