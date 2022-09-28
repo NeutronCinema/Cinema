@@ -20,7 +20,7 @@ Geometry
     import numpy as np
     from Cinema.Interface.Utils import findData
 
-    inputfile=os.path.join(os.environ["CDOCUTILS"], 'simple_geo.gdml')
+    inputfile=os.path.join(os.environ["CDOCGDML"], 'simple_geo.gdml')
     printTraj=False
 
     if not os.path.isfile(inputfile):
