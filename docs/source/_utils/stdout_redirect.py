@@ -1,5 +1,8 @@
-
+# original
 # https://stackoverflow.com/a/22434262
+
+# redirect jupyter output
+# https://github.com/ipython/ipykernel/issues/795#issuecomment-978179560
 
 import os
 import sys
