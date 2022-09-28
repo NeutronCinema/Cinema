@@ -7,6 +7,7 @@
 import os
 import sys
 from contextlib import contextmanager
+from tkinter.messagebox import YES
 
 def fileno(file_or_fd):
     fd = getattr(file_or_fd, 'fileno', lambda: file_or_fd)()
@@ -36,3 +37,21 @@ def stdout_redirected(to=os.devnull, stdout=None):
             #NOTE: dup2 makes stdout_fd inheritable unconditionally
             stdout.flush()
             os.dup2(copied.fileno(), stdout_fd)  # $ exec >&copied
+
+@contextmanager
+def jupyter2terminal():
+    import os, sys
+    std = sys.stdout
+    oristd = sys.__stdout__
+    try:
+        if getattr(std, "_original_stdstream_copy", None) is not None:
+            stdnum = oristd.fileno()
+            # redirect captured pipe back to original FD
+            os.dup2(std._original_stdstream_copy, oristd.fileno())
+            temp = std._original_stdstream_copy
+            std._original_stdstream_copy = None
+        yield 
+    finally:
+        std._original_stdstream_copy = temp
+        os.dup2(stdnum, std.fileno())
+
