@@ -44,6 +44,8 @@ def jupyter2terminal():
     std = sys.stdout
     oristd = sys.__stdout__
     try:
+        temp = None
+        stdnum = std.fileno()
         if getattr(std, "_original_stdstream_copy", None) is not None:
             stdnum = oristd.fileno()
             # redirect captured pipe back to original FD
