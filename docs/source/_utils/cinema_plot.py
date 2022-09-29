@@ -35,3 +35,4 @@ def tutorial_plot(fn):
                     if visualize is True:
                         v = Visualiser('+', printWorld=False)
                         v.show()
+                        v.plotter.close()
