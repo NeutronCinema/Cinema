@@ -28,7 +28,6 @@ def tutorial_plot(fn):
             with rd.stdout_redirected(fto, sys.__stdout__):
                 with redirect_stdout(fto):
                     myLcher=Launcher()
-                    myLcher.setSeed(1)
                     myLcher.loadGeometry(inputfile)
 
                     visualize = True
