@@ -6,11 +6,9 @@ def tutorial_plot(fn):
     import stdout_redirect as rd
     from contextlib import redirect_stdout
 
-    pyvista.set_jupyter_backend('panel')
-    pyvista.global_theme.axes.show = True
-    pyvista.global_theme.show_edges = True
+    pyvista.set_jupyter_backend('ipyvtklink')
     pyvista.global_theme.background = 'white'
-    pyvista.global_theme.window_size = [300, 200]
+    # pyvista.global_theme.window_size = [300, 200]
     
     import Cinema
     from Cinema.Prompt import Launcher, Visualiser
@@ -34,5 +32,5 @@ def tutorial_plot(fn):
 
                     if visualize is True:
                         v = Visualiser('+', printWorld=False)
-                        v.show()
-                        v.plotter.close()
+                        v.plotter.show_bounds(bounds=[-75, 75, -75, 75, -75, 75], grid='front', location='outer', all_edges=True)
+                        v.plotter.show()
