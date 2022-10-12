@@ -6,8 +6,8 @@ def tutorial_plot(fn):
     import stdout_redirect as rd
     from contextlib import redirect_stdout
 
-    pyvista.set_jupyter_backend('ipyvtklink')
-    pyvista.global_theme.background = 'white'
+    pyvista.set_jupyter_backend('panel')
+    pyvista.global_theme.background = 'grey'
     # pyvista.global_theme.window_size = [300, 200]
     
     import Cinema
