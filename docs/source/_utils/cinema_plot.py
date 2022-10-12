@@ -32,5 +32,6 @@ def tutorial_plot(fn):
 
                     if visualize is True:
                         v = Visualiser('+', printWorld=False)
-                        v.plotter.show_bounds(bounds=[-75, 75, -75, 75, -75, 75], grid='front', location='outer', all_edges=True)
+                        v.plotter.show_bounds()
+                        v.plotter.show_grid()
                         v.plotter.show()
