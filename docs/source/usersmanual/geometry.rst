@@ -11,6 +11,7 @@ Usage
 
 .. list-table::
     :width: 100%
+    :widths: 40 60
 
     * - .. code-block:: xml
 
@@ -70,6 +71,7 @@ Usage
 
 .. list-table::
     :width: 100%
+    :widths: 40 60
 
     * - .. code-block:: xml
 
@@ -108,6 +110,7 @@ Usage
 
 .. list-table::
     :width: 100%
+    :widths: 40 60
 
     * - .. code-block:: xml
 
@@ -156,6 +159,7 @@ Usage
 
 .. list-table::
     :width: 100%
+    :widths: 40 60
 
     * - .. code-block:: xml
 
@@ -205,6 +209,7 @@ Usage
 
 .. list-table::
     :width: 100%
+    :widths: 40 60
 
     * - .. code-block:: xml
 
@@ -267,6 +272,7 @@ Usage
 
 .. list-table::
     :width: 100%
+    :widths: 40 60
 
     * - .. code-block:: xml
 
@@ -337,6 +343,7 @@ Usage
 
 .. list-table::
     :width: 100%
+    :widths: 40 60
 
     * - .. code-block:: xml
 
@@ -379,6 +386,7 @@ Usage
 
 .. list-table::
     :width: 100%
+    :widths: 40 60
 
     * - .. code-block:: xml
 
@@ -413,6 +421,7 @@ Usage
 
 .. list-table::
     :width: 100%
+    :widths: 40 60
 
     * - .. code-block:: xml
 
@@ -451,6 +460,7 @@ Usage
 
 .. list-table::
     :width: 100%
+    :widths: 40 60
 
     * - .. code-block:: xml
 
@@ -499,6 +509,7 @@ Usage
 
 .. list-table::
     :width: 100%
+    :widths: 40 60
 
     * - .. code-block:: xml
 
@@ -549,6 +560,7 @@ Usage
 
 .. list-table::
     :width: 100%
+    :widths: 40 60
 
     * - .. code-block:: xml
 
@@ -603,6 +615,7 @@ Usage
 
 .. list-table::
     :width: 100%
+    :widths: 40 60
 
     * - .. code-block:: xml
 
@@ -648,6 +661,7 @@ Usage
 
 .. list-table::
     :width: 100%
+    :widths: 40 60
 
     * - .. code-block:: xml
 
@@ -691,6 +705,7 @@ Usage
 
 .. list-table::
     :width: 100%
+    :widths: 40 60
 
     * - .. code-block:: xml
 
