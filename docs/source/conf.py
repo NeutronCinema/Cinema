@@ -21,6 +21,7 @@ extensions = [
     'jupyter_sphinx',
     "pyvista.ext.plot_directive",
     "pyvista.ext.coverage",
+    'sphinx.ext.imgmath',
 ]
 
 import os, sys
@@ -37,7 +38,14 @@ pyvista.start_xvfb()
 # package_path = os.path.abspath('../..')
 # os.environ['PYTHONPATH'] = ':'.join((package_path, os.environ.get('PYTHONPATH', '')))
 
-# intersphinx_mapping = {
+# imgmath_image_format = 'svg'
+imgmath_font_size = 14
+imgmath_use_preview = True
+
+# if png format is required
+# imgmath_dvipng_args = ['-gamma', '1.5', '-D', '110', '-bg', 'Transparent']
+
+intersphinx_mapping = {
 #     'python': ('https://docs.python.org/3/', None),
 #     'sphinx': ('https://www.sphinx-doc.org/en/master/', None),
 # }
