@@ -19,7 +19,7 @@
     </materials>
 
     <solids>
-        <box lunit="mm" name="WorldSolid" x="150.0" y="150.0" z="150.0" />
+        <!-- <box lunit="mm" name="WorldSolid" x="150.0" y="150.0" z="150.0" /> -->
         <trd lunit="mm" name="TrdSolid"  x1="50" x2="100" y1="60" y2="80" z="130" />
     </solids>
 
@@ -29,7 +29,7 @@
             <materialref ref="Vacuum" />
         </volume>
 
-        <volume name="VolWorld">
+        <!-- <volume name="VolWorld">
             <solidref ref="WorldSolid" />
             <materialref ref="Cd" />
 
@@ -37,10 +37,10 @@
                 <volumeref ref="VolTrd" />
                 <position name="Position" unit="mm" x="0.0" y="0.0" z="0.0" />
             </physvol>
-        </volume>
+        </volume> -->
     </structure>
 
     <setup name="Default" version="1.0">
-        <world ref="VolWorld" />
+        <world ref="VolTrd" />
     </setup>
 </gdml>

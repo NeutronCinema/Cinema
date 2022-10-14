@@ -19,7 +19,7 @@
     </materials>
 
     <solids>
-        <box lunit="mm" name="WorldSolid" x="150.0" y="150.0" z="150.0" />
+        <!-- <box lunit="mm" name="WorldSolid" x="150.0" y="150.0" z="150.0" /> -->
         <cutTube aunit="deg" lunit="mm" name="CutTubeSolid" rmin="0.0" rmax="25.0" z="50.0" deltaphi="360.0" startphi="0.0" lowX="-10" lowY="-10" lowZ="-10" highX="10" highY="10" highZ="10"/>
     </solids>
 
@@ -29,7 +29,7 @@
             <materialref ref="Vacuum" />
         </volume>
 
-        <volume name="VolWorld">
+        <!-- <volume name="VolWorld">
             <solidref ref="WorldSolid" />
             <materialref ref="Cd" />
 
@@ -37,10 +37,10 @@
                 <volumeref ref="VolCutTube" />
                 <position name="Position" unit="mm" x="0.0" y="0.0" z="0.0" />
             </physvol>
-        </volume>
+        </volume> -->
     </structure>
 
     <setup name="Default" version="1.0">
-        <world ref="VolWorld" />
+        <world ref="VolCutTube" />
     </setup>
 </gdml>
