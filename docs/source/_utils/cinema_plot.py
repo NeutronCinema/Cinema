@@ -28,12 +28,11 @@ def tutorial(fn):
         raise IOError('gdml not found: ' + inputfile)
         
     with rd.jupyter2terminal():
-        with open('output.txt', 'w') as fto:
-            with rd.stdout_redirected(fto, sys.__stdout__):
-                with redirect_stdout(fto):
-                    myLcher=Launcher()
-                    myLcher.loadGeometry(inputfile)
-                    v = Visualiser('+', printWorld=False)
-                    v.plotter.show_bounds()
-                    v.plotter.show_axes()
-                    v.plotter.show()
+        with rd.stdout_redirected(stdout=sys.__stdout__):
+            with redirect_stdout(None):
+                myLcher=Launcher()
+                myLcher.loadGeometry(inputfile)
+                v = Visualiser('+', printWorld=False)
+                v.plotter.show_bounds()
+                v.plotter.show_axes()
+                v.plotter.show()
