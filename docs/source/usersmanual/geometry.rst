@@ -2,7 +2,7 @@ Geometry
 ==========
 
 Arbitrary_trapezoid
--------------------
+---------------------
 
 Usage
 ^^^^^^^^^^
@@ -37,7 +37,7 @@ Usage
             cinema_plot.tutorial('arbitrary_trapezoid.gdml')
 
 Parameters
-^^^^^^^^^^
+^^^^^^^^^^^^
  ============= ====================== 
   Parameters    Descriptions          
  ============= ====================== 
@@ -65,7 +65,7 @@ Box
 ----
 
 Usage
-^^^^^
+^^^^^^
 .. jupyter-kernel:: 
     :id: box
 
@@ -91,7 +91,7 @@ Usage
             cinema_plot.tutorial('box.gdml')
 
 Parameters
-^^^^^^^^^
+^^^^^^^^^^^
  ============= ============================= 
   Parameters    Descriptions          
  ============= =============================
@@ -135,7 +135,7 @@ Usage
             cinema_plot.tutorial('cone.gdml')
 
 Parameters
-^^^^^^^^^^
+^^^^^^^^^^^
  ============= =============================== 
   Parameters    Descriptions                   
  ============= =============================== 
@@ -200,7 +200,7 @@ Parameters
  ============= ============================================= 
 
 Extruded_solid_notsure
------
+---------------------------
 
 Usage
 ^^^^^
