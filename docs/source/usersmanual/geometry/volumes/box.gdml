@@ -1,0 +1,46 @@
+<?xml version='1.0' encoding='utf-8'?>
+<gdml>
+
+    <userinfo>
+      <!-- <auxiliary auxtype="PrimaryGun" auxvalue="IsotropicGun;Neutron;0.001; 0.0,0.0,0.0; 0,0,1" /> -->
+    </userinfo>
+
+    <define>
+    </define>
+
+    <materials>
+        <material name="Vacuum">
+          <atom value="vacuum.ncmat"/>
+        </material>
+
+        <material name="Cd">
+          <atom value="Cd.ncmat"/>
+        </material>
+    </materials>
+
+    <solids>
+        <!-- <box lunit="mm" name="WorldSolid" x="150.0" y="150.0" z="150.0" /> -->
+        <box lunit="mm" name="BoxSolid" x="100.0" y="100.0" z="100.0" />
+    </solids>
+
+    <structure>
+        <volume name="VolBox">
+            <solidref ref="BoxSolid" />
+            <materialref ref="Vacuum" />
+        </volume>
+
+        <!-- <volume name="VolWorld">
+            <solidref ref="WorldSolid" />
+            <materialref ref="Cd" />
+
+            <physvol name="PhysVol_Box">
+                <volumeref ref="VolBox" />
+                <position name="Position" unit="mm" x="0.0" y="0.0" z="0.0" />
+            </physvol>
+        </volume> -->
+    </structure>
+
+    <setup name="Default" version="1.0">
+        <world ref="VolBox" />
+    </setup>
+</gdml>

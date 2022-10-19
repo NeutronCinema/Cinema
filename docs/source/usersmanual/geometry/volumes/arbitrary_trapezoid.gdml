@@ -1,0 +1,46 @@
+<?xml version='1.0' encoding='utf-8'?>
+<gdml>
+
+    <userinfo>
+      <!-- <auxiliary auxtype="PrimaryGun" auxvalue="IsotropicGun;Neutron;0.001; 0.0,0.0,0.0; 0,0,1" /> -->
+    </userinfo>
+
+    <define>
+    </define>
+
+    <materials>
+        <material name="Vacuum">
+          <atom value="vacuum.ncmat"/>
+        </material>
+
+        <material name="Cd">
+          <atom value="Cd.ncmat"/>
+        </material>
+    </materials>
+
+    <solids>
+        <!-- <box lunit="mm" name="WorldSolid" x="150.0" y="150.0" z="150.0" /> -->
+        <arb8 lunit="mm" name="Arb8Solid" v1x="-30" v1y="-60" v2x="30" v2y="-60" v3x="50" v3y="60" v4x="-50" v4y="60" v5x="-30" v5y="-60" v6x="30" v6y="-60" v7x="50" v7y="60" v8x="-50" v8y="60" dz="70"/>
+    </solids>
+
+    <structure>
+        <volume name="VolArb8">
+            <solidref ref="Arb8Solid" />
+            <materialref ref="Vacuum" />
+        </volume>
+
+        <!-- <volume name="VolWorld">
+            <solidref ref="WorldSolid" />
+            <materialref ref="Cd" />
+
+            <physvol name="PhysVol_Arb8">
+                <volumeref ref="VolArb8" />
+                <position name="Position" unit="mm" x="0.0" y="0.0" z="0.0" />
+            </physvol>
+        </volume> -->
+    </structure>
+
+    <setup name="Default" version="1.0">
+        <world ref="VolArb8" />
+    </setup>
+</gdml>

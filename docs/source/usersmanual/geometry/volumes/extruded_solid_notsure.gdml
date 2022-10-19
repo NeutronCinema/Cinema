@@ -1,0 +1,52 @@
+<?xml version='1.0' encoding='utf-8'?>
+<gdml>
+
+    <userinfo>
+      <!-- <auxiliary auxtype="PrimaryGun" auxvalue="IsotropicGun;Neutron;0.001; 0.0,0.0,0.0; 0,0,1" /> -->
+    </userinfo>
+
+    <define>
+    </define>
+
+    <materials>
+        <material name="Vacuum">
+          <atom value="vacuum.ncmat"/>
+        </material>
+
+        <material name="Cd">
+          <atom value="Cd.ncmat"/>
+        </material>
+    </materials>
+
+    <solids>
+        <!-- <box lunit="mm" name="WorldSolid" x="200.0" y="200.0" z="200.0" /> -->
+        <xtru lunit="mm" name="XtruSolid"  >
+            <twoDimVertex x="30" y="90" />
+            <twoDimVertex x="10" y="50" />
+            <twoDimVertex x="20" y="40" />
+            <section zOrder="10" zPosition="20" xOffset="5" yOffset="3" scalingFactor="3" />
+            <section zOrder="20" zPosition="50" xOffset="3" yOffset="5" scalingFactor="1" />
+        </xtru>
+    </solids>
+
+    <structure>
+        <volume name="VolXtru">
+            <solidref ref="XtruSolid" />
+            <materialref ref="Vacuum" />
+        </volume>
+
+        <!-- <volume name="VolWorld">
+            <solidref ref="WorldSolid" />
+            <materialref ref="Cd" />
+
+            <physvol name="PhysVol_Xtru">
+                <volumeref ref="VolXtru" />
+                <position name="Position" unit="mm" x="0.0" y="0.0" z="0.0" />
+            </physvol>
+        </volume> -->
+    </structure>
+
+    <setup name="Default" version="1.0">
+        <world ref="VolXtru" />
+    </setup>
+</gdml>

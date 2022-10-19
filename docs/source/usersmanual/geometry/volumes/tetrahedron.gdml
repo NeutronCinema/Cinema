@@ -1,0 +1,50 @@
+<?xml version='1.0' encoding='utf-8'?>
+<gdml>
+
+    <userinfo>
+      <!-- <auxiliary auxtype="PrimaryGun" auxvalue="IsotropicGun;Neutron;0.001; 0.0,0.0,0.0; 0,0,1" /> -->
+    </userinfo>
+
+    <define>
+        <position name="v1" x="-70" y="-70" z="-60"/>
+        <position name="v2" x="70" y="-40" z="-60"/>
+        <position name="v3" x="0.0" y="60" z="-60"/>
+        <position name="v4" x="0" y="0" z="60"/>
+    </define>
+
+    <materials>
+        <material name="Vacuum">
+          <atom value="vacuum.ncmat"/>
+        </material>
+
+        <material name="Cd">
+          <atom value="Cd.ncmat"/>
+        </material>
+    </materials>
+
+    <solids>
+        <!-- <box lunit="mm" name="WorldSolid" x="150.0" y="150.0" z="150.0" /> -->
+        <tet name="TetrahedronSolid" vertex1="v1" vertex2="v2" vertex3="v3" vertex4="v4"/>
+    </solids>
+
+    <structure>
+        <volume name="VolTetrahedron">
+            <solidref ref="TetrahedronSolid" />
+            <materialref ref="Vacuum" />
+        </volume>
+
+        <!-- <volume name="VolWorld">
+            <solidref ref="WorldSolid" />
+            <materialref ref="Cd" />
+
+            <physvol name="PhysVol_Tetrahedron">
+                <volumeref ref="VolTetrahedron" />
+                <position name="Position" unit="mm" x="0.0" y="0.0" z="0.0" />
+            </physvol>
+        </volume> -->
+    </structure>
+
+    <setup name="Default" version="1.0">
+        <world ref="VolTetrahedron" />
+    </setup>
+</gdml>

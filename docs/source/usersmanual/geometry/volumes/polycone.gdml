@@ -1,0 +1,49 @@
+<?xml version='1.0' encoding='utf-8'?>
+<gdml>
+
+    <userinfo>
+      <!-- <auxiliary auxtype="PrimaryGun" auxvalue="IsotropicGun;Neutron;0.001; 0.0,0.0,0.0; 0,0,1" /> -->
+    </userinfo>
+
+    <define>
+    </define>
+
+    <materials>
+        <material name="Vacuum">
+          <atom value="vacuum.ncmat"/>
+        </material>
+
+        <material name="Cd">
+          <atom value="Cd.ncmat"/>
+        </material>
+    </materials>
+
+    <solids>
+        <!-- <box lunit="mm" name="WorldSolid" x="150.0" y="150.0" z="150.0" /> -->
+        <polycone aunit="deg" lunit="mm" name="PolyconeSolid" deltaphi="360.0" startphi="0.0" >
+            <zplane rmin="10.0" rmax="20.0" z="-50" />
+            <zplane rmin="30.0" rmax="50.0" z="60" />
+        </polycone>
+    </solids>
+
+    <structure>
+        <volume name="VolPolycone">
+            <solidref ref="PolyconeSolid" />
+            <materialref ref="Vacuum" />
+        </volume>
+
+        <!-- <volume name="VolWorld">
+            <solidref ref="WorldSolid" />
+            <materialref ref="Cd" />
+
+            <physvol name="PhysVol_Polycone">
+                <volumeref ref="VolPolycone" />
+                <position name="Position" unit="mm" x="0.0" y="0.0" z="0.0" />
+            </physvol>
+        </volume> -->
+    </structure>
+
+    <setup name="Default" version="1.0">
+        <world ref="VolPolycone" />
+    </setup>
+</gdml>
