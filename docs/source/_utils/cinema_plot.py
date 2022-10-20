@@ -4,7 +4,7 @@ def tutorial(fn):
     import os, sys
     import pyvista
     import stdout_redirect as rd
-    from contextlib import redirect_stdout
+    import contextlib
 
     # configure global theme
     # panel is the only jupyter backend working good
@@ -29,10 +29,11 @@ def tutorial(fn):
         
     with rd.jupyter2terminal():
         with rd.stdout_redirected(stdout=sys.__stdout__):
-            with redirect_stdout(None):
-                myLcher=Launcher()
-                myLcher.loadGeometry(inputfile)
-                v = Visualiser('+', printWorld=False)
-                v.plotter.show_bounds()
-                v.plotter.show_axes()
-                v.plotter.show()
+            with open(os.devnull, 'w') as f:
+                with contextlib.redirect_stdout(f):
+                    myLcher=Launcher()
+                    myLcher.loadGeometry(inputfile)
+                    v = Visualiser('+', printWorld=False)
+                    v.plotter.show_bounds()
+                    v.plotter.show_axes()
+                    v.plotter.show()
