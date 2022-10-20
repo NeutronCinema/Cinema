@@ -1,0 +1,19 @@
+name: cinema_doc
+channels:
+  - conda-forge
+dependencies:
+  - python==3.8.13
+  - pip
+  - sphinx==4.5.0
+  - sphinx_rtd_theme==1.0.0
+  - jupyter-sphinx==0.4.0
+  - jupyterlab==3.4.8
+  - ipykernel==6.15.3
+  - ipython==8.5.0
+  - ipywidgets==7.7.2
+  - panel==0.14.0
+  - breathe==4.34.0
+  - exhale==0.3.6
+  - doxygen==1.9.5
+  - pip:
+    - neutron-cinema
