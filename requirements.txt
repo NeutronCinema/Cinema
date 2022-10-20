@@ -13,3 +13,5 @@ panel
 ipyvtklink
 # matplotlib
 # numpy
+breathe
+exhale
