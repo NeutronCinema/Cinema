@@ -13,6 +13,8 @@ version = '0.0.1'
 
 extensions = [
     # 'nbsphinx',
+    'breathe',
+    'exhale',
     'sphinx.ext.duration',
     'sphinx.ext.doctest',
     'sphinx.ext.autodoc',
@@ -25,15 +27,46 @@ extensions = [
 ]
 
 import os, sys
+print(sys.executable)
 import pyvista
 
 os.environ["CDOCROOT"] = os.path.dirname(__file__)
 os.environ["CDOCGDML"] = os.path.join(os.getenv("CDOCROOT"), 'usersmanual', 'geometry')
 os.environ["CDOCUTILS"] = os.path.join(os.getenv("CDOCROOT"), '_utils')
 os.environ['PYTHONPATH'] = ':'.join((os.getenv("CDOCUTILS"), os.environ.get('PYTHONPATH', '')))
+sys.path.insert(0, os.path.abspath('..'))
 
 # To start framebuffer: required if built in VM or docker (where is the case of readthedocs)
 pyvista.start_xvfb()
+
+# Setup the breathe extension
+breathe_projects = {
+    "cinema": "./_doxygen/xml"
+}
+breathe_default_project = "cinema"
+
+# Setup the exhale extension
+exhale_args = {
+    # These arguments are required
+    "containmentFolder":     "./api",
+    "rootFileName":          "library_root.rst",
+    "doxygenStripFromPath":  "..",
+    # Heavily encouraged optional argument (see docs)
+    "rootFileTitle":         "Library API",
+    # Suggested optional arguments
+    "createTreeView":        True,
+    # TIP: if using the sphinx-bootstrap-theme, you need
+    # "treeViewIsBootstrap": True,
+    "exhaleExecutesDoxygen": True,
+    "exhaleDoxygenStdin":    "INPUT = ../../src/cxx"
+}
+
+# Tell sphinx what the primary language being documented is.
+primary_domain = 'cpp'
+
+# Tell sphinx what the pygments highlight language should be.
+highlight_language = 'cpp'
+
 
 # package_path = os.path.abspath('../..')
 # os.environ['PYTHONPATH'] = ':'.join((package_path, os.environ.get('PYTHONPATH', '')))

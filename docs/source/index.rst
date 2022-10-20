@@ -15,7 +15,7 @@ The cross section generators for crystalline materials *PiXiu* and liquids *Tak*
    This project is under active development.
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    installation
    tutorial/index
@@ -23,3 +23,4 @@ The cross section generators for crystalline materials *PiXiu* and liquids *Tak*
    usersmanual/index
    publications
    references
+   api/library_root
