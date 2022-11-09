@@ -15,5 +15,6 @@ dependencies:
   - breathe==4.34.0
   - exhale==0.3.6
   - doxygen==1.9.5
+  - graphviz=2.50.0
   - pip:
     - neutron-cinema

@@ -7,6 +7,12 @@ build:
   apt_packages:
     - libgl1-mesa-dev
     - xvfb
+    - texlive
+    - latexmk
+    - texlive-latex-extra
+    - texlive-xetex
+    - texlive-publishers
+
 
 # Build from the docs/ directory with Sphinx
 sphinx:

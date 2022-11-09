@@ -26,7 +26,10 @@ extensions = [
     'sphinx.ext.imgmath',
 ]
 
-import os, sys
+import os
+import sys
+import textwrap
+from matplotlib.pyplot import text
 print(sys.executable)
 import pyvista
 
@@ -58,7 +61,23 @@ exhale_args = {
     # TIP: if using the sphinx-bootstrap-theme, you need
     # "treeViewIsBootstrap": True,
     "exhaleExecutesDoxygen": True,
-    "exhaleDoxygenStdin":    "INPUT = ../../src/cxx"
+    "exhaleDoxygenStdin":    textwrap.dedent('''
+        INPUT = ../../src/cxx
+        EXTRACT_ALL = YES
+        CLASS_DIAGRAMS = YES
+        HIDE_UNDOC_RELATIONS = NO
+        HAVE_DOT = YES
+        CLASS_GRAPH = YES
+        COLLABORATION_GRAPH = YES
+        UML_LOOK = YES
+        UML_LIMIT_NUM_FIELDS = 50
+        TEMPLATE_RELATIONS = YES
+        DOT_GRAPH_MAX_NODES = 100
+        MAX_DOT_GRAPH_DEPTH = 0
+        DOT_TRANSPARENT = YES
+        GENERATE_LATEX = YES
+        ''')
+        
 }
 
 # Tell sphinx what the primary language being documented is.
@@ -71,7 +90,7 @@ highlight_language = 'cpp'
 # package_path = os.path.abspath('../..')
 # os.environ['PYTHONPATH'] = ':'.join((package_path, os.environ.get('PYTHONPATH', '')))
 
-# imgmath_image_format = 'svg'
+imgmath_image_format = 'svg'
 imgmath_font_size = 14
 imgmath_use_preview = True
 
@@ -91,3 +110,11 @@ html_theme = 'sphinx_rtd_theme'
 
 # -- Options for EPUB output
 # epub_show_urls = 'footnote'
+
+# -- LaTex output configuration -----------------
+latex_documents = [
+    ('index', 'cinema.tex', 'Prompt', 'Developers', 
+    'manual')
+]
+
+latex_logo = os.path.join('img', 'logo.png')
