@@ -26,7 +26,10 @@ def tutorial(fn):
 
     if not os.path.isfile(inputfile):
         raise IOError('gdml not found: ' + inputfile)
-        
+    
+    # redirection of stdout from: 
+    # 1.jupyter to terminal; 2.terminal to nothing at file descriptor level;
+    # 3.python stdout to nothing
     with rd.jupyter2terminal():
         with rd.stdout_redirected(stdout=sys.__stdout__):
             with open(os.devnull, 'w') as f:
