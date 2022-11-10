@@ -19,7 +19,7 @@ The probability of detection then can be expressed as
   \int {\mathop{}\!\mathrm{d}} \alpha_0 \,\,
   G(\boldsymbol{r}, \boldsymbol{p}, t, \alpha; \boldsymbol{r}_0, \boldsymbol{p}_0, t_0, \alpha_0) f_{src}(\boldsymbol{r}_0, \boldsymbol{p}_0, t_0, \alpha_0)
 
-where :math:`\boldsymbol{r}` is the position, :math:`$\boldsymbol{p}_0$` is the
+where :math:`\boldsymbol{r}` is the position, :math:`\boldsymbol{p}_0` is the
 momentum, :math:`t` is the time, :math:`\alpha` is the spin, and :math:`\textbf{$G$}` function is the propagator.
 
 
