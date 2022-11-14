@@ -1,7 +1,7 @@
 Geometry
 ==========
 
-Arbitrary_trapezoid
+Arbitrary\_trapezoid
 ---------------------
 
 Usage
@@ -9,32 +9,15 @@ Usage
 .. jupyter-kernel:: 
     :id: arbitrary_trapezoid
 
-.. list-table::
-    :width: 100%
-    :widths: 40 60
+.. code-block:: xml
 
-    * - .. code-block:: xml
+    <arb8 lunit="mm" name="Arb8Solid" v1x="-30" v1y="-60" v2x="30" v2y="-60" v3x="50" v3y="60" v4x="-50" v4y="60" v5x="-30" v5y="-60" v6x="30" v6y="-60" v7x="50" v7y="60" v8x="-50" v8y="60" dz="70"/>
 
-            <arb8 
-            lunit="mm" 
-            name="Arb8Solid" 
-            v1x="-30" v1y="-60" 
-            v2x="30" v2y="-60" 
-            v3x="50" v3y="60" 
-            v4x="-50" v4y="60" 
-            v5x="-30" v5y="-60" 
-            v6x="30" v6y="-60" 
-            v7x="50" v7y="60" 
-            v8x="-50" v8y="60" 
-            dz="70"
-            />
+.. jupyter-execute:: 
+    :hide-code:
 
-      - ..  jupyter-execute:: 
-            :raises:
-            :hide-code:
-
-            import cinema_plot
-            cinema_plot.tutorial('arbitrary_trapezoid.gdml')
+    import cinema_plot
+    cinema_plot.tutorial('arbitrary_trapezoid.gdml')
 
 Parameters
 ^^^^^^^^^^^^
@@ -69,26 +52,15 @@ Usage
 .. jupyter-kernel:: 
     :id: box
 
-.. list-table::
-    :width: 100%
-    :widths: 40 60
+.. code-block:: xml
 
-    * - .. code-block:: xml
+    <box lunit="mm" name="BoxSolid" x="100.0" y="100.0" z="100.0"/>
 
-            <box 
-            lunit="mm" 
-            name="BoxSolid" 
-            x="100.0" 
-            y="100.0" 
-            z="100.0" 
-            />
+.. jupyter-execute:: 
+    :hide-code:
 
-      - .. jupyter-execute:: 
-            :raises:
-            :hide-code:
-
-            import cinema_plot
-            cinema_plot.tutorial('box.gdml')
+    import cinema_plot
+    cinema_plot.tutorial('box.gdml')
 
 Parameters
 ^^^^^^^^^^^
@@ -108,31 +80,15 @@ Usage
 .. jupyter-kernel:: 
     :id: cone
 
-.. list-table::
-    :width: 100%
-    :widths: 40 60
+.. code-block:: xml
 
-    * - .. code-block:: xml
+    <cone aunit="deg" lunit="mm" name="ConeSolid" rmin1="0.0" rmax1="50.0" rmin2="0.0" rmax2="10.0" z="120.0" deltaphi="360.0" startphi="0.0" />
 
-            <cone 
-            aunit="deg" 
-            lunit="mm" 
-            name="ConeSolid" 
-            rmin1="0.0" 
-            rmax1="50.0" 
-            rmin2="0.0" 
-            rmax2="10.0" 
-            z="120.0" 
-            deltaphi="360.0" 
-            startphi="0.0" 
-            />
+.. jupyter-execute:: 
+    :hide-code:
 
-      - .. jupyter-execute:: 
-            :raises:
-            :hide-code:
-
-            import cinema_plot
-            cinema_plot.tutorial('cone.gdml')
+    import cinema_plot
+    cinema_plot.tutorial('cone.gdml')
 
 Parameters
 ^^^^^^^^^^^
@@ -157,29 +113,15 @@ Usage
 .. jupyter-kernel:: 
     :id: cutTube
 
-.. list-table::
-    :width: 100%
-    :widths: 40 60
+.. code-block:: xml
 
-    * - .. code-block:: xml
+    <cutTube aunit="deg" lunit="mm" name="CutTubeSolid" rmin="0.0" rmax="25.0" z="50.0" deltaphi="360.0" startphi="0.0" lowX="-10" lowY="-10" lowZ="-10" highX="10" highY="10" highZ="10"/>
 
-            <cutTube 
-            aunit="deg" 
-            lunit="mm" 
-            name="CutTubeSolid" 
-            rmin="0.0" rmax="25.0" 
-            z="50.0" 
-            deltaphi="360.0" startphi="0.0" 
-            lowX="-10" lowY="-10" lowZ="-10" 
-            highX="10" highY="10" highZ="10"
-            />
+.. jupyter-execute:: 
+    :hide-code:
 
-      - .. jupyter-execute:: 
-            :raises:
-            :hide-code:
-
-            import cinema_plot
-            cinema_plot.tutorial('cutTube.gdml')
+    import cinema_plot
+    cinema_plot.tutorial('cutTube.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -199,7 +141,7 @@ Parameters
   highZ         normal at upper z plane                      
  ============= ============================================= 
 
-Extruded_solid_notsure
+Extruded\_solid\_notsure
 ---------------------------
 
 Usage
@@ -207,38 +149,21 @@ Usage
 .. jupyter-kernel:: 
     :id: extruded_solid_notsure
 
-.. list-table::
-    :width: 100%
-    :widths: 40 60
+.. code-block:: xml
 
-    * - .. code-block:: xml
+    <xtru lunit="mm" name="XtruSolid"  >
+        <twoDimVertex x="30" y="90" />
+        <twoDimVertex x="10" y="50" />
+        <twoDimVertex x="20" y="40" />
+        <section zOrder="10" zPosition="20" xOffset="5" yOffset="3" scalingFactor="3"/>
+        <section zOrder="20" zPosition="50" xOffset="3" yOffset="5" scalingFactor="1"/>
+    </xtru>
 
-            <xtru lunit="mm" name="XtruSolid"  >
-                <twoDimVertex x="30" y="90" />
-                <twoDimVertex x="10" y="50" />
-                <twoDimVertex x="20" y="40" />
-                <section 
-                zOrder="10" 
-                zPosition="20" 
-                xOffset="5" 
-                yOffset="3" 
-                scalingFactor="3" 
-                />
-                <section 
-                zOrder="20" 
-                zPosition="50" 
-                xOffset="3" 
-                yOffset="5" 
-                scalingFactor="1" 
-                />
-            </xtru>
+.. jupyter-execute:: 
+    :hide-code:
 
-      - .. jupyter-execute:: 
-            :raises:
-            :hide-code:
-
-            import cinema_plot
-            cinema_plot.tutorial('extruded_solid_notsure.gdml')
+    import cinema_plot
+    cinema_plot.tutorial('extruded_solid_notsure.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -262,7 +187,7 @@ Parameters
 +---------------------------+----------------+-------------------------------------------------+
 
 
-General_trapezoid
+General\_trapezoid
 -----------------
 
 Usage
@@ -270,34 +195,15 @@ Usage
 .. jupyter-kernel:: 
     :id: general_trapezoid
 
-.. list-table::
-    :width: 100%
-    :widths: 40 60
+.. code-block:: xml
 
-    * - .. code-block:: xml
-
-            <trap 
-            lunit="mm" 
-            name="TrapSolid" 
-            z="130" 
-            thata="45" 
-            phi="45" 
-            y1="60" 
-            x1="40" 
-            x2="40" 
-            alpha1="45" 
-            y2="60" 
-            x3="40" 
-            x4="40" 
-            alpha2="45"  
-            />
+    <trap lunit="mm" name="TrapSolid" z="130" thata="45" phi="45" y1="60" x1="40" x2="40" alpha1="45" y2="60" x3="40" x4="40" alpha2="45"/>
     
-      - .. jupyter-execute:: 
-            :raises:
-            :hide-code:
+.. jupyter-execute:: 
+    :hide-code:
 
-            import cinema_plot
-            cinema_plot.tutorial('general_trapezoid.gdml')
+    import cinema_plot
+    cinema_plot.tutorial('general_trapezoid.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -333,7 +239,7 @@ Parameters
 +-------------+--------------------------------------------------+
 
 
-Hyperbolic_tube
+Hyperbolic\_tube
 ----------------
 
 Usage
@@ -341,28 +247,15 @@ Usage
 .. jupyter-kernel:: 
     :id: hyperbolic_tube
 
-.. list-table::
-    :width: 100%
-    :widths: 40 60
+.. code-block:: xml
 
-    * - .. code-block:: xml
+    <hype lunit="mm" name="HypeSolid" rmin="0" rmax="20" z="100" inst="3" outst="4"/>
 
-            <hype 
-            lunit="mm" 
-            name="HypeSolid" 
-            rmin="0" 
-            rmax="20" 
-            z="100" 
-            inst="3" 
-            outst="4" 
-            />
+.. jupyter-execute:: 
+    :hide-code:
 
-      - .. jupyter-execute:: 
-            :raises:
-            :hide-code:
-
-            import cinema_plot
-            cinema_plot.tutorial('hyperbolic_tube.gdml')
+    import cinema_plot
+    cinema_plot.tutorial('hyperbolic_tube.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -384,24 +277,15 @@ Usage
 .. jupyter-kernel:: 
     :id: orb
 
-.. list-table::
-    :width: 100%
-    :widths: 40 60
+.. code-block:: xml
 
-    * - .. code-block:: xml
+    <orb lunit="mm" name="OrbSolid" r="50"/>
 
-            <orb 
-            lunit="mm" 
-            name="OrbSolid" 
-            r="50" 
-            />
+.. jupyter-execute:: 
+    :hide-code:
 
-      - .. jupyter-execute:: 
-            :raises:
-            :hide-code:
-
-            import cinema_plot
-            cinema_plot.tutorial('orb.gdml')
+    import cinema_plot
+    cinema_plot.tutorial('orb.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -419,26 +303,15 @@ Usage
 .. jupyter-kernel:: 
     :id: paraboloid
 
-.. list-table::
-    :width: 100%
-    :widths: 40 60
+.. code-block:: xml
 
-    * - .. code-block:: xml
+    <paraboloid lunit="mm" name="ParaboloidSolid" rlo="0.0" rhi="60.0" dz="60.0"/>
 
-            <paraboloid 
-            lunit="mm" 
-            name="ParaboloidSolid" 
-            rlo="0.0" 
-            rhi="60.0" 
-            dz="60.0" 
-            />
+.. jupyter-execute:: 
+    :hide-code:
 
-      - .. jupyter-execute:: 
-            :raises:
-            :hide-code:
-
-            import cinema_plot
-            cinema_plot.tutorial('paraboloid.gdml')
+    import cinema_plot
+    cinema_plot.tutorial('paraboloid.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -458,28 +331,18 @@ Usage
 .. jupyter-kernel:: 
     :id: polycone
 
-.. list-table::
-    :width: 100%
-    :widths: 40 60
+.. code-block:: xml
 
-    * - .. code-block:: xml
+    <polycone aunit="deg" lunit="mm" name="PolyconeSolid" deltaphi="360.0" startphi="0.0">
+        <zplane rmin="10.0" rmax="20.0" z="-50" />
+        <zplane rmin="30.0" rmax="50.0" z="60" />
+    </polycone>
 
-            <polycone 
-            aunit="deg" 
-            lunit="mm" 
-            name="PolyconeSolid" 
-            deltaphi="360.0" 
-            startphi="0.0" >
-                <zplane rmin="10.0" rmax="20.0" z="-50" />
-                <zplane rmin="30.0" rmax="50.0" z="60" />
-            </polycone>
+.. jupyter-execute:: 
+    :hide-code:
 
-      - .. jupyter-execute:: 
-            :raises:
-            :hide-code:
-
-            import cinema_plot
-            cinema_plot.tutorial('polycone.gdml')
+    import cinema_plot
+    cinema_plot.tutorial('polycone.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -507,28 +370,18 @@ Usage
 .. jupyter-kernel:: 
     :id: polyhedra
 
-.. list-table::
-    :width: 100%
-    :widths: 40 60
+.. code-block:: xml
 
-    * - .. code-block:: xml
+    <polyhedra aunit="deg" lunit="mm" name="PolyhedraSolid" deltaphi="360.0" startphi="0.0" numsides="6">
+        <zplane rmin="0.0" rmax="20.0" z="-50" />
+        <zplane rmin="0.0" rmax="50.0" z="60" />
+    </polyhedra>
 
-            <polyhedra 
-            aunit="deg" 
-            lunit="mm" 
-            name="PolyhedraSolid" 
-            deltaphi="360.0" startphi="0.0" 
-            numsides="6" >
-                <zplane rmin="0.0" rmax="20.0" z="-50" />
-                <zplane rmin="0.0" rmax="50.0" z="60" />
-            </polyhedra>
+.. jupyter-execute:: 
+    :hide-code:
 
-      - .. jupyter-execute:: 
-            :raises:
-            :hide-code:
-
-            import cinema_plot
-            cinema_plot.tutorial('polyhedra.gdml')
+    import cinema_plot
+    cinema_plot.tutorial('polyhedra.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -558,30 +411,15 @@ Usage
 .. jupyter-kernel:: 
     :id: sphere
 
-.. list-table::
-    :width: 100%
-    :widths: 40 60
+.. code-block:: xml
 
-    * - .. code-block:: xml
+    <sphere aunit="deg" lunit="mm" name="SphereSolid" rmin="0.0" rmax="60.0" deltaphi="180.0" startphi="0.0" deltatheta="90.0" starttheta="0.0"/>
 
-            <sphere 
-            aunit="deg" 
-            lunit="mm" 
-            name="SphereSolid" 
-            rmin="0.0" 
-            rmax="60.0" 
-            deltaphi="180.0" 
-            startphi="0.0" 
-            deltatheta="90.0" 
-            starttheta="0.0" 
-            />
+.. jupyter-execute:: 
+    :hide-code:
 
-      - .. jupyter-execute:: 
-            :raises:
-            :hide-code:
-
-            import cinema_plot
-            cinema_plot.tutorial('sphere.gdml')
+    import cinema_plot
+    cinema_plot.tutorial('sphere.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -613,32 +451,21 @@ Usage
 .. jupyter-kernel:: 
     :id: tetrahedron
 
-.. list-table::
-    :width: 100%
-    :widths: 40 60
+.. code-block:: xml
 
-    * - .. code-block:: xml
+    <define>
+        <position name="v1" x="-70" y="-70" z="-60"/>
+        <position name="v2" x="70" y="-40" z="-60"/>
+        <position name="v3" x="0.0" y="60" z="-60"/>
+        <position name="v4" x="0" y="0" z="60"/>
+    </define>
+    <tet name="TetrahedronSolid" vertex1="v1" vertex2="v2" vertex3="v3" vertex4="v4"/>
 
-            <define>
-                <position name="v1" x="-70" y="-70" z="-60"/>
-                <position name="v2" x="70" y="-40" z="-60"/>
-                <position name="v3" x="0.0" y="60" z="-60"/>
-                <position name="v4" x="0" y="0" z="60"/>
-            </define>
-            <tet 
-            name="TetrahedronSolid" 
-            vertex1="v1" 
-            vertex2="v2" 
-            vertex3="v3" 
-            vertex4="v4"
-            />
+.. jupyter-execute:: 
+    :hide-code:
 
-      - .. jupyter-execute:: 
-            :raises:
-            :hide-code:
-
-            import cinema_plot
-            cinema_plot.tutorial('tetrahedron.gdml')
+    import cinema_plot
+    cinema_plot.tutorial('tetrahedron.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -659,28 +486,15 @@ Usage
 .. jupyter-kernel:: 
     :id: trapezoid
 
-.. list-table::
-    :width: 100%
-    :widths: 40 60
+.. code-block:: xml
 
-    * - .. code-block:: xml
+    <trd lunit="mm" name="TrdSolid"  x1="50" x2="100" y1="60" y2="80" z="130"/>
 
-            <trd 
-            lunit="mm" 
-            name="TrdSolid"  
-            x1="50" 
-            x2="100" 
-            y1="60" 
-            y2="80" 
-            z="130" 
-            />
+.. jupyter-execute:: 
+    :hide-code:
 
-      - .. jupyter-execute:: 
-            :raises:
-            :hide-code:
-
-            import cinema_plot
-            cinema_plot.tutorial('trapezoid.gdml')
+    import cinema_plot
+    cinema_plot.tutorial('trapezoid.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -703,29 +517,15 @@ Usage
 .. jupyter-kernel:: 
     :id: tube
 
-.. list-table::
-    :width: 100%
-    :widths: 40 60
+.. code-block:: xml
 
-    * - .. code-block:: xml
+    <tubeaunit="deg" lunit="mm" name="TubeSolid" rmin="0.0" rmax="50.0" z="120.0" deltaphi="360.0" startphi="0.0"/>
 
-            <tube
-            aunit="deg" 
-            lunit="mm" 
-            name="TubeSolid" 
-            rmin="0.0" 
-            rmax="50.0" 
-            z="120.0" 
-            deltaphi="360.0" 
-            startphi="0.0" 
-            />
+.. jupyter-execute:: 
+    :hide-code:
 
-      - .. jupyter-execute:: 
-            :raises:
-            :hide-code:
-
-            import cinema_plot
-            cinema_plot.tutorial('tube.gdml')
+    import cinema_plot
+    cinema_plot.tutorial('tube.gdml')
 
 Parameters
 ^^^^^^^^^^
