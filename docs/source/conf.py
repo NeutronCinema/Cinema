@@ -34,8 +34,8 @@ print(sys.executable)
 import pyvista
 
 os.environ["CDOCROOT"] = os.path.dirname(__file__)
-os.environ["CDOCGDML"] = os.path.join(os.getenv("CDOCROOT"), 'usersmanual', 'geometry')
-os.environ["CDOCUTILS"] = os.path.join(os.getenv("CDOCROOT"), '_utils')
+os.environ["CDOCGDML"] = os.path.join(os.getenv("CDOCROOT"),'prompt' ,'usersmanual', 'geometry')
+os.environ["CDOCUTILS"] = os.path.join(os.getenv("CDOCROOT"), 'utils')
 os.environ['PYTHONPATH'] = ':'.join((os.getenv("CDOCUTILS"), os.environ.get('PYTHONPATH', '')))
 sys.path.insert(0, os.path.abspath('..'))
 
@@ -112,9 +112,32 @@ html_theme = 'sphinx_rtd_theme'
 # epub_show_urls = 'footnote'
 
 # -- LaTex output configuration -----------------
-latex_documents = [
-    ('index', 'cinema.tex', 'Prompt', 'Developers', 
-    'manual')
+latex_additional_files = [
+    './theme/elsarticle.cls'
 ]
 
+latex_theme_path = [
+    './theme/elsarticle.cls'
+]
+
+latex_toplevel_sectioning = 'section'
+
+# latex_theme = ''
+
+latex_documents = [
+    ('index_prompt', 'cinema.tex', 
+    'Prompt: Probability-Conserved Cross Section Biasing Monte Carlo Particle Transport System', 'Developers', 
+    'elsarticle', True)
+]
+
+latex_elements = {
+
+    'papersize': r'''a4paper''',
+    'preamble': r"""
+    
+    """
+}
+
 latex_logo = os.path.join('img', 'logo.png')
+
+

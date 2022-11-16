@@ -2,7 +2,7 @@ Geometry
 ==========
 
 Arbitrary\_trapezoid
----------------------
+-----------------------
 
 Usage
 ^^^^^^^^^^
@@ -106,7 +106,7 @@ Parameters
 
 
 CutTube
--------
+--------
 
 Usage
 ^^^^^
@@ -188,7 +188,7 @@ Parameters
 
 
 General\_trapezoid
------------------
+-------------------
 
 Usage
 ^^^^^

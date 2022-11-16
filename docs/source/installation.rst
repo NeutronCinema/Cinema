@@ -1,5 +1,5 @@
 Installation
-=================
+============================
 
 Cinema is now available for Linux, via ``pip``. 
 

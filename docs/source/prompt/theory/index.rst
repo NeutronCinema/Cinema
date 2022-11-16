@@ -4,7 +4,7 @@ Theory
 Monte Carlo simulation
 ----------------------------
 
-.. figure:: ../img/transport.png
+.. figure:: /img/transport.png
 
    A simplified sketch of particle transport
 

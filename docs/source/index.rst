@@ -18,9 +18,7 @@ The cross section generators for crystalline materials *PiXiu* and liquids *Tak*
    :maxdepth: 2
 
    installation
-   tutorial/index
-   theory/index
-   usersmanual/index
+   prompt/index
    publications
    references
    api/library_root
