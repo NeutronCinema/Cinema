@@ -2,22 +2,14 @@ Geometry
 ==========
 
 Arbitrary\_trapezoid
------------------------
+---------------------
 
 Usage
 ^^^^^^^^^^
-.. jupyter-kernel:: 
-    :id: arbitrary_trapezoid
-
 .. code-block:: xml
 
     <arb8 lunit="mm" name="Arb8Solid" v1x="-30" v1y="-60" v2x="30" v2y="-60" v3x="50" v3y="60" v4x="-50" v4y="60" v5x="-30" v5y="-60" v6x="30" v6y="-60" v7x="50" v7y="60" v8x="-50" v8y="60" dz="70"/>
 
-.. jupyter-execute:: 
-    :hide-code:
-
-    import cinema_plot
-    cinema_plot.tutorial('arbitrary_trapezoid.gdml')
 
 Parameters
 ^^^^^^^^^^^^
@@ -49,18 +41,10 @@ Box
 
 Usage
 ^^^^^^
-.. jupyter-kernel:: 
-    :id: box
 
 .. code-block:: xml
 
     <box lunit="mm" name="BoxSolid" x="100.0" y="100.0" z="100.0"/>
-
-.. jupyter-execute:: 
-    :hide-code:
-
-    import cinema_plot
-    cinema_plot.tutorial('box.gdml')
 
 Parameters
 ^^^^^^^^^^^
@@ -77,18 +61,10 @@ Cone
 
 Usage
 ^^^^^^
-.. jupyter-kernel:: 
-    :id: cone
 
 .. code-block:: xml
 
     <cone aunit="deg" lunit="mm" name="ConeSolid" rmin1="0.0" rmax1="50.0" rmin2="0.0" rmax2="10.0" z="120.0" deltaphi="360.0" startphi="0.0" />
-
-.. jupyter-execute:: 
-    :hide-code:
-
-    import cinema_plot
-    cinema_plot.tutorial('cone.gdml')
 
 Parameters
 ^^^^^^^^^^^
@@ -106,22 +82,14 @@ Parameters
 
 
 CutTube
---------
+-------
 
 Usage
 ^^^^^
-.. jupyter-kernel:: 
-    :id: cutTube
-
 .. code-block:: xml
 
     <cutTube aunit="deg" lunit="mm" name="CutTubeSolid" rmin="0.0" rmax="25.0" z="50.0" deltaphi="360.0" startphi="0.0" lowX="-10" lowY="-10" lowZ="-10" highX="10" highY="10" highZ="10"/>
 
-.. jupyter-execute:: 
-    :hide-code:
-
-    import cinema_plot
-    cinema_plot.tutorial('cutTube.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -146,8 +114,6 @@ Extruded\_solid\_notsure
 
 Usage
 ^^^^^
-.. jupyter-kernel:: 
-    :id: extruded_solid_notsure
 
 .. code-block:: xml
 
@@ -158,12 +124,6 @@ Usage
         <section zOrder="10" zPosition="20" xOffset="5" yOffset="3" scalingFactor="3"/>
         <section zOrder="20" zPosition="50" xOffset="3" yOffset="5" scalingFactor="1"/>
     </xtru>
-
-.. jupyter-execute:: 
-    :hide-code:
-
-    import cinema_plot
-    cinema_plot.tutorial('extruded_solid_notsure.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -188,22 +148,15 @@ Parameters
 
 
 General\_trapezoid
--------------------
+-----------------
 
 Usage
 ^^^^^
-.. jupyter-kernel:: 
-    :id: general_trapezoid
 
 .. code-block:: xml
 
     <trap lunit="mm" name="TrapSolid" z="130" thata="45" phi="45" y1="60" x1="40" x2="40" alpha1="45" y2="60" x3="40" x4="40" alpha2="45"/>
     
-.. jupyter-execute:: 
-    :hide-code:
-
-    import cinema_plot
-    cinema_plot.tutorial('general_trapezoid.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -244,18 +197,10 @@ Hyperbolic\_tube
 
 Usage
 ^^^^^^
-.. jupyter-kernel:: 
-    :id: hyperbolic_tube
 
 .. code-block:: xml
 
     <hype lunit="mm" name="HypeSolid" rmin="0" rmax="20" z="100" inst="3" outst="4"/>
-
-.. jupyter-execute:: 
-    :hide-code:
-
-    import cinema_plot
-    cinema_plot.tutorial('hyperbolic_tube.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -274,18 +219,10 @@ Orb
 
 Usage
 ^^^^^
-.. jupyter-kernel:: 
-    :id: orb
-
 .. code-block:: xml
 
     <orb lunit="mm" name="OrbSolid" r="50"/>
 
-.. jupyter-execute:: 
-    :hide-code:
-
-    import cinema_plot
-    cinema_plot.tutorial('orb.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -300,18 +237,9 @@ Paraboloid
 
 Usage
 ^^^^^
-.. jupyter-kernel:: 
-    :id: paraboloid
-
 .. code-block:: xml
 
     <paraboloid lunit="mm" name="ParaboloidSolid" rlo="0.0" rhi="60.0" dz="60.0"/>
-
-.. jupyter-execute:: 
-    :hide-code:
-
-    import cinema_plot
-    cinema_plot.tutorial('paraboloid.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -328,9 +256,6 @@ Polycone
 
 Usage
 ^^^^^^
-.. jupyter-kernel:: 
-    :id: polycone
-
 .. code-block:: xml
 
     <polycone aunit="deg" lunit="mm" name="PolyconeSolid" deltaphi="360.0" startphi="0.0">
@@ -338,11 +263,6 @@ Usage
         <zplane rmin="30.0" rmax="50.0" z="60" />
     </polycone>
 
-.. jupyter-execute:: 
-    :hide-code:
-
-    import cinema_plot
-    cinema_plot.tutorial('polycone.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -367,8 +287,6 @@ Polyhedra
 
 Usage
 ^^^^^^
-.. jupyter-kernel:: 
-    :id: polyhedra
 
 .. code-block:: xml
 
@@ -376,12 +294,6 @@ Usage
         <zplane rmin="0.0" rmax="20.0" z="-50" />
         <zplane rmin="0.0" rmax="50.0" z="60" />
     </polyhedra>
-
-.. jupyter-execute:: 
-    :hide-code:
-
-    import cinema_plot
-    cinema_plot.tutorial('polyhedra.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -408,18 +320,9 @@ Sphere
 
 Usage
 ^^^^^
-.. jupyter-kernel:: 
-    :id: sphere
-
 .. code-block:: xml
 
     <sphere aunit="deg" lunit="mm" name="SphereSolid" rmin="0.0" rmax="60.0" deltaphi="180.0" startphi="0.0" deltatheta="90.0" starttheta="0.0"/>
-
-.. jupyter-execute:: 
-    :hide-code:
-
-    import cinema_plot
-    cinema_plot.tutorial('sphere.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -448,9 +351,6 @@ Tetrahedron
 Usage
 ^^^^^
 
-.. jupyter-kernel:: 
-    :id: tetrahedron
-
 .. code-block:: xml
 
     <define>
@@ -461,11 +361,6 @@ Usage
     </define>
     <tet name="TetrahedronSolid" vertex1="v1" vertex2="v2" vertex3="v3" vertex4="v4"/>
 
-.. jupyter-execute:: 
-    :hide-code:
-
-    import cinema_plot
-    cinema_plot.tutorial('tetrahedron.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -483,18 +378,10 @@ Trapezoid
 
 Usage
 ^^^^^^
-.. jupyter-kernel:: 
-    :id: trapezoid
 
 .. code-block:: xml
 
     <trd lunit="mm" name="TrdSolid"  x1="50" x2="100" y1="60" y2="80" z="130"/>
-
-.. jupyter-execute:: 
-    :hide-code:
-
-    import cinema_plot
-    cinema_plot.tutorial('trapezoid.gdml')
 
 Parameters
 ^^^^^^^^^^
@@ -514,18 +401,10 @@ Tube
 
 Usage
 ^^^^^
-.. jupyter-kernel:: 
-    :id: tube
-
 .. code-block:: xml
 
-    <tube aunit="deg" lunit="mm" name="TubeSolid" rmin="0.0" rmax="50.0" z="120.0" deltaphi="360.0" startphi="0.0"/>
+    <tubeaunit="deg" lunit="mm" name="TubeSolid" rmin="0.0" rmax="50.0" z="120.0" deltaphi="360.0" startphi="0.0"/>
 
-.. jupyter-execute:: 
-    :hide-code:
-
-    import cinema_plot
-    cinema_plot.tutorial('tube.gdml')
 
 Parameters
 ^^^^^^^^^^
