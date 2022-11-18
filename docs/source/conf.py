@@ -130,7 +130,7 @@ latex_toplevel_sectioning = 'section'
 
 latex_documents = [
     ('prompt/paper', 'cinema.tex', 
-    'Prompt: Probability-Conserved Cross Section Biasing Monte Carlo Particle Transport System', 'Developers', 
+    'Prompt: Probability-Conserved Cross Section Biasing Monte Carlo Particle Transport System', '', 
     'elsarticle', True)
 ]
 
@@ -149,6 +149,7 @@ latex_elements = {
     'fncychap': '',
     'preamble': r"""
 \usepackage{booktabs}
+\usepackage[font=normalsize,labelfont=bf]{caption}
     """
 }
 
