@@ -143,7 +143,7 @@ latex_table_style = ['booktabs', 'nocolorrows']
 latex_elements = {
     'papersize': r'a4paper',
     'tableofcontents': r'',
-    'pointsize': r'12pt',
+    'pointsize': r'10pt',
     'fontpkg': r"""
 \usepackage{times}
 \renewcommand{\familydefault}{\rmdefault}
@@ -151,7 +151,7 @@ latex_elements = {
     'fncychap': '',
     'preamble': r"""
 \usepackage{booktabs}
-\usepackage[font=normalsize,labelfont=bf]{caption}
+\usepackage[font=footnotesize,labelfont=bf]{caption}
     """
 }
 
