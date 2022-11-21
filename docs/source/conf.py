@@ -118,6 +118,8 @@ latex_additional_files = [
     './theme/sphinxlatexstyletext.sty',
     './theme/sphinxlatexstyleheadings.sty',
     './theme/sphinxlatexstylepage.sty',
+    './theme/sphinxlatexliterals.sty',
+    './theme/sphinxmessages.sty',
 ]
 
 latex_theme_path = [

@@ -753,6 +753,8 @@
   \setcounter{equation}{0}
   \gdef\thefigure{\@Alph\c@section.\arabic{figure}}%
   \gdef\thetable{\@Alph\c@section.\arabic{table}}%
+  %% --panzy: set literal block label
+  \gdef\theliteralblock{\@Alph\c@section.\arabic{literalblock}}%
   \gdef\thesection{\appendixname~\@Alph\c@section}%
   \@addtoreset{equation}{section}%
   \gdef\theequation{\@Alph\c@section.\arabic{equation}}%
