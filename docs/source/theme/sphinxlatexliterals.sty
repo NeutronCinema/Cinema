@@ -381,7 +381,8 @@
 % insert a \label via \sphinxLiteralBlockLabel
 % reset to normal the color for the literal block caption
     \def\sphinxVerbatimTitle
-       {\py@NormalColor\sphinxcaption{\sphinxLiteralBlockLabel #1}}%
+    %% --panzy: fix literal block font size to normalsize
+       {\py@NormalColor\captionsetup{font=normalsize}\sphinxcaption{\sphinxLiteralBlockLabel #1}}%
 }
 \newcommand*\sphinxSetupCodeBlockInFootnote {%
   \fvset{fontsize=\footnotesize}\let\caption\sphinxfigcaption

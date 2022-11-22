@@ -141,17 +141,20 @@ latex_appendices = ['./prompt/usersmanual/geometry']
 latex_table_style = ['booktabs', 'nocolorrows']
 
 latex_elements = {
-    'papersize': r'a4paper',
+    'papersize': r'preprint',
     'tableofcontents': r'',
-    'pointsize': r'10pt',
+    # 'pointsize': r'10pt',
+    # refer to CPC_template.tex for options available
+    'extraclassoptions': r'times',
     'fontpkg': r"""
-\usepackage{times}
-\renewcommand{\familydefault}{\rmdefault}
+% \usepackage{txfonts}
+% \renewcommand{\familydefault}{\rmdefault}
 """,
     'fncychap': '',
     'preamble': r"""
 \usepackage{booktabs}
-\usepackage[font=footnotesize,labelfont=bf]{caption}
+% affect only figure and table, as known
+\usepackage[font=small,labelfont=bf]{caption}
     """
 }
 
