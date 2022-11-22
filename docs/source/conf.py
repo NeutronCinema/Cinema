@@ -112,6 +112,9 @@ html_theme = 'sphinx_rtd_theme'
 # epub_show_urls = 'footnote'
 
 # -- LaTex output configuration -----------------
+# it seems like a hard job to simply add a custom document class (.cls)
+# the solution here is to bind sphinx and latex step by step
+# https://github.com/sphinx-doc/sphinx/pull/6969#pullrequestreview-369699459
 latex_additional_files = [
     './theme/elsarticle.cls',
     './theme/sphinx.sty',
