@@ -747,7 +747,10 @@
 }{}}
 %%
 \def\appendixname{Appendix }
-\renewcommand\appendix{\par
+\renewcommand\appendix{
+  %% --panzy: add pagebreak before appendix
+  \pagebreak
+  \par
   \setcounter{section}{0}%
   \setcounter{subsection}{0}%
   \setcounter{equation}{0}
