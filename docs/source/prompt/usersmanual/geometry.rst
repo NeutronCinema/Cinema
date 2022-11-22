@@ -13,7 +13,7 @@ Usage
 .. --TODO: just in case if code font needed changed
 .. --ref:https://stackoverflow.com/a/9960329
 .. code-block:: xml
-    :caption: An example of arbitrary_trapezoid realization
+    :caption: An example: definition of an arbitrary_trapezoid
 
     <arb8 lunit="mm" name="Arb8Solid" v1x="-30" v1y="-60" v2x="30" v2y="-60" v3x="50" v3y="60" v4x="-50" v4y="60" v5x="-30" v5y="-60" v6x="30" v6y="-60" v7x="50" v7y="60" v8x="-50" v8y="60" dz="70"/>
 
@@ -25,7 +25,7 @@ Usage
 
 Parameters
 ^^^^^^^^^^^^
-.. table:: Parameters for definition of Arbitrary_trapezoid
+.. table:: Parameters for defining an arbitrary_trapezoid
 
  ============= ========================== 
   Parameters    Descriptions          
@@ -59,7 +59,7 @@ Usage
     :id: box
 
 .. code-block:: xml
-    :caption: An example of box realization
+    :caption: An example: definition of a box
 
     <box lunit="mm" name="BoxSolid" x="100.0" y="100.0" z="100.0"/>
 
@@ -71,7 +71,7 @@ Usage
 
 Parameters
 ^^^^^^^^^^^
-.. table:: Parameters for definition of Box
+.. table:: Parameters for defining a box
 
  ============= ============================= 
   Parameters    Descriptions          
@@ -90,7 +90,7 @@ Usage
     :id: cone
 
 .. code-block:: xml
-    :caption: An example of cone realization
+    :caption: An example: definition of a cone
 
     <cone aunit="deg" lunit="mm" name="ConeSolid" rmin1="0.0" rmax1="50.0" rmin2="0.0" rmax2="10.0" z="120.0" deltaphi="360.0" startphi="0.0" />
 
@@ -102,7 +102,7 @@ Usage
 
 Parameters
 ^^^^^^^^^^^
-.. table:: Parameters for definition of Cone
+.. table:: Parameters for defining a cone
 
  ============= =============================== 
   Parameters    Descriptions                   
@@ -126,7 +126,7 @@ Usage
     :id: cutTube
 
 .. code-block:: xml
-    :caption: An example of cutTube realization
+    :caption: An example: definition of a cutTube
 
     <cutTube aunit="deg" lunit="mm" name="CutTubeSolid" rmin="0.0" rmax="25.0" z="50.0" deltaphi="360.0" startphi="0.0" lowX="-10" lowY="-10" lowZ="-10" highX="10" highY="10" highZ="10"/>
 
@@ -138,7 +138,7 @@ Usage
 
 Parameters
 ^^^^^^^^^^
-.. table:: Parameters for definition of CutTube
+.. table:: Parameters for defining a cutTube
 
  ============= ============================================= 
   Parameters    Descriptions                                 
@@ -165,7 +165,7 @@ Usage
     :id: extruded_solid_notsure
 
 .. code-block:: xml
-    :caption: An example of extruded_solid_notsure realization
+    :caption: An example: definition of an extruded_solid_notsure
 
     <xtru lunit="mm" name="XtruSolid"  >
         <twoDimVertex x="30" y="90" />
@@ -185,27 +185,27 @@ Parameters
 ^^^^^^^^^^
 .. --indent the table to make it recognized
 .. --ref: https://stackoverflow.com/a/53192390
-.. table:: Parameters for definition of Extruded_solid_notsure
-    :widths: 25, 25, 50
+.. table:: Parameters for defining an extruded_solid_notsure
+    :widths: 15, 23, 17, 45
 
-    +---------------------------+---------------------+-------------------------------------------------+
-    | Attributes                | Parameters          | Descriptions                                    |
-    +===========================+=====================+=================================================+
-    | ``twoDimVertex``          | ``x``               | x coordinate of the vertex                      |
-    | (vertices of an           +---------------------+-------------------------------------------------+
-    | unbound blueprint polygon)| ``y``               | y coordinate of the vertex                      |
-    +---------------------------+---------------------+-------------------------------------------------+
-    | ``section``               | ``zOrder``          | index of the section, must be between 0 and n-1 |
-    | (z section)               |                     | where n is the number of sections               |
-    |                           +---------------------+-------------------------------------------------+
-    |                           | ``zPosition``       | distance from the plane z=0                     |
-    |                           +---------------------+-------------------------------------------------+
-    |                           | ``xOffset``         | x offset from centre point of original plane    |
-    |                           +---------------------+-------------------------------------------------+
-    |                           | ``yOffset``         | y offset from centre point of original plane    |
-    |                           +---------------------+-------------------------------------------------+
-    |                           | ``scalingFactor``   | proportion to original blueprint                |
-    +---------------------------+---------------------+-------------------------------------------------+
+    +------------------+-----------------------------+---------------------+-------------------------------------------------+
+    | Attributes       | Attribute descriptions      | Parameters          | Paramter descriptions                           |
+    +==================+=============================+=====================+=================================================+
+    | ``twoDimVertex`` | vertices of an              | ``x``               | x coordinate of the vertex                      |
+    |                  | unbound blueprint polygon   +---------------------+-------------------------------------------------+
+    |                  |                             | ``y``               | y coordinate of the vertex                      |
+    +------------------+-----------------------------+---------------------+-------------------------------------------------+
+    | ``section``      |  z section                  | ``zOrder``          | index of the section, must be between 0 and n-1 |
+    |                  |                             |                     | where n is the number of sections               |
+    |                  |                             +---------------------+-------------------------------------------------+
+    |                  |                             | ``zPosition``       | distance from the plane z=0                     |
+    |                  |                             +---------------------+-------------------------------------------------+
+    |                  |                             | ``xOffset``         | x offset from centre point of original plane    |
+    |                  |                             +---------------------+-------------------------------------------------+
+    |                  |                             | ``yOffset``         | y offset from centre point of original plane    |
+    |                  |                             +---------------------+-------------------------------------------------+
+    |                  |                             | ``scalingFactor``   | proportion to original blueprint                |
+    +------------------+-----------------------------+---------------------+-------------------------------------------------+
 
 
 General\_trapezoid
@@ -217,7 +217,7 @@ Usage
     :id: general_trapezoid
 
 .. code-block:: xml
-    :caption: An example of general_trapezoid realization
+    :caption: An example: definition of a general_trapezoid
 
     <trap lunit="mm" name="TrapSolid" z="130" thata="45" phi="45" y1="60" x1="40" x2="40" alpha1="45" y2="60" x3="40" x4="40" alpha2="45"/>
     
@@ -229,7 +229,7 @@ Usage
 
 Parameters
 ^^^^^^^^^^
-.. table:: Parameters for definition of General_trapezoid
+.. table:: Parameters for defining a general_trapezoid
     :widths: 20, 80
 
     +-------------+--------------------------------------------------+
@@ -273,7 +273,7 @@ Usage
     :id: hyperbolic_tube
 
 .. code-block:: xml
-    :caption: An example of hyperbolic_tube realization
+    :caption: An example: definition of a hyperbolic_tube
 
     <hype lunit="mm" name="HypeSolid" rmin="0" rmax="20" z="100" inst="3" outst="4"/>
 
@@ -285,7 +285,7 @@ Usage
 
 Parameters
 ^^^^^^^^^^
-.. table:: Parameters for definition of Hyperbolic_tube
+.. table:: Parameters for defining a hyperbolic_tube
 
  ============= ======================== 
   Parameters    Descriptions            
@@ -306,7 +306,7 @@ Usage
     :id: orb
 
 .. code-block:: xml
-    :caption: An example of orb realization
+    :caption: An example: definition of an orb
 
     <orb lunit="mm" name="OrbSolid" r="50"/>
 
@@ -318,7 +318,7 @@ Usage
 
 Parameters
 ^^^^^^^^^^
-.. table:: Parameters for definition of Orb
+.. table:: Parameters for defining an orb
 
  ============= ======================== 
   Parameters    Descriptions            
@@ -335,7 +335,7 @@ Usage
     :id: paraboloid
 
 .. code-block:: xml
-    :caption: An example of paraboloid realization
+    :caption: An example: definition of a paraboloid
 
     <paraboloid lunit="mm" name="ParaboloidSolid" rlo="0.0" rhi="60.0" dz="60.0"/>
 
@@ -347,7 +347,7 @@ Usage
 
 Parameters
 ^^^^^^^^^^
-.. table:: Parameters for definition of Paraboloid
+.. table:: Parameters for defining a paraboloid
 
  ============= =============== 
   Parameters    Descriptions   
@@ -366,7 +366,7 @@ Usage
     :id: polycone
 
 .. code-block:: xml
-    :caption: An example of polycone realization
+    :caption: An example: definition of a polycone
 
     <polycone aunit="deg" lunit="mm" name="PolyconeSolid" deltaphi="360.0" startphi="0.0">
         <zplane rmin="10.0" rmax="20.0" z="-50" />
@@ -381,7 +381,7 @@ Usage
 
 Parameters
 ^^^^^^^^^^
-.. table:: Parameters for definition of Polycone
+.. table:: Parameters for defining a polycone
     :widths: 20, 20, 60
 
     +-------------+------------------------------------------------+
@@ -409,7 +409,7 @@ Usage
     :id: polyhedra
 
 .. code-block:: xml
-    :caption: An example of polyhedra realization
+    :caption: An example: definition of a polyhedra
 
     <polyhedra aunit="deg" lunit="mm" name="PolyhedraSolid" deltaphi="360.0" startphi="0.0" numsides="6">
         <zplane rmin="0.0" rmax="20.0" z="-50" />
@@ -424,7 +424,7 @@ Usage
 
 Parameters
 ^^^^^^^^^^
-.. table:: Parameters for definition of Polyhedra
+.. table:: Parameters for defining a polyhedra
     :widths: 20, 20, 60
 
     +-------------+------------------------------------------------+
@@ -454,7 +454,7 @@ Usage
     :id: sphere
 
 .. code-block:: xml
-    :caption: An example of sphere realization
+    :caption: An example: definition of a sphere
 
     <sphere aunit="deg" lunit="mm" name="SphereSolid" rmin="0.0" rmax="60.0" deltaphi="180.0" startphi="0.0" deltatheta="90.0" starttheta="0.0"/>
 
@@ -466,7 +466,7 @@ Usage
 
 Parameters
 ^^^^^^^^^^
-.. table:: Parameters for definition of Sphere
+.. table:: Parameters for defining a sphere
 
     +------------------+--------------------------------+
     | Parameters       | Descriptions                   |
@@ -497,7 +497,7 @@ Usage
     :id: tetrahedron
 
 .. code-block:: xml
-    :caption: An example of tetrahedron realization
+    :caption: An example: definition of a tetrahedron
 
     <define>
         <position name="v1" x="-70" y="-70" z="-60"/>
@@ -515,7 +515,7 @@ Usage
 
 Parameters
 ^^^^^^^^^^
-.. table:: Parameters for definition of Tetrahedron
+.. table:: Parameters for defining a tetrahedron
 
  ============= ====================== 
   Parameters    Descriptions          
@@ -535,7 +535,7 @@ Usage
     :id: trapezoid
 
 .. code-block:: xml
-    :caption: An example of trapezoid realization
+    :caption: An example: definition of a trapezoid
 
     <trd lunit="mm" name="TrdSolid"  x1="50" x2="100" y1="60" y2="80" z="130"/>
 
@@ -547,7 +547,7 @@ Usage
 
 Parameters
 ^^^^^^^^^^
-.. table:: Parameters for definition of Trapezoid
+.. table:: Parameters for defining a trapezoid
 
  ============= ================= 
   Parameters    Descriptions     
@@ -569,7 +569,7 @@ Usage
     :id: tube
 
 .. code-block:: xml
-    :caption: An example of tube realization
+    :caption: An example: definition of a tube
 
     <tube aunit="deg" lunit="mm" name="TubeSolid" rmin="0.0" rmax="50.0" z="120.0" deltaphi="360.0" startphi="0.0"/>
 
@@ -581,7 +581,7 @@ Usage
 
 Parameters
 ^^^^^^^^^^
-.. table:: Parameters for definition of Tube
+.. table:: Parameters for defining a tube
 
     +------------------+-------------------------------------------+
     | Parameters       | Descriptions                              |
