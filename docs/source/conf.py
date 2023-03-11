@@ -13,8 +13,8 @@ version = '0.0.1'
 
 extensions = [
     # 'nbsphinx',
-    # 'breathe',
-    # 'exhale',
+    'breathe',
+    'exhale',
     'sphinx.ext.duration',
     'sphinx.ext.doctest',
     'sphinx.ext.autodoc',
@@ -42,53 +42,53 @@ sys.path.insert(0, os.path.abspath('..'))
 # To start framebuffer: required if built in VM or docker (where is the case of readthedocs)
 pyvista.start_xvfb()
 
-# # Setup the breathe extension
-# breathe_projects = {
-#     "cinema": "./_doxygen/xml"
-# }
-# breathe_default_project = "cinema"
+# Setup the breathe extension
+breathe_projects = {
+    "cinema": "./_doxygen/xml"
+}
+breathe_default_project = "cinema"
 
-# # Setup the exhale extension
-# exhale_args = {
-#     # These arguments are required
-#     "containmentFolder":     "./api",
-#     "rootFileName":          "library_root.rst",
-#     "doxygenStripFromPath":  "..",
-#     # Heavily encouraged optional argument (see docs)
-#     "rootFileTitle":         "Library API",
-#     # Suggested optional arguments
-#     "createTreeView":        True,
-#     # TIP: if using the sphinx-bootstrap-theme, you need
-#     # "treeViewIsBootstrap": True,
-#     "exhaleExecutesDoxygen": True,
-#     "exhaleDoxygenStdin":    textwrap.dedent('''
-#         INPUT = ../../src/cxx
-#         EXTRACT_ALL = YES
-#         CLASS_DIAGRAMS = YES
-#         HIDE_UNDOC_RELATIONS = NO
-#         HAVE_DOT = YES
-#         CLASS_GRAPH = YES
-#         COLLABORATION_GRAPH = YES
-#         UML_LOOK = YES
-#         UML_LIMIT_NUM_FIELDS = 50
-#         TEMPLATE_RELATIONS = YES
-#         DOT_GRAPH_MAX_NODES = 100
-#         MAX_DOT_GRAPH_DEPTH = 0
-#         DOT_TRANSPARENT = YES
-#         GENERATE_LATEX = YES
-#         ''')
+# Setup the exhale extension
+exhale_args = {
+    # These arguments are required
+    "containmentFolder":     "./api",
+    "rootFileName":          "library_root.rst",
+    "doxygenStripFromPath":  "..",
+    # Heavily encouraged optional argument (see docs)
+    "rootFileTitle":         "Library API",
+    # Suggested optional arguments
+    "createTreeView":        True,
+    # TIP: if using the sphinx-bootstrap-theme, you need
+    # "treeViewIsBootstrap": True,
+    "exhaleExecutesDoxygen": True,
+    "exhaleDoxygenStdin":    textwrap.dedent('''
+        INPUT = ../../src/cxx
+        EXTRACT_ALL = YES
+        CLASS_DIAGRAMS = YES
+        HIDE_UNDOC_RELATIONS = NO
+        HAVE_DOT = YES
+        CLASS_GRAPH = YES
+        COLLABORATION_GRAPH = YES
+        UML_LOOK = YES
+        UML_LIMIT_NUM_FIELDS = 50
+        TEMPLATE_RELATIONS = YES
+        DOT_GRAPH_MAX_NODES = 100
+        MAX_DOT_GRAPH_DEPTH = 0
+        DOT_TRANSPARENT = YES
+        GENERATE_LATEX = YES
+        ''')
         
-# }
+}
 
-# # Tell sphinx what the primary language being documented is.
-# primary_domain = 'cpp'
+# Tell sphinx what the primary language being documented is.
+primary_domain = 'cpp'
 
-# # Tell sphinx what the pygments highlight language should be.
-# highlight_language = 'cpp'
+# Tell sphinx what the pygments highlight language should be.
+highlight_language = 'cpp'
 
 
-# package_path = os.path.abspath('../..')
-# os.environ['PYTHONPATH'] = ':'.join((package_path, os.environ.get('PYTHONPATH', '')))
+package_path = os.path.abspath('../..')
+os.environ['PYTHONPATH'] = ':'.join((package_path, os.environ.get('PYTHONPATH', '')))
 
 imgmath_image_format = 'svg'
 imgmath_font_size = 14
