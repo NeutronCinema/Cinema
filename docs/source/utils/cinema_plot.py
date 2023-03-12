@@ -1,8 +1,11 @@
+#!python
+
+import numpy as np
+import pyvista 
 
 def tutorial(fn):
     
     import os, sys
-    import pyvista
     import stdout_redirect as rd
     import contextlib
 
@@ -40,3 +43,35 @@ def tutorial(fn):
                     v.plotter.show_bounds()
                     v.plotter.show_axes()
                     v.plotter.show()
+
+
+# Monkey patching to overwrite plot style
+import pyvista.jupyter.notebook as jp
+jp.build_panel_bounds = lambda actor: add_axes(actor)
+
+def add_axes(actor):
+    """
+    Build a panel bounds actor using the plotter cube_axes_actor.
+    """
+    bounds = {}
+
+    n_ticks = 5
+    if actor.GetXAxisVisibility():
+        xmin, xmax = actor.GetXRange()
+        bounds['xticker'] = {'ticks': np.linspace(xmin, xmax, n_ticks)}
+
+    if actor.GetYAxisVisibility():
+        ymin, ymax = actor.GetYRange()
+        bounds['yticker'] = {'ticks': np.linspace(ymin, ymax, n_ticks)}
+
+    if actor.GetZAxisVisibility():
+        zmin, zmax = actor.GetZRange()
+        bounds['zticker'] = {'ticks': np.linspace(zmin, zmax, n_ticks)}
+
+    bounds['origin'] = [xmin, ymin, zmin]
+    bounds['grid_opacity'] = 1.
+    bounds['show_grid'] = True
+    bounds['digits'] = 1
+    bounds['fontsize'] = 14
+
+    return bounds
