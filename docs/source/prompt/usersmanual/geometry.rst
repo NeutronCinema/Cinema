@@ -5,8 +5,6 @@ Geometry
 Arbitrary\_trapezoid
 -----------------------
 
-Usage
-^^^^^^^^^^
 .. jupyter-kernel:: 
     :id: arbitrary_trapezoid
 
@@ -23,8 +21,6 @@ Usage
     import cinema_plot
     cinema_plot.tutorial('arbitrary_trapezoid.gdml')
 
-Parameters
-^^^^^^^^^^^^
 .. table:: Parameters for defining an arbitrary_trapezoid
 
  ============= ========================== 
@@ -53,8 +49,6 @@ Parameters
 Box
 ----
 
-Usage
-^^^^^^
 .. jupyter-kernel:: 
     :id: box
 
@@ -69,8 +63,6 @@ Usage
     import cinema_plot
     cinema_plot.tutorial('box.gdml')
 
-Parameters
-^^^^^^^^^^^
 .. table:: Parameters for defining a box
 
  ============= ============================= 
@@ -84,8 +76,6 @@ Parameters
 Cone
 ----
 
-Usage
-^^^^^^
 .. jupyter-kernel:: 
     :id: cone
 
@@ -100,8 +90,6 @@ Usage
     import cinema_plot
     cinema_plot.tutorial('cone.gdml')
 
-Parameters
-^^^^^^^^^^^
 .. table:: Parameters for defining a cone
 
  ============= =============================== 
@@ -120,8 +108,6 @@ Parameters
 CutTube
 --------
 
-Usage
-^^^^^
 .. jupyter-kernel:: 
     :id: cutTube
 
@@ -136,8 +122,6 @@ Usage
     import cinema_plot
     cinema_plot.tutorial('cutTube.gdml')
 
-Parameters
-^^^^^^^^^^
 .. table:: Parameters for defining a cutTube
 
  ============= ============================================= 
@@ -159,8 +143,6 @@ Parameters
 Extruded\_solid\_notsure
 ---------------------------
 
-Usage
-^^^^^
 .. jupyter-kernel:: 
     :id: extruded_solid_notsure
 
@@ -181,8 +163,6 @@ Usage
     import cinema_plot
     cinema_plot.tutorial('extruded_solid_notsure.gdml')
 
-Parameters
-^^^^^^^^^^
 .. --indent the table to make it recognized
 .. --ref: https://stackoverflow.com/a/53192390
 .. table:: Parameters for defining an extruded_solid_notsure
@@ -211,8 +191,6 @@ Parameters
 General\_trapezoid
 -------------------
 
-Usage
-^^^^^
 .. jupyter-kernel:: 
     :id: general_trapezoid
 
@@ -227,8 +205,6 @@ Usage
     import cinema_plot
     cinema_plot.tutorial('general_trapezoid.gdml')
 
-Parameters
-^^^^^^^^^^
 .. table:: Parameters for defining a general_trapezoid
     :widths: 20, 80
 
@@ -267,8 +243,6 @@ Parameters
 Hyperbolic\_tube
 ----------------
 
-Usage
-^^^^^^
 .. jupyter-kernel:: 
     :id: hyperbolic_tube
 
@@ -283,8 +257,6 @@ Usage
     import cinema_plot
     cinema_plot.tutorial('hyperbolic_tube.gdml')
 
-Parameters
-^^^^^^^^^^
 .. table:: Parameters for defining a hyperbolic_tube
 
  ============= ======================== 
@@ -300,8 +272,6 @@ Parameters
 Orb
 ----
 
-Usage
-^^^^^
 .. jupyter-kernel:: 
     :id: orb
 
@@ -316,8 +286,6 @@ Usage
     import cinema_plot
     cinema_plot.tutorial('orb.gdml')
 
-Parameters
-^^^^^^^^^^
 .. table:: Parameters for defining an orb
 
  ============= ======================== 
@@ -329,8 +297,6 @@ Parameters
 Paraboloid
 ----------
 
-Usage
-^^^^^
 .. jupyter-kernel:: 
     :id: paraboloid
 
@@ -345,8 +311,6 @@ Usage
     import cinema_plot
     cinema_plot.tutorial('paraboloid.gdml')
 
-Parameters
-^^^^^^^^^^
 .. table:: Parameters for defining a paraboloid
 
  ============= =============== 
@@ -360,8 +324,6 @@ Parameters
 Polycone
 --------
 
-Usage
-^^^^^^
 .. jupyter-kernel:: 
     :id: polycone
 
@@ -379,8 +341,6 @@ Usage
     import cinema_plot
     cinema_plot.tutorial('polycone.gdml')
 
-Parameters
-^^^^^^^^^^
 .. table:: Parameters for defining a polycone
     :widths: 20, 20, 60
 
@@ -403,8 +363,6 @@ Parameters
 Polyhedra
 ----------
 
-Usage
-^^^^^^
 .. jupyter-kernel:: 
     :id: polyhedra
 
@@ -422,8 +380,6 @@ Usage
     import cinema_plot
     cinema_plot.tutorial('polyhedra.gdml')
 
-Parameters
-^^^^^^^^^^
 .. table:: Parameters for defining a polyhedra
     :widths: 20, 20, 60
 
@@ -448,8 +404,6 @@ Parameters
 Sphere
 ------
 
-Usage
-^^^^^
 .. jupyter-kernel:: 
     :id: sphere
 
@@ -464,8 +418,6 @@ Usage
     import cinema_plot
     cinema_plot.tutorial('sphere.gdml')
 
-Parameters
-^^^^^^^^^^
 .. table:: Parameters for defining a sphere
 
     +------------------+--------------------------------+
@@ -490,8 +442,6 @@ Parameters
 Tetrahedron
 -----------
 
-Usage
-^^^^^
 
 .. jupyter-kernel:: 
     :id: tetrahedron
@@ -513,8 +463,6 @@ Usage
     import cinema_plot
     cinema_plot.tutorial('tetrahedron.gdml')
 
-Parameters
-^^^^^^^^^^
 .. table:: Parameters for defining a tetrahedron
 
  ============= ====================== 
@@ -529,8 +477,6 @@ Parameters
 Trapezoid
 ---------
 
-Usage
-^^^^^^
 .. jupyter-kernel:: 
     :id: trapezoid
 
@@ -545,8 +491,6 @@ Usage
     import cinema_plot
     cinema_plot.tutorial('trapezoid.gdml')
 
-Parameters
-^^^^^^^^^^
 .. table:: Parameters for defining a trapezoid
 
  ============= ================= 
@@ -563,8 +507,6 @@ Parameters
 Tube
 -----
 
-Usage
-^^^^^
 .. jupyter-kernel:: 
     :id: tube
 
@@ -579,8 +521,6 @@ Usage
     import cinema_plot
     cinema_plot.tutorial('tube.gdml')
 
-Parameters
-^^^^^^^^^^
 .. table:: Parameters for defining a tube
 
     +------------------+-------------------------------------------+

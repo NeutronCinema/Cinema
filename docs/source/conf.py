@@ -40,7 +40,7 @@ os.environ['PYTHONPATH'] = ':'.join((os.getenv("CDOCUTILS"), os.environ.get('PYT
 sys.path.insert(0, os.path.abspath('..'))
 
 # To start framebuffer: required if built in VM or docker (where is the case of readthedocs)
-pyvista.start_xvfb()
+# pyvista.start_xvfb()
 
 # Setup the breathe extension
 breathe_projects = {
