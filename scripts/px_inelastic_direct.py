@@ -57,7 +57,9 @@ class CohPhon:
         self.maxHistEn = omega.max()*THz*2*np.pi*hbar + 0.005 #add 5meV as the energy margin
 
         import euphonic as eu
-        self.eu = eu.ForceConstants.from_phonopy(summary_name='phonopy.yaml')
+        self.eu = eu.ForceConstants.from_phonopy(summary_name='phonopy.yaml',
+                                                fc_name='force_constants.hdf5',
+                                                fc_format='hdf5')
 
 
 
@@ -213,7 +215,7 @@ def gen_parser():
     parser.add_argument('-o', '--output-file-name', action='store', default='qehist.h5',
                         dest='output', help='output file name')
     parser.add_argument('-n', '--neval', action='store', type=float, default=10000,
-                    dest='neval', help='number of evaluation for the 20 iterations')
+                    dest='neval', help='number of evaluation pre iterations')
     parser.add_argument('-p', '--partitions', action='store', type=int, default=1,
                     dest='partitions', help='number of partitions.')
     parser.add_argument('-s', '--save', action='store_true', dest='save', help='save vegas pickles')
