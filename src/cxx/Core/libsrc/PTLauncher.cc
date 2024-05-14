@@ -130,7 +130,7 @@ void Prompt::Launcher::simOneEvent(bool recordTrj)
         while(m_activeVolume.proprogateInAVolume(particle) )
         {
           // score if any scorer is available
-          if(m_activeVolume.hasPropagateScorer())
+          if(particle.isAlive() && m_activeVolume.hasPropagateScorer())
           {
             m_activeVolume.scorePropagate(particle);
           }
