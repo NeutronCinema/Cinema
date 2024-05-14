@@ -21,6 +21,7 @@ import argparse
 from Cinema.Interface.units import *
 from Cinema.PiXiu.AtomInfo import getAtomMassBC
 from phonopy.structure.brillouin_zone import BrillouinZone, get_qpoints_in_Brillouin_zone
+import euphonic.util as util
 
 import tqdm
 
@@ -53,6 +54,7 @@ class CohPhon:
         self.ph.run_thermal_displacement_matrices(self.temperature, self.temperature+1, 2, freq_min=0.002)
         # get_thermal_displacement_matrices returns the temperatures and thermal_displacement_matrices
         self.disp = np.copy(self.ph.get_thermal_displacement_matrices()[1][0])
+        Q=np.array([0,0,1])
         omega = np.copy(self.ph.get_mesh_dict()['frequencies'])
         self.maxHistEn = omega.max()*THz*2*np.pi*hbar + 0.005 #add 5meV as the energy margin
 
@@ -60,6 +62,14 @@ class CohPhon:
         self.eu = eu.ForceConstants.from_phonopy(summary_name='phonopy.yaml',
                                                 fc_name='force_constants.hdf5',
                                                 fc_format='hdf5')
+        
+        q_grid = util.mp_grid([11,11,11])
+        phonons_grid = self.eu.calculate_qpoint_phonon_modes(q_grid, asr='reciprocal')
+        # Now calculate the Debye-Waller exponent
+        temperature = temperature*eu.ureg('K')
+        dw = phonons_grid.calculate_debye_waller(temperature)
+        self.disp = dw.debye_waller.to('angstrom ** 2').magnitude
+
 
 
 
@@ -113,7 +123,7 @@ class CohPhon:
         F = np.zeros((Qarr.shape[0], self.nAtom*3))
         
         for i, (Q, eigvec) in enumerate(zip(Qarr, eigvecss)):
-            w =  -0.5 * np.dot(np.dot(self.disp, Q), Q)
+            w =  - np.dot(np.dot(self.disp, Q), Q)
 
             # for testing
             # print('w', w, -0.5*self.disp[0,0,0]*np.linalg.norm(Q)**2)
