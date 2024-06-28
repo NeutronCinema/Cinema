@@ -127,6 +127,7 @@ class DataLoader():
         pid = hf[f'/csns/instrument/{moduleName}/pixel_id'][()].flatten() #vector
         tofpidMat = hf[f'/csns/instrument/{moduleName}/histogram_data'][()] #matrix
         tofpidMat[:, :tofcut] = 0
+        self.tof = tof
         self.tofCentre = tof[:-1]+np.diff(tof)*0.5 #vector
 
         self.detErrPro = ErrorPropagator(tofpidMat, pid, tof, tofpidMat)
