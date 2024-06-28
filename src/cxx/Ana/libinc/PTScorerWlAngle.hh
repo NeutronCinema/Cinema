@@ -29,13 +29,14 @@ namespace Prompt {
   class ScorerWlAngle  : public Scorer2D {
   public:
     ScorerWlAngle(const std::string &name, const Vector &samplePos, const Vector &refDir, double sourceSampleDist,
-      double wl_min, double wl_max, unsigned wl_nbins, double angle_min, double angle_max, unsigned angle_nbins, ScorerType stype=Scorer::ScorerType::ENTRY, int method=0);
+      double wl_min, double wl_max, unsigned wl_nbins, double angle_min, double angle_max, unsigned angle_nbins, ScorerType stype=Scorer::ScorerType::ENTRY, int method=0, int scatnum=-1);
     virtual ~ScorerWlAngle();
     virtual void score(Particle &particle) override;
   protected:
     const Vector m_samplePos, m_refDir;
     const double m_sourceSampleDist;
     int m_method;
+    int m_scatnum;
   };
 }
 #endif

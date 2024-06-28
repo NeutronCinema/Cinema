@@ -543,9 +543,9 @@ std::shared_ptr<Prompt::Scorer> Prompt::ScorerFactory::createScorer(const std::s
     {
       // example cfg
       // "Scorer=WlAngle; name=wl_angle;sample_pos=0,0,0;beam_dir=0,0,1;dist=1000;
-      // ptstate=ENTRY;wl_min=0.5;wl_max=5;numbin_wl=1000;angle_min=-3;angle_max=3;numbin_angle=1000;method=0"
+      // ptstate=ENTRY;wl_min=0.5;wl_max=5;numbin_wl=1000;angle_min=-3;angle_max=3;numbin_angle=1000;method=0;scatnum=-1"
 
-      int parCount = 13;
+      int parCount = 14;
 
       // The mandatory parameters
       bool force = true;
@@ -590,6 +590,21 @@ std::shared_ptr<Prompt::Scorer> Prompt::ScorerFactory::createScorer(const std::s
         }
       }
 
+      int scatnum = -1;
+      if(cfg.find("scatnum")=="") 
+        parCount--;
+      else
+      {
+        int scatnumInInt = ptstoi(cfg.find("scatnum"));
+        if(scatnumInInt>=-1 )
+        {
+          scatnum = scatnumInInt;
+        }
+        else {
+          PROMPT_THROW2(BadInput, "The value for \"scatnum\" should be an integer greater than or equal to -1");
+        }
+      }
+
       Scorer::ScorerType ptstate = Scorer::ScorerType::ENTRY;
       std::string ptstateInStr = cfg.find("ptstate");
       if(ptstateInStr.empty())
@@ -604,7 +619,7 @@ std::shared_ptr<Prompt::Scorer> Prompt::ScorerFactory::createScorer(const std::s
         PROMPT_THROW2(BadInput, "Scorer type WlAngle is missing or with extra config parameters " << cfg.size() << " " << parCount );
       }
 
-      return std::make_shared<Prompt::ScorerWlAngle>(name, samplePos, beamDir, moderator2SampleDist, wl_min, wl_max, numbin_wl, angle_min, angle_max, numbin_angle, ptstate, method);
+      return std::make_shared<Prompt::ScorerWlAngle>(name, samplePos, beamDir, moderator2SampleDist, wl_min, wl_max, numbin_wl, angle_min, angle_max, numbin_angle, ptstate, method, scatnum);
     }
     else
       PROMPT_THROW2(BadInput, "Scorer type " << ScorDef << " is not supported. ")
