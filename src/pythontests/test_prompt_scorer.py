@@ -15,7 +15,7 @@ scorertest_dict['TOF'] = {'gdml': 'TOF.gdml', 'mcpl': 'ScorerTOF_detector_seed11
 scorertest_dict['VolFluence'] = {'gdml': 'VolFluence.gdml', 'mcpl': 'ScorerVolFluence_Sflux_seed113.mcpl.gz', 'value': [60.600505, 0.005264443047830176, 14948., 0.0002324042989916737]}
 scorertest_dict['PSD'] = {'gdml': 'PSD.gdml', 'mcpl': 'ScorerPSD_NeutronHistMap_seed113.mcpl.gz', 'value': [0., 0., 812., 812., 1130., 1130.]}
 scorertest_dict['guide'] = {'gdml': 'guide.gdml', 'mcpl': 'ScorerPSD_Monitor2_seed113.mcpl.gz', 'value': [0., 0., 186.29931081917783, 207., -196.196441756424, -196.196441756424]}
-scorertest_dict['WlAngle'] = {'gdml': 'WlAngle.gdml', 'mcpl': 'ScorerWlAngle_wl_angle_seed113.mcpl.gz', 'value': [1.515e+02, 9.090e+03, 1.100e+01, 1.100e+01, 4.800e+00, 2.880e+02]}
+scorertest_dict['WlAngle'] = {'gdml': 'WlAngle_ela.gdml', 'mcpl': 'ScorerWlAngle_wl_angle_seed113.mcpl.gz', 'value': [1.515e+02, 9.090e+03, 1.100e+01, 1.100e+01, 4.800e+00, 2.880e+02]}
 
 for scorername in scorertest_dict:
     scorer = scorertest_dict[scorername]
