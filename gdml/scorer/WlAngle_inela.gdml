@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+<gdml>
+
+  <userinfo>
+    <auxiliary auxtype="PrimaryGun" auxvalue="gun=SimpleThermalGun;energy=0.0253;position=0,0,-100;direction=0,0,1" />
+  </userinfo>
+
+   <define>
+    <position name="DetectorPos" x="0" y="25.5" z="50." />
+    <rotation name="SampleRot" unit="deg" x="90" y="0" z="0" />
+  </define>
+
+  <materials>
+    <material name="Vacuum">
+      <atom value="vacuum.ncmat"/>
+    </material>
+
+    <material name="HeavyWater">
+      <atom value="LiquidHeavyWaterD2O_T293.6K.ncmat"/>
+    </material>
+
+    <material name="V">
+          <atom value="physics=ncrystal;nccfg='V_sg229.ncmat'"/>
+        </material>
+  </materials>
+
+  <solids>
+    <box name="DetectorSolid" x="50" y="50" z="1" />
+    <tube name="SampleSolid" rmin="0" rmax="5" z="10" startphi="0" deltaphi="360" aunit="deg"/>
+    <box name="worldSolid" x="600.0" y="600.0" z="300.0" />
+  </solids>
+
+  <structure>
+    <volume name="Sample">
+      <materialref ref="HeavyWater"/>
+      <solidref ref="SampleSolid"/>
+    </volume>
+
+    <volume name="Detector">
+      <materialref ref="Vacuum"/>
+      <solidref ref="DetectorSolid"/>
+      <auxiliary auxtype="Scorer" auxvalue="Scorer=WlAngle;name=wl_angle_inela;sample_pos=0,0,0;beam_dir=0,0,1;dist=100;ptstate=ENTRY;wl_min=0.0;wl_max=3;numbin_wl=100;angle_min=0.0;angle_max=180.0;numbin_angle=100;method=0"/>
+    </volume>
+
+    <volume name="World">
+      <materialref ref="Vacuum"/>
+      <solidref ref="worldSolid"/>
+      <physvol>
+        <volumeref ref="Sample"/>
+        <rotationref ref="SampleRot"/>
+      </physvol>
+
+      <physvol>
+        <volumeref ref="Detector"/>
+        <positionref ref="DetectorPos"/>
+      </physvol>
+    </volume>
+  </structure>
+
+  <setup name="default" version="1.0">
+    <world ref="World"/>
+  </setup>
+
+
+</gdml>

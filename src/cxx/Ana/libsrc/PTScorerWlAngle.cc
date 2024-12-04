@@ -41,8 +41,8 @@ void Prompt::ScorerWlAngle::score(Prompt::Particle &particle)
   
     if(m_method==0)
     {
-      double wl = ekin2wl(particle.getEKin());
-      m_hist->fill(wl, angle, particle.getWeight() );
+      double wl0 = ekin2wl(particle.getEKin0());
+      m_hist->fill(wl0, angle, particle.getWeight() );
     }
     else if(m_method==1) //static approximation
     {
