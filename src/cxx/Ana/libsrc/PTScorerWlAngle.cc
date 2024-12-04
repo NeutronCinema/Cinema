@@ -25,7 +25,10 @@ Prompt::ScorerWlAngle::ScorerWlAngle(const std::string &name, const Vector &samp
       double wl_min, double wl_max, unsigned wl_nbins, double angle_min, double angle_max, unsigned angle_nbins, ScorerType stype, int method, int scatnum)
 :Scorer2D("ScorerWlAngle_"+name, stype, std::make_unique<Hist2D>("ScorerWlAngle_"+name, wl_min, wl_max, wl_nbins, angle_min, angle_max, angle_nbins)),
 m_samplePos(samplePos), m_refDir(refDir), m_sourceSampleDist(sourceSampleDist), m_method(method), m_scatnum(scatnum)
-{}
+{
+  if(angle_max>180 || angle_min<0 || angle_min>=angle_max)
+    PROMPT_THROW2(BadInput, "angular range should be within 0 to 180 degrees" )
+}
 
 Prompt::ScorerWlAngle::~ScorerWlAngle() {}
 
@@ -34,9 +37,8 @@ void Prompt::ScorerWlAngle::score(Prompt::Particle &particle)
   if(m_scatnum==-1||particle.getNumScat()==m_scatnum)
   {
     double angle_cos = (particle.getPosition()-m_samplePos).angleCos(m_refDir);
-    double angle = std::acos(angle_cos);
-    if(particle.getPosition().x()<0) //default setting
-      angle *= -1;
+    double angle = std::acos(angle_cos)*const_rad2deg;
+  
     if(m_method==0)
     {
       double wl = ekin2wl(particle.getEKin());

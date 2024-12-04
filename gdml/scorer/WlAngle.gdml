@@ -39,7 +39,7 @@
     <volume name="Detector">
       <materialref ref="Vacuum"/>
       <solidref ref="DetectorSolid"/>
-      <auxiliary auxtype="Scorer" auxvalue="Scorer=WlAngle;name=wl_angle;sample_pos=0,0,0;beam_dir=0,0,1;dist=100;ptstate=ENTRY;wl_min=0.0;wl_max=3;numbin_wl=100;angle_min=-3;angle_max=3;numbin_angle=100;method=1"/>
+      <auxiliary auxtype="Scorer" auxvalue="Scorer=WlAngle;name=wl_angle;sample_pos=0,0,0;beam_dir=0,0,1;dist=100;ptstate=ENTRY;wl_min=0.0;wl_max=3;numbin_wl=100;angle_min=0.0;angle_max=180.0;numbin_angle=100;method=1"/>
     </volume>
 
     <volume name="World">
