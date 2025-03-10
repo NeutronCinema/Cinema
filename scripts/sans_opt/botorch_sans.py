@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+
+from Cinema.Prompt import Prompt, PromptMPI
+from Cinema.Prompt.geo import Volume, Transformation3D
+from Cinema.Prompt.solid import Box,Tube
+from Cinema.Prompt.scorer import makePSD, ESpectrumHelper, WlSpectrumHelper, TOFHelper, VolFluenceHelper, PSDHelper, DirectSqwHelper, KillMCPLHelper
+from Cinema.Prompt.gun import PythonGun, SimpleThermalGun, MaxwellianGun
+from Cinema.Prompt.histogram import wl2ekin
+from Cinema.Prompt.physics import Material, Mirror
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+mod_sam_dist = 12000
+gun_pos = np.array([0,0,-mod_sam_dist])
+sam_pos = np.array([0,0,0])
+det_radius_mm = 400.
+beamstop_radius_mm = .1
+det_pos = 6000.
+
+class MySim(PromptMPI):
+    def __init__(self, seed=4096) -> None:
+        super().__init__(seed)  
+
+    def makeWorld(self, wl, t):
+        matCfg_sample = Material('LiquidWaterH2O_T293.6K.ncmat')
+        # matCfg_sample = Material('PTWaterH2O_T293.6K.ncmat')
+
+        # matCfg_sample = Material('PTHeavyWater_T293.6K.ncmat;ucnmode=refine:0.01eV')
+        # matCfg_sample = Material('PTHeavyWater_T293.6K.ncmat')
+
+        # matCfg_sample = Material('LiquidHeavyWaterD2O_T293.6K.ncmat')
+       
+        world = Volume("world", Box(10000, 10000, 25000))
+        sample = Volume('sample', Box(10, 10, t), matCfg = matCfg_sample)
+        detector = Volume("det", Tube(beamstop_radius_mm, det_radius_mm, 0.0001))
+
+        world.placeChild("sample", sample, Transformation3D(0., 0., 0))
+        world.placeChild("det", detector, Transformation3D(0., 0., det_pos))
+
+        PSDHelper('psd', -det_radius_mm, det_radius_mm, 100,  -det_radius_mm, det_radius_mm, 100).make(detector)
+        ESpectrumHelper('espec').make(detector)
+        WlSpectrumHelper('wlspec').make(detector)
+        TOFHelper('tof', max=50e-3).make(detector)
+        DirectSqwHelper('sqw', mod_sam_dist, wl2ekin(wl), sample_position=sam_pos, qmin=1e-1, 
+                        qmax=30, num_qbin=100, ekinmin=-1, ekinmax=1, num_ebin=1001 ).make(detector)
+        DirectSqwHelper('sqw_s', mod_sam_dist, wl2ekin(wl), sample_position=sam_pos, qmin=1e-3, 
+                        qmax=.5, num_qbin=1000, ekinmin=-.01, ekinmax=.01, num_ebin=101, logx=True ).make(detector)
+        self.kill = KillMCPLHelper('part_gen', 2112)
+        self.kill.make(detector)
+
+        self.setWorld(world)
+
+sim = MySim(seed=1010)
+
+def sans_run(wl, n, t, pyGun=False, sim=sim):
+
+    class MyGun(PythonGun):
+        def __init__(self, pdg):
+            super().__init__(pdg)
+
+        def sampleEnergy(self):
+            return wl2ekin(wl)
+
+        def samplePosition(self):
+            return np.array(gun_pos)
+        
+        def sampleDirection(self):
+            return np.array([0, 0, 1])
+
+    sim.makeWorld(wl,t)
+
+    usePythonGun=pyGun
+
+    if usePythonGun:
+        gun = MyGun(2112)
+    else:
+        gun = SimpleThermalGun()
+        gun.setPosition(gun_pos) 
+        gun.setDirection([0, 0, 1])
+        gun.setWavelength(wl)
+
+# vis or production
+    if False:
+        sim.show(gun, 100)
+    else:
+        sim.simulate(gun, n)
+    sqw = sim.gatherHistData('sqw')
+    sqw_s = sim.gatherHistData('sqw_s')
+
+    psd = sim.gatherHistData('psd')
+    espec = sim.gatherHistData('espec')
+    wlspec = sim.gatherHistData('wlspec')
+    tof = sim.gatherHistData('tof')
+    res = psd.getAccWeight()
+    return sim, res
+
+# if sim.rank==0: 
+#     psd.save('psd.h5')
+#     espec.save('espec.h5')
+#     wlspec.save('wlspec.h5')
+#     tof.save('tof.h5')
+#     sqw.save('sqw.h5')
+#     sqw_s.save('sqw_s.h5')
+#     # sqw.savefig('sqw.pdf', log=True)
+
+
+#     # psd.plot(show=False)
+#     sqw.plot(show=False, dynrange=1e-10)
+    # sqw_s.plot(show=False, dynrange=1e-10, logx=True)
+    # plt.figure()
+
+    # espec.plot(show=False, log=True)
+    # plt.figure()
+    # wlspec.plot(show=False,  log=[False, True])
+    # plt.figure()
+    # tof.plot(show=True)
