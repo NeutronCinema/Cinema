@@ -39,6 +39,12 @@ void* pt_ScorerVolFluence_new(const char* name, double xmin, double xmax, unsign
 
 void* pt_ScorerMultiScat_new(const char* name, double xmin, double xmax, unsigned nbins, unsigned pdg, int groupid);
 
+void* pt_ScorerDeltaMomentum_new(const std::string &name,
+    double sourceSampleDist, double qmin, double qmax, unsigned numbin, unsigned int pdg,
+    double mean_incident_dir_x, double mean_incident_dir_y, double mean_incident_dir_z,
+    double sample_position_x, double sample_position_y, double sample_position_z, int type, 
+    int method, bool linear);
+     
 void* pt_ScorerDirectSqw_new(const char* name, double qmin, double qmax, unsigned xbin, 
                             double ekinmin, double ekinmax, unsigned nybins, unsigned int pdg, int group_id,
                             double mod_smp_dist, double mean_ekin,

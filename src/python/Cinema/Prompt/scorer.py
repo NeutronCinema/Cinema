@@ -142,13 +142,15 @@ _pt_ScorerESpectrum_new = importFunc('pt_ScorerESpectrum_new', type_voidp, [type
 _pt_ScorerTOF_new = importFunc('pt_ScorerTOF_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_uint, type_int, type_int ])
 _pt_ScorerWlSpectrum_new = importFunc('pt_ScorerWlSpectrum_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_uint, type_int, type_int ])
 _pt_ScorerVolFluence_new = importFunc('pt_ScorerVolFluence_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_dbl, type_uint, type_int, type_bool, type_int])
+_pt_ScorerDeltaMomentum_new = importFunc('pt_ScorerDeltaMomentum_new',type_voidp, [type_cstr, type_dbl, type_dbl, type_dbl, type_uint,
+                                                                                   type_uint, type_dbl, type_dbl, type_dbl, 
+                                                                                   type_dbl, type_dbl, type_dbl, type_int, type_int, type_bool])
 _pt_ScorerMultiScat_new = importFunc('pt_ScorerMultiScat_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_uint, type_int])
 _pt_ScorerDirectSqw_new = importFunc('pt_ScorerDirectSqw_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, 
                                                                             type_dbl, type_dbl, type_uint,
                                                                             type_uint, type_int, type_dbl, type_dbl,
                                                                             type_dbl, type_dbl, type_dbl,
                                                                             type_dbl, type_dbl, type_dbl, type_int, type_bool])
-
 _pt_ScorerPSD_new = importFunc('pt_ScorerPSD_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint,
                                                                 type_dbl, type_dbl, type_uint,
                                                                 type_uint, type_int, type_int, type_int, type_bool])
@@ -294,6 +296,37 @@ class VolFluenceHelper(ScorerHelper, MultiScatMixin1D):
             self.ptsNum,
             self.linear,
             self.groupID
+        )
+        vol.addScorer(self, cobj)
+        self.cobj = cobj
+
+class DirectSqHelper(ScorerHelper, MultiScatMixin1D):
+    def __init__(self, name, qmin, qmax, numbin, distanceMS, pdg=2112, 
+                 refDir=[0,0,1], samplePos=[0,0,0], ptstate='ENTRY', method=0, linear=False, groupID=0):
+        super().__init__(name, qmin, qmax, numbin, pdg, ptstate, groupID)
+        self.distanceMS = distanceMS
+        self.refDir = refDir
+        self.samplePos = samplePos
+        self.method = method
+        self.linear = linear
+
+    def make(self, vol):
+        cobj = _pt_ScorerDeltaMomentum_new(
+            self.name.encode('utf-8'),
+            self.distanceMS,
+            self.min,
+            self.max,
+            self.numbin,
+            self.pdg,
+            self.refDir[0],
+            self.refDir[1],
+            self.refDir[2],
+            self.samplePos[0],
+            self.samplePos[1],
+            self.samplePos[2],
+            self.ptsNum,
+            self.method,
+            self.linear
         )
         vol.addScorer(self, cobj)
         self.cobj = cobj

@@ -7,58 +7,53 @@ from distutils.command.build import build as _build
 from setuptools.command.build_ext import build_ext
 
 class CMakeExtension(Extension):
-    def __init__(self, name, sourcedir):
-        Extension.__init__(self, name, sources=[])
-        self.sourcedir = os.path.abspath(sourcedir)
+    def __init__(self, name):
+        super().__init__(name, sources=[])
 
 class CMakeBuild(build_ext):
 
     def run(self):     
-        for ext in self.extensions:
-            self.build_cmake_extension(ext)
-        extensions = ['libprompt_core']
-        self.copy_precompiled_files(extensions)
+        self.copy_shlib_to_proot('libprompt_core')
 
     def build_cmake_extension(self, ext):
-        temp = vars(ext)
-        for item in temp:
-            print(item, ':', temp[item])
+        pass
+        # build_temp = os.path.join(self.build_temp, ext.name)
+        # subprocess.check_call("bash", "buildscript.sh", cwd=build_temp)
+        # print(f'build_temp : {build_temp}')
+        # temp = vars(ext)
+        # for item in temp:
+        #     print(item, ':', temp[item])
 
-        build_temp = os.path.join(self.build_temp, ext.name)
-        if not os.path.exists(build_temp):
-            os.makedirs(build_temp)
+        # if not os.path.exists(build_temp):
+        #     os.makedirs(build_temp)
             
-        build_temp = os.path.abspath(build_temp)
-        print(f'build_temp: {build_temp}')
+        # build_temp = os.path.abspath(build_temp)
+        # print(f'build_temp: {build_temp}')
 
-        numcpu = os.cpu_count()//2
+        # numcpu = os.cpu_count() - 1
                 
-        extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
+        # extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
 
-        if not extdir.endswith(os.path.sep):
-            extdir += os.path.sep
+        # if not extdir.endswith(os.path.sep):
+        #     extdir += os.path.sep
 
-        if not os.path.exists(os.path.join(build_temp, 'install')):
-            subprocess.check_call(['mkdir', 'install'] , cwd=build_temp)
-        subprocess.check_call(["cmake", ext.sourcedir] , cwd=build_temp+'/install')
-        subprocess.check_call(['make', '-j'+str(numcpu)] , cwd=build_temp+'/install')
-                
-    def copy_precompiled_files(self, file_list, orig = None):
-        
+        # if not os.path.exists(os.path.join(build_temp, 'install')):
+        #     subprocess.check_call(['mkdir', 'install'] , cwd=build_temp)
+        # subprocess.check_call(["cmake", ext.sourcedir] , cwd=build_temp+'/install')
+        # subprocess.check_call(['make', '-j'+str(numcpu)] , cwd=build_temp+'/install')
+    
+    def copy_shlib_to_proot(self, name):
         import os
-        import shutil
         from setuptools import find_packages
-
-        if not orig:
-            orig = self.build_temp
-
+        if os.getenv('CONDA_BUILD'):
+            buildpath = os.path.join(os.getenv('SRC_DIR'))
         pkg = find_packages(where = os.path.join("src", "python"))[0]
-
-        for dir, subdirs, filenames in os.walk(os.path.join(orig)):
+        for dir, _, filenames in os.walk(buildpath):
             for files in filenames:
-                if files.split('.')[0] in file_list:
+                if files==f'{name}.so':
+                    src = os.path.join(dir, files)
                     dest = os.path.join(os.path.abspath('.'), self.build_lib, pkg, files)
-                    shutil.copyfile(os.path.join(dir, files), dest)
+                    self.copy_file(src, dest)
 
 class Recorder(_build):
     def run(self):
@@ -115,7 +110,7 @@ setup(
 
     # outdated argument: install_requires=['pyvista', 'matplotlib', 'mcpl', 'scipy', 'h5py', 'optuna'],
 
-    ext_modules=[CMakeExtension(name='cinema', sourcedir='')],
+    ext_modules=[CMakeExtension(name="Cinema")],
 
     cmdclass={
         'build_ext': CMakeBuild,

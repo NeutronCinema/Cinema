@@ -1,16 +1,16 @@
 #!/bin/bash
 # --set options
-PREFIX="https://gitlab.com/cinema-developers"
+PREFIX="https://code.ihep.ac.cn/cinema-developers/"
 while getopts ":f" option
   do
     case "${option}"
      in
       f) echo "Running: "${PREFIX};;
-      *) PREFIX="https://gitlab.com/cinema-developers";;
+      *) PREFIX="https://code.ihep.ac.cn/cinema-developers/";;
     esac
 done
 if (( $OPTIND == 1 )); then
-  PREFIX="https://gitlab.com/cinema-developers"
+  PREFIX="https://code.ihep.ac.cn/cinema-developers/"
 fi 
 NUMCPU=$(grep ^cpu\\scores /proc/cpuinfo | uniq |  awk '{print $4}')
 
@@ -50,6 +50,7 @@ function findSetEnv(){
   fi
 }
 
+export CINEMA_LOCAL_BUILD=1
 export CINEMAPATH="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 #install ncrystal
 export response='y'
