@@ -5,7 +5,7 @@ from botorch_sans import sans_run
 
 import multiprocessing
 
-numNeutron = 1e6
+numNeutron = 1e5
 # thickness = np.linspace(0.1, 10, 3)
 thickness = np.array([0.1,2,5,10])
 detpos = np.linspace(1100, 25000, 30)
@@ -33,7 +33,10 @@ if __name__ == "__main__":
         zzip = list(zip(sqw,var))
         base = zzip.pop(0)
         for sqw_s, v in zzip:
-            plt.plot(sqw_s[0], sqw_s[1]/base[0][1], label=f'{v}')
+            plt.plot(sqw_s[0], sqw_s[1]/base[0][1], label=f't={v}')
         plt.legend()
+        plt.xlabel('Q')
+        plt.ylabel('%')
+        plt.title('Intensity ratio relative to sample thickness(t) = 0.1')
         plt.xscale("log")
         plt.savefig('thickness.pdf')
