@@ -3,7 +3,7 @@
 from Cinema.Prompt import Prompt, PromptMPI
 from Cinema.Prompt.geo import Volume, Transformation3D
 from Cinema.Prompt.solid import Box,Tube
-from Cinema.Prompt.scorer import makePSD, ESpectrumHelper,MultiScatCounter, WlSpectrumHelper, TOFHelper, VolFluenceHelper, PSDHelper, DirectSqwHelper, KillMCPLHelper
+from Cinema.Prompt.scorer import makePSD, ESpectrumHelper,MultiScatCounter, WlSpectrumHelper, TOFHelper, VolFluenceHelper, PSDHelper, DirectSqwHelper,DirectSqHelper, KillMCPLHelper
 from Cinema.Prompt.gun import PythonGun, SimpleThermalGun, MaxwellianGun
 from Cinema.Prompt.histogram import wl2ekin
 from Cinema.Prompt.physics import Material, Mirror
@@ -15,7 +15,7 @@ mod_sam_dist = 12000
 gun_pos = np.array([0,0,-mod_sam_dist])
 sam_pos = np.array([0,0,0])
 det_radius_mm = 400.
-beamstop_radius_mm = .1
+beamstop_radius_mm = .001
 det_pos = 6000.
 
 class MySim(PromptMPI):
@@ -58,6 +58,11 @@ class MySim(PromptMPI):
                         qmax=.1, num_qbin=20, ekinmin=-.01, ekinmax=.01, num_ebin=101, logx=True )
         helpersqw.linear=False
         helpersqw.make(detector)
+
+        helperSq = DirectSqHelper('sq', qmin=2e-3, qmax=0.1,
+                                  numbin=50, distanceMS=mod_sam_dist, 
+                                  linear=False)
+        helperSq.make(detector)
         # self.kill = KillMCPLHelper('part_gen', 2112)
         # self.kill.make(detector)
 
@@ -101,6 +106,7 @@ def sans_run(wl, n, t, det_pos, divergence, pyGun=True, sim=sim):
         sim.simulate(gun, n)
     sqw = sim.gatherHistData('sqw')
     sqw_s = sim.gatherHistData('sqw_s')
+    sq = sim.gatherHistData('sq')
 
     psd = sim.gatherHistData('psd') # 1 scatter
     psd2 = sim.gatherHistData('psd2') # all
@@ -110,7 +116,7 @@ def sans_run(wl, n, t, det_pos, divergence, pyGun=True, sim=sim):
     all = psd2.getAccWeight()
     signal = psd.getAccWeight()
     res = signal
-    return sim, sqw_s
+    return sim, sqw_s, sq
 
 
 if __name__ == "__main__":
