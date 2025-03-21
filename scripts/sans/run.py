@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import numpy as np
-from botorch_sans import sans_run
+from scripts.sans.sans_model import sans_run
 
 import multiprocessing
 

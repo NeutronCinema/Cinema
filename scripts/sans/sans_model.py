@@ -3,13 +3,26 @@
 from Cinema.Prompt import Prompt, PromptMPI
 from Cinema.Prompt.geo import Volume, Transformation3D
 from Cinema.Prompt.solid import Box,Tube
-from Cinema.Prompt.scorer import makePSD, ESpectrumHelper,MultiScatCounter, WlSpectrumHelper, TOFHelper, VolFluenceHelper, PSDHelper, DirectSqwHelper,DirectSqHelper, KillMCPLHelper
+from Cinema.Prompt.scorer import ESpectrumHelper,MultiScatCounter, WlSpectrumHelper, TOFHelper, VolFluenceHelper, PSDHelper, DirectSqwHelper,DirectSqHelper, KillMCPLHelper
 from Cinema.Prompt.gun import PythonGun, SimpleThermalGun, MaxwellianGun
 from Cinema.Prompt.histogram import wl2ekin
 from Cinema.Prompt.physics import Material, Mirror
 
 import matplotlib.pyplot as plt
 import numpy as np
+
+# >> parameters
+## >> distance to moderator (mm)
+slit_A1 =                7500
+monitor2 =               10884
+slit_A2 =                11231
+slit_A3_short =	         12675
+slit_A3_long =	         12931
+sample_changer =         13000
+monitor3 =               13485
+window =                 13635
+main_detector =          15200 / 18200
+
 
 mod_sam_dist = 12000
 gun_pos = np.array([0,0,-mod_sam_dist])
