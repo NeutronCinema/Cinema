@@ -73,7 +73,7 @@ class FileProcessor:
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Process files in a directory with multiprocessing.')
-    parser.add_argument('calc', action='store', type=str, default='', required=True,
+    parser.add_argument('calc', action='store', type=str, default='', 
                           help='calculation type: endf, mc, urr.(default: %(default)s)')
     parser.add_argument('-d', '--dirname', type=str, required=True, help='Directory containing input files. (default: %(default)s)')
     parser.add_argument('-o', '--output_dir', type=str, required=True, help='Directory for storing output files. (default: %(default)s)')

@@ -44,7 +44,7 @@ void* pt_ScorerDeltaMomentum_new(const char* name,
     double mean_incident_dir_x, double mean_incident_dir_y, double mean_incident_dir_z,
     double sample_position_x, double sample_position_y, double sample_position_z, int type, 
     int method, bool linear);
-    
+     
 void* pt_ScorerDirectSqw_new(const char* name, double qmin, double qmax, unsigned xbin, 
                             double ekinmin, double ekinmax, unsigned nybins, unsigned int pdg, int group_id,
                             double mod_smp_dist, double mean_ekin,

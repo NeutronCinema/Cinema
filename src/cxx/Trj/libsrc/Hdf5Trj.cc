@@ -182,24 +182,100 @@ void Hdf5Trj::readAtomTrj(unsigned atomOffset, std::vector<double> &atomTrj) con
 }
 
 template <class T>
-void Hdf5Trj::readDataset(const std::string &name, Data<T> &vec, bool loadData)
-{
-  hid_t dataset_id = H5Dopen2 (m_file_id, name.c_str(), H5P_DEFAULT);
-  hid_t memspace_id = H5Dget_space (dataset_id);
+void Hdf5Trj::readDataset(const std::string &name, Data<T> &vec, bool loadData) {
+    // Open the dataset within the HDF5 file
+    hid_t dataset_id = H5Dopen2(m_file_id, name.c_str(), H5P_DEFAULT);
+    if (dataset_id < 0) {
+        // If dataset opening fails, throw an appropriate error
+        throw std::runtime_error("Failed to open dataset: " + name);
+    }
 
-  int rank = H5Sget_simple_extent_ndims(memspace_id);
-  vec.dim.resize(rank);
-  H5Sget_simple_extent_dims(memspace_id, vec.dim.data(), NULL);
+    // Get the dataspace associated with the dataset
+    hid_t memspace_id = H5Dget_space(dataset_id);
+    if (memspace_id < 0) {
+        // In case getting the dataspace fails, close the dataset and throw an error
+        H5Dclose(dataset_id);
+        throw std::runtime_error("Failed to get dataspace for dataset: " + name);
+    }
 
-  vec.vec.resize(H5Sget_simple_extent_npoints(memspace_id));
-  if(loadData)
-  {
-    hid_t datatype = H5Tcopy(dataset_id);
-    H5Dread (dataset_id, datatype, H5S_ALL, H5S_ALL, H5P_DEFAULT, vec.vec.data());
-    H5Tclose(datatype);
-  }
-  H5Dclose(dataset_id);
-  H5Sclose(memspace_id);
+    // Get the rank (number of dimensions) of the dataspace
+    int rank = H5Sget_simple_extent_ndims(memspace_id);
+    if (rank < 0) {
+        // If getting the rank fails, close the dataset and dataspace, then throw an error
+        H5Dclose(dataset_id);
+        H5Sclose(memspace_id);
+        throw std::runtime_error("Failed to get rank of dataspace for dataset: " + name);
+    }
+
+    // Resize the dimension container of 'vec' based on the rank
+    vec.dim.resize(rank);
+    // Get the dimensions of the dataspace and store them in 'vec.dim'
+    // Here, make sure the type of vec.dim elements is compatible with hsize_t
+    // If there's a type mismatch error like before, check the type of vec.dim
+    if (H5Sget_simple_extent_dims(memspace_id, vec.dim.data(), NULL) < 0) {
+        H5Dclose(dataset_id);
+        H5Sclose(memspace_id);
+        throw std::runtime_error("Failed to get dimensions for dataset: " + name);
+    }
+
+    // Calculate the total number of elements in the dataset (number of points)
+    hsize_t numPoints = H5Sget_simple_extent_npoints(memspace_id);
+    if (numPoints < 0) {
+        H5Dclose(dataset_id);
+        H5Sclose(memspace_id);
+        throw std::runtime_error("Failed to get number of points in dataset: " + name);
+    }
+
+    // Resize the data container 'vec.vec' based on the number of points
+    vec.vec.resize(numPoints);
+
+    // Only read the data if loadData is true
+    if (loadData) {
+        // Get the datatype of the dataset
+        hid_t datatype = H5Tcopy(H5Dget_type(dataset_id));
+        if (datatype < 0) {
+            H5Dclose(dataset_id);
+            H5Sclose(memspace_id);
+            throw std::runtime_error("Failed to copy datatype for dataset: " + name);
+        }
+
+        // Based on the type T, use the appropriate HDF5 read function
+        if constexpr (std::is_same_v<T, double>) {
+            if (H5Dread(dataset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, vec.vec.data()) < 0) {
+                H5Tclose(datatype);
+                H5Dclose(dataset_id);
+                H5Sclose(memspace_id);
+                throw std::runtime_error("Failed to read dataset as double type: " + name);
+            }
+        } else if constexpr (std::is_same_v<T, int>) {
+            if (H5Dread(dataset_id, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT, vec.vec.data()) < 0) {
+                H5Tclose(datatype);
+                H5Dclose(dataset_id);
+                H5Sclose(memspace_id);
+                throw std::runtime_error("Failed to read dataset as int type: " + name);
+            }
+          } else if constexpr (std::is_same_v<T, unsigned int>) {
+            if (H5Dread(dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, vec.vec.data()) < 0) {
+                H5Tclose(datatype);
+                H5Dclose(dataset_id);
+                H5Sclose(memspace_id);
+                throw std::runtime_error("Failed to read dataset as int type: " + name);
+            }
+        } else {
+            // For other types not explicitly handled yet, close relevant resources and throw an error
+            H5Tclose(datatype);
+            H5Dclose(dataset_id);
+            H5Sclose(memspace_id);
+            throw std::runtime_error("Unsupported data type for reading dataset: " + name);
+        }
+
+        // Close the copied datatype
+        H5Tclose(datatype);
+    }
+
+    // Close the dataset and dataspace identifiers to release resources
+    H5Dclose(dataset_id);
+    H5Sclose(memspace_id);
 }
 
 void* Hdf5Trj_new(const char* fileName)

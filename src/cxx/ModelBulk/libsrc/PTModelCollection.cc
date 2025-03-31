@@ -146,6 +146,8 @@ double Prompt::ModelCollection::calculateWeight(double lengthRho, bool hitWall)
     double modbias(m_models[i]->getBias());
     if (modbias==1.) continue;
     //this factor contributed in this step of lengthRho by this model
+    // printf("\nm_cache.bias[i]==%g\n", m_cache.bias[i]);
+    pt_assert(m_cache.bias[i]>0);
     factor *= exp( (m_cache.bias[i]-1.)*lengthRho* m_cache.cache_xs[i]/m_cache.bias[i] );
   }
   // std::cout << "selectedBias " << m_cache.selectedBias << " factor " << factor

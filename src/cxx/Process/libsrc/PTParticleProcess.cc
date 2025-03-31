@@ -241,6 +241,7 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
     m_numdensity = pfact.nccalNumDensity(nccfg);
 
     #ifdef ENABLE_GIDI
+    //fixme: todo: how to disable absorption when abs_bias is zero?
     if(enablegidi)
     {
       std::cout << "enabled gidi model for " << cfgstr 
@@ -282,9 +283,9 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
     else
     #endif
     {
-      if(scatter_bias)
+      if(scatter_bias > 0.)
         m_discretModels->addPhysicsModel(std::make_shared<NCrystalScat>(nccfg, scatter_bias, 0));
-      if(abs_bias)
+      if(abs_bias > 0.)
         m_discretModels->addPhysicsModel(std::make_shared<NCrystalAbs>(nccfg, abs_bias, 0));
     }
   }

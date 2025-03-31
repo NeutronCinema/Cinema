@@ -11,27 +11,41 @@ from Cinema.Prompt.physics import Material, Mirror
 import matplotlib.pyplot as plt
 import numpy as np
 
-wl = 3
+import argparse
+
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-wl', type=float, help='Wavelength', required=True)
+parser.add_argument('-n', type=float, help='Neutron number', required=True)
+parser.add_argument('-t', type=float, help='thickness', required=True)
+
+args = parser.parse_args()
+
+wl = args.wl
+n = args.n
 mod_sam_dist = 12000
 gun_pos = np.array([0,0,-mod_sam_dist])
 sam_pos = np.array([0,0,0])
-det_radius_mm = 1000.
-beamstop_radius_mm = .001
+det_radius_mm = 400.
+beamstop_radius_mm = .00001
 det_pos = 6000.
 class MySim(PromptMPI):
     def __init__(self, seed=4096) -> None:
-        super().__init__(seed)    
+        super().__init__(seed)  
 
     def makeWorld(self):
         # matCfg_sample = Material('LiquidWaterH2O_T293.6K.ncmat')
-        matCfg_sample = Material('LiquidHeavyWaterD2O_T293.6K.ncmat')
+        # matCfg_sample = Material('PTWaterH2O_T293.6K.ncmat')
 
-        
-        matCfg_sample.setBiasScat(2)
-        # matCfg_sample = Material('nanodiamond.ncmat;density=0.7x')      
+        # matCfg_sample = Material('PTHeavyWater_T293.6K.ncmat;ucnmode=refine:0.01eV')
+        # matCfg_sample = Material('PTHeavyWater_T293.6K.ncmat')
+
+        # matCfg_sample = Material('LiquidHeavyWaterD2O_T293.6K.ncmat')
+        matCfg_sample = Material('nanodiamond.ncmat;density=0.7x')      
        
         world = Volume("world", Box(10000, 10000, 25000))
-        sample = Volume('sample', Box(10,10,.5), matCfg = matCfg_sample)
+        sample = Volume('sample', Box(10, 10, args.t), matCfg = matCfg_sample)
         detector = Volume("det", Tube(beamstop_radius_mm, det_radius_mm, 0.0001))
 
         world.placeChild("sample", sample, Transformation3D(0., 0., 0))
@@ -80,7 +94,7 @@ else:
 if False:
     sim.show(gun, 100)
 else:
-    sim.simulate(gun, 1e10)
+    sim.simulate(gun, n)
 
 sqw = sim.gatherHistData('sqw')
 sqw_s = sim.gatherHistData('sqw_s')
@@ -89,7 +103,6 @@ psd = sim.gatherHistData('psd')
 espec = sim.gatherHistData('espec')
 wlspec = sim.gatherHistData('wlspec')
 tof = sim.gatherHistData('tof')
-
 
 # if sim.rank==0: 
     # sim.kill.merge()
