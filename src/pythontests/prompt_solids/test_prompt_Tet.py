@@ -10,8 +10,8 @@ import numpy as np
 from Cinema.Prompt import Prompt
 from Cinema.Prompt.geo import Volume
 
-expectWl = [345., 371., 362., 393., 384., 325., 371., 322., 319., 261., 268.,
-       216., 209., 195., 218., 152., 192., 158., 143., 113.]
+expectWl = [344., 370., 364., 393., 385., 325., 372., 322., 318., 260., 267.,
+       215., 209., 194., 217., 152., 192., 158., 143., 112.]
 
 class MySim(Prompt):
     def __init__(self, seed) -> None:

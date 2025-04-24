@@ -24,13 +24,27 @@ if(NOT TARGET VecGeom::vgdml)
 endif()
 
 # NCrystal
-if($ENV{CINEMA_LOCAL_BUILD})
-  set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/external/ncrystal/install/")
-  message(STATUS "NCrystal_DIR=$ENV{NCrystal_ext}/lib/cmake")
-  set(NCrystal_DIR  "$ENV{NCrystal_ext}/lib/cmake")
+#Find NCrystal:
+
+if(NOT DEFINED NCrystal_DIR OR NCrystal_DIR MATCHES "-NOTFOUND")
+  #Need to invoke "ncrystal-config --show cmakedir" if we want to be able to
+  #work with ncrystal-core installed via python wheels:
+  execute_process(
+    COMMAND ncrystal-config --show cmakedir
+    OUTPUT_VARIABLE "NCrystal_DIR" OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
 endif()
-find_package(NCrystal 3.0.0 REQUIRED)
-message(STATUS "FOUND NCrystal: ${NCrystal_FOUND} ${NCrystal_DIR}")
+find_package( NCrystal 4.0.0 REQUIRED )
+message(STATUS "FOUND NCrystal_DIR: ${NCrystal_DIR}")
+message(STATUS "Using NCrystal version ${NCrystal_VERSION}")
+
+# if($ENV{CINEMA_LOCAL_BUILD})
+#   set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/external/ncrystal/install/")
+#   message(STATUS "NCrystal_DIR=$ENV{NCrystal_ext}/lib/cmake")
+#   set(NCrystal_DIR  "$ENV{NCrystal_ext}/lib/cmake")
+# endif()
+# find_package(NCrystal 3.0.0 REQUIRED)
+# message(STATUS "FOUND NCrystal: ${NCrystal_FOUND} ${NCrystal_DIR}")
 
 # MCPL
 if($ENV{CINEMA_LOCAL_BUILD})
@@ -74,10 +88,13 @@ find_package(Python REQUIRED COMPONENTS Interpreter)
 
 file(GLOB_RECURSE TESTFILES "${CMAKE_CURRENT_SOURCE_DIR}/src/pythontests/test_*.py")
 foreach(TS ${TESTFILES})
-	message(STATUS "Running ${Python_EXECUTABLE} ${TS}")
+	# message(STATUS "Running ${Python_EXECUTABLE} ${TS}")
 	get_filename_component(EXCNAME  ${TS}  NAME_WE)
 	add_test (NAME python-${EXCNAME}
 	  COMMAND ${Python_EXECUTABLE} ${TS}
 	  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cinemabin #fixme find a temp dir defined in the enviroment
 	)
+  set_tests_properties(
+    python-${EXCNAME} PROPERTIES SKIP_REGULAR_EXPRESSION "PT_SKIP_TEST"
+  )
 endforeach(TS ${TESTFILES})

@@ -4,6 +4,15 @@
 
 namespace pt = Prompt;
 
+bool pt_Gidi_compiled()
+{
+    bool gidi_compiled = false;
+    #ifdef ENABLE_GIDI
+        gidi_compiled = true;
+    #endif
+    return gidi_compiled;
+}
+
 void* pt_GidiSetting_getInstance()
 {
   return static_cast<void *>(std::addressof(pt::Singleton<pt::GidiSetting>::getInstance()));

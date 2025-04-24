@@ -12,22 +12,24 @@ from Cinema.Prompt.GidiSetting import GidiSetting
 import matplotlib.pyplot as plt
 from Cinema.Interface import plotStyle
 import numpy as np
+from testsuite import *
 
-import os
 
+CDATA=GidiSetting()
+isCompiled = CDATA.isCompiled
+    
 # plotStyle()
 def promptRun(cfg, energy, gidiThreshold = -5, popsPath = None,
               numbin_en=100, loweredge=1e-5, upperedge=30e6,
               isGammaTransport=False, partnum = 1e5, setGidi= True,
               plot=False):
-
-    cdata=GidiSetting()
-    cdata.setEnableGidi(True)
-    cdata.setGidiThreshold(gidiThreshold)
-    cdata.setEnableGidiPowerIteration(False)
-    cdata.setGammaTransport(isGammaTransport)
+    skip_test_gidi_not_compile()
+    CDATA.setEnableGidi(True)
+    CDATA.setGidiThreshold(gidiThreshold)
+    CDATA.setEnableGidiPowerIteration(False)
+    CDATA.setGammaTransport(isGammaTransport)
     if not popsPath:
-        cdata.setGidiPops(popsPath)
+        CDATA.setGidiPops(popsPath)
 
     numbin_mu=10
 

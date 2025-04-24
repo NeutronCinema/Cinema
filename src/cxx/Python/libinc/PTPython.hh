@@ -27,6 +27,7 @@
 extern "C" {
 #endif
 
+bool pt_Gidi_compiled();
 
 // Converters
 double pt_eKin2k(double ekin);

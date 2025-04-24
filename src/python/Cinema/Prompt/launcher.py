@@ -24,7 +24,6 @@ __all__ = ['Launcher']
 
 from ..Interface import *
 from .histogram import Hist1D, Hist2D, _pt_HistBase_dimension
-from .Visualiser import Visualiser
 
 _pt_Launcher_getInstance = importFunc('pt_Launcher_getInstance', type_voidp, [] )
 _pt_Launcher_setSeed = importFunc('pt_Launcher_setSeed', None, [type_voidp, type_sizet] )
@@ -62,6 +61,7 @@ class Launcher():
         self.worldExist = True
     
     def showWorld(self, gun, particles=None, mergeMesh=False, xscale=1.0, yscale=1.0, zscale=1.0, byMat=False, addLegend=False, geoClip=False):
+        from .Visualiser import Visualiser
         if not self.worldExist:
             raise RuntimeError('World is not set')
         v = Visualiser([], printWorld=False, mergeMesh=mergeMesh, byMat=byMat, addLegend=addLegend, geoClip=geoClip) 

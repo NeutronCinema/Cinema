@@ -200,7 +200,7 @@ class Hist1D(HistBase):
         
         _pt_Hist1D_fill_many(self.cobj, x.size, np.ascontiguousarray(x), np.ascontiguousarray(weight) )
 
-    def plot(self, show=False, label=None, title=None, log=False, sigma=2):
+    def plot(self, show=False, label=None, title=None, log=False, sigma=1):
         try:
             import matplotlib.pyplot as plt
             from Cinema.Interface import plotStyle
@@ -208,7 +208,7 @@ class Hist1D(HistBase):
             center = self.getCentre()
             w = self.getWeight()
             err = self.getSdev()
-            plt.errorbar(center, w, yerr=err*sigma, fmt='s', label=f'Weight {w.sum()}' if label is None else f'{label} {w.sum()}')
+            plt.errorbar(center, w, yerr=err*sigma, fmt='s-', label=f'Weight {w.sum()}' if label is None else f'{label} {w.sum()}')
             if isinstance(log, list):
                 if list[0]:
                     plt.xscale('log')

@@ -1,4 +1,5 @@
 #!/bin/bash
+# set -e
 # --set options
 PREFIX="https://code.ihep.ac.cn/cinema-developers/"
 while getopts ":f" option
@@ -50,53 +51,80 @@ function findSetEnv(){
   fi
 }
 
-export CINEMA_LOCAL_BUILD=1
-export CINEMAPATH="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-#install ncrystal
+function pullFromConda(){
+  conda list | grep -q "$1"
+  if [ ! $? -eq 0 ]; then
+    echo "[ Info ]" Download from conda-forge: "$1=$2"
+    conda install "$1=$2" -c conda-forge -y -q
+  fi
+}
+
+export CINEMA_LOCAL_BUILD=1 
+CINEMAPATH="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+export CINEMAPATH=$CINEMAPATH && echo "Cinema located at $CINEMAPATH"
+
 export response='y'
-if [ ! -f $CINEMAPATH/external/ncrystal/install/lib/libNCrystal.so ]; then
-  # read -r -p "Do you want to install NCrystal into $CINEMAPATH/external? [y/N] " response
+if [ -f $CINEMAPATH/cinemavirenv/bin/activate ]; then
+  . $CINEMAPATH/cinemavirenv/bin/activate
+else
+  # read -r -p "Do you want install Cinema python virtual environment in $CINEMAPATH/cinemavirenv? [y/N] " response
   if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-      if [ ! -d $CINEMAPATH/external ]; then
-        mkdir $CINEMAPATH/external
-      fi
-      cd $CINEMAPATH/external
-      if [ -d ncrystal ]; then
-        rm -rf ncrystal
-      fi
-      git clone ${PREFIX}/ncrystal.git ncrystal
-      cd -
-      mkdir $CINEMAPATH/external/ncrystal/build && cd $CINEMAPATH/external/ncrystal/build
-      cmake  -DCMAKE_INSTALL_PREFIX=$CINEMAPATH/external/ncrystal/install ..
-      make -j ${NUMCPU} && make install
-      cd -
-      echo "installed  ncrystal"
+    python3 -m venv $CINEMAPATH/cinemavirenv
+    . $CINEMAPATH/cinemavirenv/bin/activate
+    if [[ $DOCKER == false ]]; then
+      pip install -r $CINEMAPATH/requirement
     else
-      echo "Found ncrystal"
+      echo "Python with Docker enviorment"
+      pip install -r $CINEMAPATH/requirement
     fi
-    eval $( $CINEMAPATH/external/ncrystal/install/bin/ncrystal-config --setup)  
-    export NCRYSTAL_DATA_PATH="$CINEMAPATH/ncmat:$CINEMAPATH/external/ncystal/install/share/Ncrystal/data"
-  else
-    eval $( $CINEMAPATH/external/ncrystal/install/bin/ncrystal-config --setup)  
-    export NCRYSTAL_DATA_PATH="$CINEMAPATH/ncmat:$CINEMAPATH/external/ncystal/install/share/Ncrystal/data"
-    echo "NCrystal config done"
+  fi
 fi
 
-if [ -f $CINEMAPATH/external/ncrystal/install/lib/libNCrystal.so ]; then
-  if [ ! -f $CINEMAPATH/external/ncplugin-BzScope/testcode/utils/cache/bld/libNCPlugin_PiXiu.so ]; then
-    echo "Installing ncplugin-BzScope"
-    cd $CINEMAPATH/external
-    git clone ${PREFIX}/ncplugin-BzScope.git
-    cd -
-    cd $CINEMAPATH/external/ncplugin-BzScope
-    . testcode/utils/bootstrap.sh 
-    ncpluginbuild
-    cd -
-  fi
-  echo "Found ncplugin-BzScope"
-  . $CINEMAPATH/external/ncplugin-BzScope/testcode/utils/bootstrap.sh 
-  export NCRYSTAL_PLUGIN_LIST="$CINEMAPATH/external/ncplugin-BzScope/testcode/utils/cache/bld/libNCPlugin_BzScope.so:$NCRYSTAL_PLUGIN_LIST"
-fi
+# #install ncrystal
+# export response='y'
+# if [ ! -f $CINEMAPATH/external/ncrystal/install/lib/libNCrystal.so ]; then
+#   # read -r -p "Do you want to install NCrystal into $CINEMAPATH/external? [y/N] " response
+#   if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+#       if [ ! -d $CINEMAPATH/external ]; then
+#         mkdir $CINEMAPATH/external
+#       fi
+#       cd $CINEMAPATH/external
+#       if [ -d ncrystal ]; then
+#         rm -rf ncrystal
+#       fi
+#       git clone ${PREFIX}/ncrystal.git ncrystal
+#       cd -
+#       mkdir $CINEMAPATH/external/ncrystal/build && cd $CINEMAPATH/external/ncrystal/build
+#       cmake  -DCMAKE_INSTALL_PREFIX=$CINEMAPATH/external/ncrystal/install ..
+#       make -j ${NUMCPU} && make install
+#       cd -
+#       echo "installed  ncrystal"
+#     else
+#       echo "Found ncrystal"
+#     fi
+#     # eval $( $CINEMAPATH/external/ncrystal/install/bin/ncrystal-config -s)  
+#     # export NCRYSTAL_DATA_PATH="$CINEMAPATH/ncmat:$CINEMAPATH/external/ncystal/install/share/Ncrystal/data"
+#   else
+#     # eval $( $CINEMAPATH/external/ncrystal/install/bin/ncrystal-config -s)  
+#     # export NCRYSTAL_DATA_PATH="$CINEMAPATH/ncmat:$CINEMAPATH/external/ncystal/install/share/Ncrystal/data"
+#     echo "NCrystal config done"
+# fi
+
+# if [ -f $CINEMAPATH/external/ncrystal/install/lib/libNCrystal.so ]; then
+#   if [ ! -f $CINEMAPATH/external/ncplugin-BzScope/testcode/utils/cache/bld/libNCPlugin_PiXiu.so ]; then
+#     echo "Installing ncplugin-BzScope"
+#     cd $CINEMAPATH/external
+#     git clone ${PREFIX}/ncplugin-BzScope.git
+#     cd -
+#     cd $CINEMAPATH/external/ncplugin-BzScope
+#     . testcode/utils/bootstrap.sh 
+#     ncpluginbuild
+#     cd -
+#   fi
+#   echo "Found ncplugin-BzScope"
+#   . $CINEMAPATH/external/ncplugin-BzScope/testcode/utils/bootstrap.sh 
+#   export NCRYSTAL_PLUGIN_LIST="$CINEMAPATH/external/ncplugin-BzScope/testcode/utils/cache/bld/libNCPlugin_BzScope.so:$NCRYSTAL_PLUGIN_LIST"
+# fi
 
 #MCPL
 if [ ! -f $CINEMAPATH/external/mcpl/install/lib/libmcpl.so ]; then
@@ -122,40 +150,17 @@ if [ ! -f $CINEMAPATH/external/mcpl/install/lib/libmcpl.so ]; then
     echo "Found MCPL"
 fi
 
-#install libxerces
-if [ ! -f $CINEMAPATH/external/xerces-c/install/lib/libxerces-c.so ]; then
-  # read -r -p "Do you want to install libxerces into $CINEMAPATH/external? [y/N] " response
-  if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-      if [ ! -d $CINEMAPATH/external ]; then
-        mkdir $CINEMAPATH/external
-      fi
-      cd $CINEMAPATH/external
-      if [ -d xerces-c ]; then
-        rm -rf xerces-c
-      fi
-      git clone -b v3.2.3 --single-branch ${PREFIX}/xerces-c.git
-      cd -
-      mkdir $CINEMAPATH/external/xerces-c/build && cd $CINEMAPATH/external/xerces-c/build
-      cmake  -DCMAKE_INSTALL_PREFIX=$CINEMAPATH/external/ncrystal/install ..
-      cmake -DBUILD_SHARED_LIBS=ON -Dnetwork=OFF -Dextra-warnings=OFF  -DCMAKE_INSTALL_PREFIX=$CINEMAPATH/external/xerces-c/install ..
-      make -j ${NUMCPU} && make install
-      cd -
-      echo "installed  libxerces"
-  fi
-  else
-    echo "Found libxerces"
-fi
-
 # KDSource 
 # 1st check if libxml2 is installed, if not install version 2.9.3, as required by KDSource
 # 2nd install KDSource
 findSetEnv PROMPT_LIBXML2_LIB
 if [ $? -eq 0 ]; then
   echo "LIBXML2 path read from environment variable cache"
-elif find /lib -name *libxml2.so | grep -q . ; then
-  export PROMPT_LIBXML2_LIB="$(dirname $(find /lib -name *libxml2.so -print -quit))"
-elif find $CINEMAPATH/external/libxml2-2.9.3/local -name *libxml2.so | grep -q .; then
-  export PROMPT_LIBXML2_LIB=$CINEMAPATH/external/libxml2-2.9.3/local
+elif [ -n "$CONDA_DEFAULT_ENV" ]; then  
+  pullFromConda libxml2 "2.9.3"
+  export PROMPT_LIBXML2_LIB="$(dirname $(find $CONDA_PREFIX/lib -name libxml2.so -print -quit))"
+elif [ -f $CINEMAPATH/external/libxml2-2.9.3/local/lib/libxml2.so ]; then
+  export PROMPT_LIBXML2_LIB=$CINEMAPATH/external/libxml2-2.9.3/local/lib
 else
   echo "libxml2 missing! Installing to "${CINEMAPATH}"/external"
   cd $CINEMAPATH/external
@@ -181,7 +186,7 @@ if [ ! -f $CINEMAPATH/external/KDSource/install/lib/libkdsource.so ]; then
       if [ -d KDSource ]; then
         rm -rf KDSource
       fi
-      git clone ${PREFIX}/KDSource.git
+      git clone ${PREFIX}/KDSource.git --single-branch
       cd -
 
       # should in fact use git clone --recurse-submodules ${PREFIX}/KDSource.git
@@ -208,6 +213,30 @@ if [ ! -f $CINEMAPATH/external/KDSource/install/lib/libkdsource.so ]; then
     echo "Found KDSource"
 fi
 
+#install libxerces
+if [ ! -f $CINEMAPATH/external/xerces-c/install/lib/libxerces-c.so ]; then
+  # if [ -n "$CONDA_DEFAULT_ENV" ]; then #fixme: conda conflict right now
+  #   pullFromConda xerces-c 3.2.3
+  # read -r -p "Do you want to install libxerces into $CINEMAPATH/external? [y/N] " response
+  if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+      if [ ! -d $CINEMAPATH/external ]; then
+        mkdir $CINEMAPATH/external
+      fi
+      cd $CINEMAPATH/external
+      if [ -d xerces-c ]; then
+        rm -rf xerces-c
+      fi
+      git clone -b v3.2.3 --single-branch ${PREFIX}/xerces-c.git
+      cd -
+      mkdir $CINEMAPATH/external/xerces-c/build && cd $CINEMAPATH/external/xerces-c/build
+      cmake -DBUILD_SHARED_LIBS=ON -Dnetwork=OFF -Dextra-warnings=OFF  -DCMAKE_INSTALL_PREFIX=$CINEMAPATH/external/xerces-c/install ..
+      make -j ${NUMCPU} && make install
+      cd -
+      echo "installed  libxerces"
+  fi
+  else
+    echo "Found libxerces"
+fi
 
 #install VecGeom
 if [ ! -f $CINEMAPATH/external/VecGeom/install/lib/libvecgeom.a ]; then
@@ -241,12 +270,12 @@ fi
 findSetEnv PROMPT_HDF5_LIB PROMPT_HDF5_HEADER PROMPT_HDF5_PATH
 if [ $? -eq 0 ]; then
   echo "HDF5 path read from environment variable cache"
-elif find /usr -name *hdf5.so | grep -q . ; then
-  export PROMPT_HDF5_LIB="$(dirname $(find /usr -name *hdf5.so -print -quit))"
-  # there are cases where lib and header not in the same well-setup directory tree like .../bin .../include .../lib, so another find cml
-  export PROMPT_HDF5_HEADER="$(dirname $(find /usr -name *hdf5.h -print -quit))"
-  export PROMPT_HDF5_PATH="$(dirname $(dirname $(find /usr -name *hdf5.so -print -quit)))"
-elif find $CINEMAPATH/external/hdf5-1.12.2/local -name *hdf5.so | grep -q .; then
+elif [ -n "$CONDA_DEFAULT_ENV" ]; then
+    pullFromConda hdf5 1.12.2
+    export PROMPT_HDF5_LIB="$CONDA_PREFIX/lib"
+    export PROMPT_HDF5_HEADER="$CONDA_PREFIX/include"
+    export PROMPT_HDF5_PATH="$CONDA_PREFIX"
+elif [ -f  $CINEMAPATH/external/hdf5-1.12.2/local/lib/libhdf5.so ]; then
   export PROMPT_HDF5_LIB=$CINEMAPATH/external/hdf5-1.12.2/local/lib
   export PROMPT_HDF5_HEADER=$CINEMAPATH/external/hdf5-1.12.2/local/include
   export PROMPT_HDF5_PATH=$CINEMAPATH/external/hdf5-1.12.2/local/
@@ -279,12 +308,12 @@ if [ ! -f $CINEMAPATH/external/gidiplus/lib/libgidiplus.a ]; then
     if [ -d gidiplus ]; then
       rm -rf gidiplus
     fi
-    git clone -b master --single-branch ${PREFIX}/gidiplus.git
+    git clone -b pt --single-branch ${PREFIX}/gidiplus.git
     cd -
     cd $CINEMAPATH/external/gidiplus
     # wget https://github.com/zeux/pugixml/releases/download/v1.13/pugixml-1.13.zip 
     # mv pugixml-1.13.zip Misc
-    make -s -j${NUMCPU} SHELL=bash CXXFLAGS="-std=c++11 -fPIC"  CFLAGS="-fPIC" HDF5_PATH=${PROMPT_HDF5_PATH} HDF5_LIB=${PROMPT_HDF5_LIB} HDF5_INCLUDE=${PROMPT_HDF5_HEADER}
+    make install4prompt -s -j${NUMCPU} SHELL=bash CXXFLAGS="-std=c++11 -fPIC"  CFLAGS="-fPIC" HDF5_PATH=${PROMPT_HDF5_PATH} HDF5_LIB=${PROMPT_HDF5_LIB} HDF5_INCLUDE=${PROMPT_HDF5_HEADER}
     cd -
     echo "installed gidiplus"
   fi
@@ -326,23 +355,6 @@ function writeEnv(){
 }
 
 writeEnv PROMPT_LIBXML2_LIB PROMPT_HDF5_LIB PROMPT_HDF5_PATH PROMPT_HDF5_DIR PROMPT_HDF5_HEADER
-
-
-if [ -f $CINEMAPATH/cinemavirenv/bin/activate ]; then
-  . $CINEMAPATH/cinemavirenv/bin/activate
-else
-  # read -r -p "Do you want install Cinema python virtual environment in $CINEMAPATH/cinemavirenv? [y/N] " response
-  if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-    python3 -m venv $CINEMAPATH/cinemavirenv
-    . $CINEMAPATH/cinemavirenv/bin/activate
-    if [[ $DOCKER == false ]]; then
-      pip install -r $CINEMAPATH/requirement
-    else
-      echo "Python with Docker enviorment"
-      pip install -r $CINEMAPATH/requirement
-    fi
-  fi
-fi
 
 if [ $OPENMCIN -eq 1 ]; then
   if [ ! -f $CINEMAPATH/external/openmc/local/lib/libopenmc.so ]; then
@@ -395,6 +407,7 @@ if [ ! -f $CINEMAPATH/src/python/ptgeo/__init__.py ]; then
   cd -
 fi
 
-
+export NCRYSTAL_DATA_PATH="$CINEMAPATH/ncmat"
 export PATH="$CINEMAPATH/src/python/ptgeo/examples:$PATH"
+export PYTHONPATH="$CINEMAPATH:$PYTHONPATH"
 echo "Added the ptgeo example directory into environment"

@@ -26,6 +26,7 @@
 #include <stdexcept>
 #include <iostream>
 #include <fstream>
+#include <cstdint>
 
 namespace Prompt {
 

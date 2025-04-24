@@ -6,7 +6,7 @@ import os
 
 cpath = os.getenv('CINEMAPATH')
 # Check H1 at 1e-4
-popsPATH = os.path.join(cpath, 'external', 'ptdata', 'pops.xml')
+popsPATH = os.path.join(cpath, 'testdata', 'pops.xml')
 expected = [0.0, 0.0, 8.0, 28.0, 101.0, 250.0, 697.0, 1520.0, 3402.0, 7237.0, 14155.0, 23695.0, 28278.0, 16656.0, 2400.0, 23.0, 0.0, 0.0, 0.0, 0.0]
 cfg ='freegas::H/1gcm3/H_is_H1'
 incidentEnergy = 1e-4
@@ -19,7 +19,7 @@ def printExpected(counts):
     ct = list(counts)
     for c in ct:
         if isinstance(c,np.ndarray):
-            print(list(c), sep=',')
+            print(c, sep=',')
         else:
             print(c)
     

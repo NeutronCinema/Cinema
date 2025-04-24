@@ -21,6 +21,18 @@
 ################################################################################
 import warnings
 
+from ..Interface import *
+
+def has_pyvista():
+    try:
+        status = True
+        import pyvista
+    except:
+        status = False
+        warnings.warn("pyvista not install in current environment")
+    return status
+
+from . import solid
 from . import launcher
 from .launcher import *
 
@@ -30,8 +42,8 @@ from .PromptFileReader import *
 from . import Mesh
 from .Mesh import *
 
-from . import Visualiser
-from .Visualiser import *
+if has_pyvista():
+    from .Visualiser import *
 
 from . import histogram
 from .histogram import *
@@ -290,7 +302,7 @@ class PromptMPI(Prompt):
         weight = hist.getWeight()
         hit = hist.getHit()
         ww = hist.getWW()
-        print(f'rank {self.rank} hist info: weight {hist.getWeight().sum()}, hit {hist.getHit().sum()}')
+        print(f'Scorer {cfg} rank {self.rank}: weight {hist.getWeight().sum()}, hit {hist.getHit().sum()}')
 
         recvw = None
         recvh = None

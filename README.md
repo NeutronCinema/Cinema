@@ -1,10 +1,12 @@
-# prompt
+# Prompt
 
 Prompt: Probability-Conserved Cross Section Biasing Monte Carlo Particle Transport System. 
 
 Introduction of system can be found at [arXiv](https://arxiv.org/abs/2304.06226).
 
 ## Installing on Linux(Ubuntu) from source
+
+### With native linux envrionment
 
 To build Prompt, several prerequisites are needed.
 ```
@@ -18,6 +20,18 @@ git clone https://gitlab.com/cinema-developers/prompt.git
 cd prompt
 . env.sh
 cimbuild
+```
+
+### With conda envrionment
+
+Use `conda` cml to manage prerequisites:
+```
+conda create -n tmp python=3.10 cxx-compiler cmake make=4.3 fftw unzip openmp
+```
+
+Then source `env.sh`
+```
+. env.sh
 ```
 
 ## Installing on Linux with pip

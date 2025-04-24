@@ -48,3 +48,6 @@ bigdata
 
 # CAD or others geometry datas
 *.step
+
+# No gitlab runner 
+.gitlab-ci.yml

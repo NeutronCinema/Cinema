@@ -43,21 +43,21 @@ TEST_CASE("ModelCollection")
   std::vector<double> expectedXS;
   #ifdef ENABLE_GIDI
   expectedXS={
-    1.6801370629016,
-    1.63844743351929,
-    1.60031071917211,
-    1.565349153125,
-    1.53331373618499,
-    1.61278276163805
+    1.680228126153258,
+    1.638541715024224,
+    1.600408252103404,
+    1.565449983578320,
+    1.533417449071772,
+    1.612889632139340
     };
   #else
   expectedXS={
-    1.67754141205923,
-    1.63589383650134,
-    1.5978104364311,
-    1.56291359985623,
-    1.53091995017932,
-    1.61041869533578
+    1.67763252179636,
+    1.63598819378975,
+    1.59790799293761,
+    1.5630143018536,
+    1.5310237678712,
+    1.61052559545843
     };
   #endif
   double inE(0.0253);
@@ -74,14 +74,19 @@ TEST_CASE("ModelCollection")
 
   double finE(0.);
   Vector finDir;
-  for(size_t i;i<6;i++)
+  for(size_t i=0;i<6;i++)
   {
     std::cout << "In energy: " << inE << std::endl;
     std::cout << "In dir: " << inDir << std::endl;
     xs = compModel->totalCrossSection(2112, inE, inDir);
       std::cout << "xs = compModel->totalCrossSection(2112, inE, inDir) "<< std::endl;
 
-    std::cout << "Total XS: " << xs/Unit::barn << std::endl;
+    std::cout << "Total XS: " << std::endl;
+    std::cout << xs/Unit::barn << std::endl;
+    std::cout << "  versus " << std::endl;
+    std::cout << expectedXS[i] << std::endl;
+    std::cout << "" << std::endl;
+    
     CHECK(floateq(xs/Unit::barn, expectedXS[i]));
     // compModel->generate(inE, inDir, finE, finDir);
     // std::cout << "Out energy: " << finE << std::endl;

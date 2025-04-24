@@ -20,7 +20,7 @@ class MySim(PromptMPI):
     def makeWorld(self):
         world = Volume("world", Box(2000, 2000, 21000))
         # mat = 'physics=idealElaScat;xs_barn=1;density_per_aa3=5;energy_transfer_eV=0.03'
-        mat = "physics=ncrystal;nccfg='bzscope_ni_20K_c1c2.ncmat';scatter_bias=5.0;abs_bias=1.0;"
+        mat = "physics=ncrystal;nccfg='plugins::BzScope/bzscope_beo_c1_300K.ncmat;bragg=0';scatter_bias=5.0;abs_bias=1.0;"
         # mat = 'bzscope_c1_vol_77K.ncmat;bragg=0'
         sample = Volume("sample", Sphere(0, 1), matCfg=mat)
         ms = MultiScatCounter()
@@ -71,10 +71,10 @@ sim.makeWorld()
 
 # sim.show(gun, 100)
 
-sim.simulate(gun, 1e6)
+sim.simulate(gun, 1e7)
 res = sim.gatherHistData('sqw')
 destination = 0
 if sim.rank==0:
     # res.plot(False, log=False)
     res.save('sqw.h5')
-    res.plot(True, title=f'Total Weight: {res.getAccWeight()}', log=True, dynrange=1e-6)
+    res.plot(True, title=f'Total Weight: {res.getAccWeight()}', log=False, dynrange=1e-6)

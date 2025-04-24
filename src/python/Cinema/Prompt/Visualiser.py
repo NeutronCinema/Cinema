@@ -22,11 +22,11 @@
 
 from ..Interface import *
 
-import pyvista as pv
 import random
 import matplotlib.colors as mcolors
 from .Mesh import Mesh
 
+import pyvista as pv
 
 # from https://stackoverflow.com/questions/57173235/how-to-detect-whether-in-jupyter-notebook-or-lab 
 def is_jupyterlab_session() -> bool:
@@ -56,11 +56,8 @@ def is_jupyterlab_session() -> bool:
 
     return False
 
-
-
-
 class Visualiser():
-    def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, dumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=False, geoClip=False):
+    def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, dumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=False, geoClip=False):       
         if is_jupyterlab_session():
             pv.set_jupyter_backend('trame')  
 

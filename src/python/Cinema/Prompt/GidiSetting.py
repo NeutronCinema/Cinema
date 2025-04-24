@@ -23,7 +23,7 @@
 
 from ..Interface import *
 
-
+_pt_Gidi_compiled = importFunc('pt_Gidi_compiled', type_bool, [])
 _pt_GidiSetting_getInstance = importFunc('pt_GidiSetting_getInstance', type_voidp, [] )
 
 _pt_GidiSetting_getGidiThreshold = importFunc('pt_GidiSetting_getGidiThreshold', type_dbl, [type_voidp] )
@@ -49,6 +49,7 @@ _pt_GidiSetting_setGammaTransport = importFunc('pt_GidiSetting_setGammaTransport
 class GidiSetting():
     def __init__(self):
         self.cobj = _pt_GidiSetting_getInstance()
+        self.isCompiled = _pt_Gidi_compiled()
 
     def getGidiThreshold(self):
         return _pt_GidiSetting_getGidiThreshold(self.cobj)

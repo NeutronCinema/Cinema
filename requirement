@@ -2,6 +2,9 @@
 # numba==0.55.1
 
 #required packages for Prompt visualisation
+ncrystal
+ncrystal-pypluginmgr
+git+https://code.ihep.ac.cn/cinema-developers/ncplugin-bzscope
 mpi4py
 pyvista
 matplotlib
@@ -12,6 +15,7 @@ psutil
 # tetgen #tetrahedralise function in pyvista 
 # pymeshfix #reconstruct a manifold clean surface
 tqdm
+gvar
 
 #PiXiu
 # phonopy==2.14.0

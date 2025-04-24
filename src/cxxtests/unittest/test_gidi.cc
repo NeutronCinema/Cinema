@@ -47,12 +47,10 @@ void configTestData()
   cdata.setGidiPops(fpop);
 }
 
-void configTestData();
-
 TEST_CASE("GIDIfactory")
 {
   auto &cdata = Prompt::Singleton<Prompt::GidiSetting>::getInstance();
-  
+  configTestData();
   std::cout << "GidiSetting info: " << std::endl;
   std::cout << "  " << cdata.getGidiMap() << std::endl;
   std::cout << "  " << cdata.getGidiPops() << std::endl;

@@ -1,4 +1,4 @@
 [submodule "src/python/ptgeo"]
 	path = src/python/ptgeo
-	url = https://gitlab.com/cinema-developers/ptgeo.git
+	url = https://code.ihep.ac.cn/cinema-developers/ptgeo.git
 	branch = main
