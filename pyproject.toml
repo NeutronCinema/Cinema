@@ -1,6 +1,6 @@
 [project]
 name="neutron-cinema"
-version="2.0.0a1"
+dynamic = ["version"]
 authors=[
     {name="Xiao-Xiao Cai"},
     {name="Ming Tang"},
@@ -54,6 +54,9 @@ prompt = "Cinema.Prompt.cli.promptcli:main"
 
 [tool.hatch.metadata]
 allow-direct-references = true # To make git + magic happen
+
+[tool.hatch.version]
+path = "src/python/Cinema/__init__.py"
 
 [[tool.hatch.build.hooks.build-scripts.scripts]]
 out_dir = "build"
