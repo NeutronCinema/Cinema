@@ -131,7 +131,7 @@ class Visualiser():
             from tetgen import TetGen
         except:
             raise ImportError("tetgen is required. Use 'pip install tetgen' to install. ")
-        mesh.triangulate(True)
+        mesh.triangulate(inplace=True)
         tet = TetGen(mesh)
         tet.make_manifold()
         tet.tetrahedralize()
