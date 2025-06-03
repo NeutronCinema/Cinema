@@ -147,3 +147,8 @@ class MCPLGun(ConfigString):
 
     def setMCPLFile(self, mcplfile):
         self.cfg_mcplfile = mcplfile
+
+class MPIGun(SurfaceSource):
+    def __init__(self, src_whz=None, slit_whz=None):
+        super().__init__(src_whz, slit_whz)
+        self.cfg_gun='MPIGun'
