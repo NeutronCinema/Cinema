@@ -78,13 +78,15 @@ class Visualiser():
         self.trj=pv.MultiBlock()
         self.redpoints=pv.MultiBlock()
 
+        self.set_plotter_style()
+        self.plotter.enable_mesh_picking(callback=self.callback, left_clicking=False, show_message=False)
+        self.plotter.add_key_event('s', self.save)
+
+    def set_plotter_style(self):
         self.plotter.show_bounds()
         self.plotter.view_zy()
         self.plotter.show_axes()
-
         self.plotter.show_grid()
-        self.plotter.enable_mesh_picking(callback=self.callback, left_clicking=False, show_message=False)
-        self.plotter.add_key_event('s', self.save)
 
     def save(self):
         print('save screenshot.png')

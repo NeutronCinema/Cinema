@@ -67,6 +67,8 @@ class Launcher():
         v = Visualiser([], printWorld=False, mergeMesh=mergeMesh, byMat=byMat, addLegend=addLegend, geoClip=geoClip) 
         v.plotter.set_scale(xscale, yscale, zscale )
         v.plotter.add_axes_at_origin(labels_off=True)
+        v.set_plotter_style()
+
         if particles is None:
             v.show()
         else:
