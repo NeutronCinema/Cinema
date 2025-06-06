@@ -21,8 +21,8 @@
 #include "PTScorerWlSpectrum.hh"
 
 
-Prompt::ScorerWlSpectrum::ScorerWlSpectrum(const std::string &name, double xmin, double xmax, unsigned nxbins, unsigned int pdg, ScorerType stype, int groupid)
-:Scorer1D("ScorerWlSpectrum_"+name, stype, std::make_unique<Hist1D>("ScorerWlSpectrum_"+name, xmin, xmax, nxbins), pdg, groupid)
+Prompt::ScorerWlSpectrum::ScorerWlSpectrum(const std::string &name, double xmin, double xmax, unsigned nxbins, unsigned int pdg, ScorerType stype, int groupid, bool linear)
+:Scorer1D("ScorerWlSpectrum_"+name, stype, std::make_unique<Hist1D>("ScorerWlSpectrum_"+name, xmin, xmax, nxbins, linear), pdg, groupid)
 {}
 
 Prompt::ScorerWlSpectrum::~ScorerWlSpectrum() {}

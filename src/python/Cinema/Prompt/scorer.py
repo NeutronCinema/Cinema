@@ -264,8 +264,10 @@ class ESpectrumHelper(ScorerHelper, MultiScatMixin1D):
      
     
 class WlSpectrumHelper(ScorerHelper, MultiScatMixin1D):
-    def __init__(self, name, min=0.1, max=10, numbin = 100, pdg : int = 2112, ptstate : str = 'ENTRY', groupID : int = 0) -> None:
+    def __init__(self, name, min=0.1, max=10, numbin = 100, pdg : int = 2112, 
+                 ptstate : str = 'ENTRY', groupID : int = 0, linear = True) -> None:
         super().__init__(name, min, max, numbin, pdg, ptstate, groupID)
+        self.linear = linear
 
     def make(self, vol):
         cobj = _pt_ScorerWlSpectrum_new(self.name.encode('utf-8'), 
