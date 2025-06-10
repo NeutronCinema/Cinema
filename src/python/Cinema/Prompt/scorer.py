@@ -140,7 +140,7 @@ from ..Interface import *
 _pt_ScorerDeposition_new = importFunc('pt_ScorerDeposition_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_uint, type_int, type_bool, type_int])
 _pt_ScorerESpectrum_new = importFunc('pt_ScorerESpectrum_new', type_voidp, [type_cstr, type_bool, type_dbl, type_dbl, type_uint, type_uint, type_int, type_int, type_bool ])
 _pt_ScorerTOF_new = importFunc('pt_ScorerTOF_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_uint, type_int, type_int ])
-_pt_ScorerWlSpectrum_new = importFunc('pt_ScorerWlSpectrum_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_uint, type_int, type_int ])
+_pt_ScorerWlSpectrum_new = importFunc('pt_ScorerWlSpectrum_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_uint, type_int, type_int, type_bool ])
 _pt_ScorerVolFluence_new = importFunc('pt_ScorerVolFluence_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_dbl, type_uint, type_int, type_bool, type_int])
 _pt_ScorerDeltaMomentum_new = importFunc('pt_ScorerDeltaMomentum_new',type_voidp, [type_cstr, type_dbl, type_dbl, type_dbl, type_uint,
                                                                                    type_uint, type_dbl, type_dbl, type_dbl, 
@@ -265,7 +265,7 @@ class ESpectrumHelper(ScorerHelper, MultiScatMixin1D):
     
 class WlSpectrumHelper(ScorerHelper, MultiScatMixin1D):
     def __init__(self, name, min=0.1, max=10, numbin = 100, pdg : int = 2112, 
-                 ptstate : str = 'ENTRY', groupID : int = 0, linear = True) -> None:
+                 ptstate : str = 'ENTRY', groupID : int = 0, linear = False) -> None:
         super().__init__(name, min, max, numbin, pdg, ptstate, groupID)
         self.linear = linear
 
@@ -276,7 +276,8 @@ class WlSpectrumHelper(ScorerHelper, MultiScatMixin1D):
                                         self.numbin,
                                         self.pdg,
                                         self.ptsNum,
-                                        self.groupID
+                                        self.groupID,
+                                        self.linear
                                         )
         vol.addScorer(self, cobj)
         self.cobj = cobj
