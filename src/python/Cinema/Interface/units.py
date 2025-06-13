@@ -22,7 +22,7 @@ c = 299792458*m/s
 umass = 931.494095*MeV/c**2
 kb = 8.6173324e-5*eV/K
 
-planck = 4.13566769692386e-15  #(source: NIST/CODATA 2018)
+planck = 4.13566769692386e-15  #(source: NIST/CODATA 2018) [eV*s]
 hbar = planck*0.5/np.pi  #[eV*s]6.582119569509068e-16
 radpsec2eV = hbar
 eV2radpsec = 1./radpsec2eV
