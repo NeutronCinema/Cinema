@@ -15,7 +15,8 @@ cdata=GidiSetting()
 cdata.setGidiThreshold(-5)
 cdata.setEnableGidi(True)
 cdata.setGammaTransport(True)
-cdata.setGidiPops("/home/panzy/project/ml/external/ptdata/pops_added2.xml")
+cdata.setGidiPops("/home/zypan/XS/ptdata/pops.xml")
+cdata.setGidiMap("/home/zypan/XS/ptdata/all.map")
 
 class MySim(PromptMPI):
     def __init__(self, seed=4096) -> None:
@@ -211,20 +212,23 @@ class TestGun(PythonGun):
         x = np.random.uniform(0.9,1)
         return x * 20e6
     
+def main():
+    # gun = PositionTestGun()
+    gun = TestGun()
 
-# gun = PositionTestGun()
-gun = TestGun()
-
-sim = MySim(seed=1010)
-sim.makeWorld()
+    sim = MySim(seed=1010)
+    sim.makeWorld()
 
 
-# vis or production
-if True:
-    sim.show(gun, 1, byMat=1, mergeMesh=0, addLegend=1, geoClip=1)
-else:
-    sim.simulate(gun, 100)
-    draw_xz = sim.gatherHistData('PSDXZ')
-    destination = 0
-    # if sim.rank==destination:
-        # draw_xz.plot(1)
+    # vis or production
+    if True:
+        sim.show(gun, 100, byMat=1, mergeMesh=0, addLegend=1, geoClip=0)
+    else:
+        sim.simulate(gun, 100)
+        draw_xz = sim.gatherHistData('PSDXZ')
+        destination = 0
+        # if sim.rank==destination:
+            # draw_xz.plot(1)
+
+if __name__ == "__main__":
+    main()
