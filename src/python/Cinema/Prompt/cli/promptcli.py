@@ -61,11 +61,8 @@ def get_classes_from_filepath(pyScriptPath : str):
     classes = get_classes_from_module(module)
     return classes
 
-def get_parser_modegdml(p : argparse.ArgumentParser):
-    parser = p
-    parser.add_argument('-g', '--gdml', action='store', type=str, default='',
-                        dest='gdml', help='input gdml file')
-    parser.add_argument('-v', '--visualize', action='store_true', dest='visualize', help='flag to visualize gdml model')
+def add_arguments_to_parser(parser : argparse.ArgumentParser):
+    parser.add_argument('-v', '--visualize', action='store_true', dest='visualize', help='flag to visualize geometry model')
     parser.add_argument('-s', '--seed', action='store', type=int, default=4096,
                         dest='seed', help='random seed number')
     parser.add_argument('-n', '--neutronNum', action='store', type=float, default=100,
@@ -85,39 +82,26 @@ def get_parser_modegdml(p : argparse.ArgumentParser):
 def quiry_help_msg(loc : int):
     return ('-h' in sys.argv[loc]) or ('--help' in sys.argv[loc])
 
-def get_parser_main():
-    parser_main = argparse.ArgumentParser()
-    get_parser_modegdml(parser_main)
+def get_parser(parser : argparse.ArgumentParser):
 
-    # add a subcommand 
-    cmdscript = parser_main.add_subparsers()
-    parser_script = cmdscript.add_parser('pyscript', 
-                                         help='Optional. Run simulation by Python script inputs. ' \
-                                         'Run `prompt pyscript -h` to show help messages.')
-    parser_script.add_argument("filepath", 
-                               help="Required. Simulation deifned as `.py` file. " \
-                               "Run `prompt pyscript <filepath> -h` to show simulation parameters",)
-    parser_script.add_argument('-v', '--visualize', action='store_true', 
-                               dest='visualize', help='flag to visualize model')
-    parser_script.add_argument('-n', '--neutronNum', action='store', type=float, default=100,
-                        dest='neutronNum', help='neutron number')
+    parser.add_argument('-g', '--geo', action='store', type=str, default='',
+                        dest='geo', help='input geometry file. Support `.gdml` and `.py` file.' \
+                        ' If `.py` file is given, the arguments defined in classes constructor is parsed.')
+    
+    args, _ = parser.parse_known_args()
+
+    add_arguments_to_parser(parser)
+    if args.geo.endswith('.py'):
+        get_subparser_from_cls(args.geo, parser)
     
     if len(sys.argv) <= 1:
-        parser_main.print_help()
+        parser.print_help()
 
-    if 'pyscript' in sys.argv:
-                
-        if sys.argv[1] == 'pyscript': # running in pyscript mode
-
-            if len(sys.argv) <= 2:
-                parser_script.print_help()
-            elif not quiry_help_msg(2):
-                filepath = sys.argv[2]
-                get_subparser_from_cls(filepath, parser_script)
-        else:
-            argparse.ArgumentError(message=f"{sys.argv[1]} not equals pyscript")
-
-    return parser_main
+    # add help here so as to parse parameters in `.py` scripts
+    parser.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS,
+                        help='show this help message and exit')
+        
+    return parser
 
 def get_subparser_from_cls(pyScriptPath : str, subparser : argparse.ArgumentParser):
     clss = get_classes_from_filepath(pyScriptPath)
@@ -148,7 +132,8 @@ def analyze_class_constructor(cls):
 
 def add_arguments_for_class(parser: argparse.ArgumentParser, cls: Type):
     params_info = analyze_class_constructor(cls)
-    print(f"Simulation parameters number in total: {len(params_info)}")
+    # print(f"Simulation parameters number in total: {len(params_info)}")
+    # print()
     for param_name, info in params_info.items():
         arg_name = f"--{param_name}"
         arg_kwargs = {
@@ -175,9 +160,22 @@ def add_arguments_for_class(parser: argparse.ArgumentParser, cls: Type):
             else:
                 parser.add_argument(arg_name, action='store_true', **arg_kwargs)
         else:
-            parser.add_argument(arg_name, **arg_kwargs)
+            args, _ = parser.parse_known_args()
+            if param_name not in args:
+                parser.add_argument(arg_name, **arg_kwargs)
     return parser
 
+
+def str_or_float(value: str):
+    import re
+    quote_match = re.match(r'^["\'](.*)["\']$', value)
+    if quote_match:
+        return quote_match.group(1)
+    else:
+        try:
+            return float(value)
+        except ValueError:
+            return value
 
 def instantiate_class_from_parser(targetBaseClass : Type[T], parser : argparse.ArgumentParser, args=None) -> T:
     if args is None:
@@ -186,7 +184,7 @@ def instantiate_class_from_parser(targetBaseClass : Type[T], parser : argparse.A
         parsed_args = parser.parse_args(args)
 
 
-    classes = get_classes_from_filepath(parsed_args.filepath)
+    classes = get_classes_from_filepath(parsed_args.geo)
     targetChildClass = get_class_of_base_class(targetBaseClass, classes)
 
     # baseclasses = []
@@ -204,9 +202,14 @@ def instantiate_class_from_parser(targetBaseClass : Type[T], parser : argparse.A
     for param_name in sig.parameters:
         if param_name == 'self':
             continue
-            
+        
         if hasattr(parsed_args, param_name):
-            init_params[param_name] = getattr(parsed_args, param_name)
+            parsedvalue = getattr(parsed_args, param_name)
+            if isinstance(parsedvalue, str):
+                parsedvalue_typeconversed = str_or_float(parsedvalue)
+            else:
+                parsedvalue_typeconversed = parsedvalue
+            init_params[param_name] = parsedvalue_typeconversed
         else:
             param = sig.parameters[param_name]
             if param.default is not inspect.Parameter.empty:
@@ -232,7 +235,7 @@ def get_class_of_base_class(targetClass : Type[T], classes : dict) -> T:
 
 def main_py(parser : argparse.ArgumentParser):
     args=parser.parse_args()
-    classes = get_classes_from_filepath(args.filepath)
+    classes = get_classes_from_filepath(args.geo)
 
     sim = instantiate_class_from_parser(PromptMPI, parser)
 
@@ -242,12 +245,15 @@ def main_py(parser : argparse.ArgumentParser):
         raise ValueError("World not made.")
     
     if args.visualize:
-        sim.show(gun, args.neutronNum)
+        sim.show(gun, int(args.neutronNum))
+    else:
+        sim.simulate(gun, int(args.neutronNum))
+        sim.save_all_scorers()
 
 
 def main_gdml(parser : argparse.ArgumentParser):
     args=parser.parse_args()
-    inputfile=args.gdml
+    inputfile=args.geo
     printTraj=False
     rdseed=args.seed
 
@@ -260,7 +266,7 @@ def main_gdml(parser : argparse.ArgumentParser):
         if not os.path.isfile(inputfile):
             inputfile=findData(f'gdml/{inputfile}', '.')
             if not os.path.isfile(inputfile):
-                raise IOError(f'The input GDML file {args.gdml} is not found.')
+                raise IOError(f'The input GDML file {args.geo} is not found.')
         myLcher.loadGeometry(inputfile)
 
     if args.visualize is True:
@@ -276,12 +282,15 @@ def main_gdml(parser : argparse.ArgumentParser):
     else:
         myLcher.go(int(args.neutronNum), recordTrj=False)
 
-if __name__ == '__main__':
-    parser = get_parser_main()
+def main():
+    parser = argparse.ArgumentParser(add_help=False)
+    parser = get_parser(parser)
     args = parser.parse_args()
-    if args.gdml:
+    if args.geo.endswith('.gdml'):
         main_gdml(parser)
-    if 'pyscript' in sys.argv:
+    elif args.geo.endswith('.py'):
         main_py(parser)
 
-    # if 'pyscript' in sys.argv:
+if __name__ == '__main__':
+
+    main()
