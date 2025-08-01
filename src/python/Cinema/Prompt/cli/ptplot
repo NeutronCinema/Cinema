@@ -1,18 +1,28 @@
 #!/usr/bin/env python3
 
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
 import h5py
 import argparse
 from Cinema.Prompt import plotStyle
+import numpy as np
 
-def plot1d(h5file, xlog=False , ylog=True, 
+def get_figure(h5file, show=True, save=False):
+    if show:
+        plt.show()
+    if save:
+        plt.savefig(f'{h5file}.pdf')
+    if not show and not save:
+        raise ValueError("Nothing happens: plot does not showed and not saved.")
+    
+def plot1d(h5file, xlog=False , ilog=True, 
            err=False, save=False, show=True,
            xlabel='x', ylabel='y', title='title'):
 
     h5f = h5py.File(f'{h5file}')
 
     if 'center' not in h5f:
-        raise ValueError("Only 1d scorer for now, or may be not a Prompt h5 file.")
+        raise ValueError("May be not a Prompt h5 file.")
 
     x = h5f[f'center'][()]
     y = h5f[f'weight'][()]
@@ -29,14 +39,39 @@ def plot1d(h5file, xlog=False , ylog=True,
 
     if xlog:
         plt.xscale('log')
-    if ylog:
+    if ilog:
         plt.yscale('log')
-    if show:
-        plt.show()
-    if save:
-        plt.savefig(f'{h5file}.pdf')
-    if not show and not save:
-        raise ValueError("Nothing happens: plot does not showed and not saved.")
+    get_figure(h5file, show, save)
+    
+
+def plot2d(h5file, ilog=False , save=False, show=True,
+           xlabel='x', ylabel='y', title='title'):
+
+    h5f = h5py.File(f'{h5file}')
+
+    if 'xcenter' not in h5f:
+        raise ValueError("May be not a Prompt h5 file.")
+
+    x = h5f[f'xcenter'][()]
+    y = h5f[f'ycenter'][()]
+    z = h5f[f'weight'][()]
+    e = h5f[f'sdev'][()]
+    X, Y = np.meshgrid(x, y)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.title(title)
+
+    if ilog:
+        pcm = ax.pcolormesh(X, Y, z.T, cmap=plt.cm.jet, norm=colors.LogNorm(vmin=z.max()*1e-2, vmax=z.max()), shading='auto')
+    else:
+        pcm = ax.pcolormesh(X, Y, z.T, cmap=plt.cm.jet,shading='auto')
+    fig.colorbar(pcm, ax=ax)
+
+    get_figure(h5file, show, save)
     
 def parse():
     parser = argparse.ArgumentParser()
@@ -44,7 +79,7 @@ def parse():
     parser.add_argument('--save', action='store_true', help='save plot as pdf file.')
     parser.add_argument('--show', action='store_true', help='show plot.')
     parser.add_argument('--xlog', action='store_true', help='xlog scale.')
-    parser.add_argument('--ylog', action='store_true', help='ylog scale.')
+    parser.add_argument('--ilog', action='store_true', help='intensity plotted in logscale.')
     parser.add_argument('--xlabel', type=str, default='x', help='xlabel.')
     parser.add_argument('--ylabel', type=str, default='y', help='ylabel.')
     parser.add_argument('--title', type=str, default='title', help='title.')
@@ -55,8 +90,16 @@ def parse():
 def main():
     plotStyle()
     args = parse()
-    plot1d(args.h5file, args.xlog, args.ylog, args.err, args.save, args.show, 
-           args.xlabel, args.ylabel, args.title)
+
+    h5f = h5py.File(args.h5file)
+    if 'xcenter' in h5f:
+        plot2d(args.h5file, args.ilog, args.save, args.show, 
+            args.xlabel, args.ylabel, args.title)
+    elif 'center' in h5f:
+        plot1d(args.h5file, args.xlog, args.ilog, args.err, args.save, args.show, 
+            args.xlabel, args.ylabel, args.title)
+    else:
+        raise ValueError("May be not a Prompt h5 file.")
 
 if __name__ == '__main__':
     main()
