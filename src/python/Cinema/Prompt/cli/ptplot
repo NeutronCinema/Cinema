@@ -19,7 +19,7 @@ def plot1d(h5file, xlog=False , ylog=True,
     e = h5f[f'sdev'][()]
 
     if not err:
-        plt.plot(x[:-1], y)
+        plt.step(x[:-1], y)
     else:
         plt.errorbar(x[:-1],y,e)
 
