@@ -210,9 +210,10 @@ class Optimiser:
   
         
 class Prompt:
-    def __init__(self, seed : int = 4096) -> None:
+    def __init__(self, seed : int = 4096, isSubmodel = False) -> None:
         self.l = Launcher()
-        self.l.setSeed(seed)
+        self.seed = seed
+        self.isSubmodel = isSubmodel
 
     @property
     def scorer(self):
@@ -233,7 +234,11 @@ class Prompt:
         Volume.scorerDict = {}
     
     def setWorld(self, world):
-        self.l.setWorld(world)
+        if self.isSubmodel:
+            self.world = world
+        else:
+            self.l.setSeed(self.seed)
+            self.l.setWorld(world)
 
      
     def show(self, gun, num : int = 0):
@@ -276,11 +281,11 @@ class Prompt:
     
 
 class PromptMPI(Prompt):
-    def __init__(self, seed=4096) -> None:
+    def __init__(self, seed=4096, **kwargs) -> None:
         self.comm = MPI.COMM_WORLD
         self.rank = self.comm.Get_rank()
         self.size = self.comm.Get_size()
-        super().__init__(seed+self.rank)
+        super().__init__(seed+self.rank, **kwargs)
         
 
     def simulate(self, gun, num : int = 0):
@@ -321,3 +326,12 @@ class PromptMPI(Prompt):
             hist.setWeight(recvw)
             hist.setWW(recww)
         return hist
+    
+    def save_all_scorers(self, savepdf = False):
+        for sc in self.scorer.values():
+            sc_value = self.gatherHistData(sc)
+            if savepdf:
+                if self.rank == 0:
+                    sc_value.savefig(f"{sc}.pdf", log=False)
+            if self.rank == 0:
+                sc_value.save(f"{sc}.h5")
