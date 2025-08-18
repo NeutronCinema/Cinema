@@ -90,6 +90,59 @@ def analyze_class_constructor(cls):
         
     return params_info
 
+def build_argument_help(info: Dict[str, Any]) -> str:
+    help_parts = []
+    
+    # type_name = info['type'].__name__ if hasattr(info['type'], '__name__') else str(info['type'])
+    # help_parts.append(f"Type: {type_name}")
+    
+    if info['default'] is not inspect.Parameter.empty:
+        default_value = info['default']
+        if isinstance(default_value, str):
+            default_value = f"'{default_value}'"
+        help_parts.append(f"Default: {default_value}")
+    
+    # if info['docstring']:
+    #     help_parts.append(info['docstring'])
+    
+    return " | ".join(help_parts)
+
+def parser_factory():
+    entry_parser = argparse.ArgumentParser(add_help=False)
+    entry_parser.add_argument('-g', '--geo', action='store', type=str, default='',
+                        dest='geo', help='Input geometry file. Support `.gdml` and `.py` file.' \
+                        'Run `prompt -g yourScript.py -h` to parse python script arguments.')
+
+    args, _ = entry_parser.parse_known_args()
+
+    class PromptParserInputError(ValueError):
+        def __init__(self, *args):
+            super().__init__(*args)
+            parser = PromptBaseParser(add_help = True, parents = [entry_parser])
+            parser.print_help()
+
+    try:
+        if len(sys.argv) <= 1:
+            raise PromptParserInputError("\n InputError: Not enough arguments!")
+        elif args.geo == '':
+            raise PromptParserInputError("\n InputError: PROMPT simulation did not run without providing a geometry file!")
+        elif args.geo.endswith('.py'):
+            parser = PromptPyScriptParser(add_help = False, parents = [entry_parser])
+        elif args.geo.endswith('.gdml'):
+            parser = PromptGdmlParser(add_help = False, parents = [entry_parser])
+        else:
+            raise PromptParserInputError("\n InputError: Command line input is NOT correct, simulation not run")
+        
+    except PromptParserInputError as e:
+            print(e)
+            sys.exit(1)
+    # add help here so as to parse parameters in `.py` scripts
+    # cannot move because it is intended to parse all arguments before print help message
+    parser.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS,
+                        help='show this help message and exit')
+    
+    return parser
+
 class PromptBaseParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -238,85 +291,6 @@ class PromptPyScriptParser(PromptBaseParser):
             sim.simulate(gun, int(args.neutronNum))
             sim.save_all_scorers()
     
-def build_argument_help(info: Dict[str, Any]) -> str:
-    help_parts = []
-    
-    # type_name = info['type'].__name__ if hasattr(info['type'], '__name__') else str(info['type'])
-    # help_parts.append(f"Type: {type_name}")
-    
-    if info['default'] is not inspect.Parameter.empty:
-        default_value = info['default']
-        if isinstance(default_value, str):
-            default_value = f"'{default_value}'"
-        help_parts.append(f"Default: {default_value}")
-    
-    # if info['docstring']:
-    #     help_parts.append(info['docstring'])
-    
-    return " | ".join(help_parts)
-
-
-def add_arguments_to_parser(parser : argparse.ArgumentParser):
-    parser.add_argument('-v', '--visualize', action='store_true', dest='visualize', help='flag to visualize geometry model')
-    parser.add_argument('-s', '--seed', action='store', type=int, default=4096,
-                        dest='seed', help='random seed number')
-    parser.add_argument('-n', '--neutronNum', action='store', type=float, default=100,
-                        dest='neutronNum', help='neutron number')
-    parser.add_argument('-b', '--blacklist',  type=str, nargs='+', dest='blacklist', help='solid mesh blacklist to inform the geometry mesh loader ')
-    parser.add_argument('-d', '--dumpmesh', action='store_true', dest='dumpmesh', help='dump mesh into disk')
-    parser.add_argument('-m', '--mergemesh', action='store_true', dest='mergemesh', help='flag to merge mesh for efficient visualize')
-    parser.add_argument('--nSeg', action='store', type=int, default=30,
-                        dest='nSegments', help='number of verts a volume')
-    
-    #TODO:
-    # parser.add_argument('-l', '--geoLayer', action='store', type=float, default=0,
-    #                     dest='geoLayer', help='geometry tree layers to be shown')
-
-    return parser
-
-def quiry_help_msg(loc : int):
-    return ('-h' in sys.argv[loc]) or ('--help' in sys.argv[loc])
-
-def get_general_args(parser : argparse.ArgumentParser):
-    return parser.parse_known_args()[0]
-
-def parser_factory():
-    entry_parser = argparse.ArgumentParser(add_help=False)
-    entry_parser.add_argument('-g', '--geo', action='store', type=str, default='',
-                        dest='geo', help='Input geometry file. Support `.gdml` and `.py` file.' \
-                        'Run `prompt -g yourScript.py -h` to parse python script arguments.')
-
-    args, _ = entry_parser.parse_known_args()
-
-    class PromptParserInputError(ValueError):
-        def __init__(self, *args):
-            super().__init__(*args)
-            parser = PromptBaseParser(add_help = True, parents = [entry_parser])
-            parser.print_help()
-
-    try:
-        if len(sys.argv) <= 1:
-            raise PromptParserInputError("\n InputError: Not enough arguments!")
-        elif args.geo == '':
-            raise PromptParserInputError("\n InputError: PROMPT simulation did not run without providing a geometry file!")
-        elif args.geo.endswith('.py'):
-            parser = PromptPyScriptParser(add_help = False, parents = [entry_parser])
-        elif args.geo.endswith('.gdml'):
-            parser = PromptGdmlParser(add_help = False, parents = [entry_parser])
-        else:
-            raise PromptParserInputError("\n InputError: Command line input is NOT correct, simulation not run")
-        
-    except PromptParserInputError as e:
-            print(e)
-            sys.exit(1)
-    # add help here so as to parse parameters in `.py` scripts
-    # cannot move because it is intended to parse all arguments before print help message
-    parser.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS,
-                        help='show this help message and exit')
-    
-    return parser
-
-
 def main():
     parser = parser_factory()
     parser.simulate()
