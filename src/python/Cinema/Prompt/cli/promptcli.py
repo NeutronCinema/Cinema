@@ -113,7 +113,7 @@ def parser_factory():
                         dest='geo', help='Input geometry file. Support `.gdml` and `.py` file.' \
                         'Run `prompt -g yourScript.py -h` to parse python script arguments.')
 
-    args, _ = entry_parser.parse_known_args()
+    args, unknown = entry_parser.parse_known_args()
 
     class PromptParserInputError(ValueError):
         def __init__(self, *args):
@@ -132,7 +132,6 @@ def parser_factory():
             parser = PromptGdmlParser(add_help = False, parents = [entry_parser])
         else:
             raise PromptParserInputError("\n InputError: Command line input is NOT correct, simulation not run")
-        
     except PromptParserInputError as e:
             print(e)
             sys.exit(1)
@@ -148,11 +147,16 @@ class PromptBaseParser(argparse.ArgumentParser):
         super().__init__(*args, **kwargs)
         self.general_arguments = self.set_general_arguments()
 
+    def set_visualize_arguments(self):
+        self.add_argument('-v', '--visualize', action='store_true', dest='visualize', help='flag to visualize geometry model')
+        self.add_argument('-Z', '--zscale', action='store', type=float, default=0.2, dest='zscale',
+                          help='Set visulization scale factor along Z direction. Must used along with "-v" flag')
+
     def set_general_arguments(self):
         #TODO:
         # parser.add_argument('-l', '--geoLayer', action='store', type=float, default=0,
         #                     dest='geoLayer', help='geometry tree layers to be shown')
-        self.add_argument('-v', '--visualize', action='store_true', dest='visualize', help='flag to visualize geometry model')
+        self.set_visualize_arguments()
         self.add_argument('-s', '--seed', action='store', type=int, default=4096,
                             dest='seed', help='random seed number')
         self.add_argument('-n', '--neutronNum', action='store', type=float, default=100,
@@ -286,7 +290,7 @@ class PromptPyScriptParser(PromptBaseParser):
             raise ValueError("World not made.")
         
         if args.visualize:
-            sim.show(gun, int(args.neutronNum))
+            sim.show(gun, int(args.neutronNum), zscale=args.zscale)
         else:
             sim.simulate(gun, int(args.neutronNum))
             sim.save_all_scorers()
