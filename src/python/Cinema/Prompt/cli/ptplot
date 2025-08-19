@@ -6,20 +6,31 @@ import h5py
 import argparse
 from Cinema.Prompt import plotStyle
 import numpy as np
+import pathlib
 
 def get_figure(h5file, show=True, save=False):
+    plt.legend()
     if show:
         plt.show()
     if save:
         plt.savefig(f'{h5file}.pdf')
     if not show and not save:
         raise ValueError("Nothing happens: plot does not showed and not saved.")
-    
-def plot1d(h5file, xlog=False , ilog=True, 
-           err=False, save=False, show=True,
-           xlabel='x', ylabel='y', title='title'):
 
-    h5f = h5py.File(f'{h5file}')
+def load_txt(filepath):
+    data = np.loadtxt(filepath)
+    x = data[:,0]
+    y = data[:,1]
+    try:
+        e = data[:,2]
+        return x, y, e
+    except Exception as e:
+        print(f"Warning: errors in reading errorbars; {e}")
+        print("Warning: all errorbars set to zeros(0)")
+        return x, y, np.zeros(len(y))
+
+def load_1dh5(filepath):
+    h5f = h5py.File(f'{filepath}')
 
     if 'center' not in h5f:
         raise ValueError("May be not a Prompt h5 file.")
@@ -27,9 +38,25 @@ def plot1d(h5file, xlog=False , ilog=True,
     x = h5f[f'center'][()]
     y = h5f[f'weight'][()]
     e = h5f[f'sdev'][()]
+    return x, y, e
 
+def plot1d(file : str, xlog=False , ilog=True, 
+           err=False, save=False, show=True,
+           xlabel='x', ylabel='y', title='title'):
+
+    if file.endswith('.h5'):
+        x,y,e = load_1dh5(file)
+    elif file.endswith('.dat'):
+        x,y,e = load_txt(file)
+    else:
+        raise ValueError(f"file not found at {file}")
+
+    ilabel = f"{file}"
     if not err:
-        plt.step(x[:-1], y)
+        try:
+            plt.step(x[:-1], y, label=ilabel)
+        except:
+            plt.step(x, y, label=ilabel)
     else:
         plt.errorbar(x[:-1],y,e)
 
@@ -41,7 +68,6 @@ def plot1d(h5file, xlog=False , ilog=True,
         plt.xscale('log')
     if ilog:
         plt.yscale('log')
-    get_figure(h5file, show, save)
     
 
 def plot2d(h5file, ilog=False , save=False, show=True,
@@ -71,11 +97,10 @@ def plot2d(h5file, ilog=False , save=False, show=True,
         pcm = ax.pcolormesh(X, Y, z.T, cmap=plt.cm.jet,shading='auto')
     fig.colorbar(pcm, ax=ax)
 
-    get_figure(h5file, show, save)
     
 def parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument('h5file', type=str, help='Path of h5 file produced by Prompt simulations.')
+    parser.add_argument('file', nargs='+',type=str, help='Path of h5 file produced by Prompt simulations.')
     parser.add_argument('--save', action='store_true', help='save plot as pdf file.')
     parser.add_argument('--show', action='store_true', help='show plot.')
     parser.add_argument('--xlog', action='store_true', help='xlog scale.')
@@ -91,15 +116,29 @@ def main():
     plotStyle()
     args = parse()
 
-    h5f = h5py.File(args.h5file)
-    if 'xcenter' in h5f:
-        plot2d(args.h5file, args.ilog, args.save, args.show, 
-            args.xlabel, args.ylabel, args.title)
-    elif 'center' in h5f:
-        plot1d(args.h5file, args.xlog, args.ilog, args.err, args.save, args.show, 
-            args.xlabel, args.ylabel, args.title)
-    else:
-        raise ValueError("May be not a Prompt h5 file.")
+    for filepath in args.file:
+        if filepath.endswith(".h5"):
+            h5f = h5py.File(f'{filepath}')
+            if 'xcenter' in h5f:
+                plot2d(filepath, args.ilog, args.save, args.show, 
+                    args.xlabel, args.ylabel, args.title)
+            elif 'center' in h5f:
+                plot1d(filepath, args.xlog, args.ilog, args.err, args.save, args.show, 
+                    args.xlabel, args.ylabel, args.title)
+            else:
+                raise ValueError("May be not a Prompt h5 file.")
+        elif filepath.endswith(".dat"):
+                plot1d(filepath, args.xlog, args.ilog, args.err, args.save, args.show, 
+                    args.xlabel, args.ylabel, args.title)
+        else:
+            raise ValueError("Not implemented")
+    get_figure(filepath, args.show, args.save)
+    
+def main_dev():
+    cwd = pathlib.Path.cwd()
+    path = cwd / "iq.dat"
+    load_txt(path)
 
 if __name__ == '__main__':
     main()
+    # main_dev()
