@@ -51,6 +51,7 @@ build-backend = "hatchling.build"
 
 [project.scripts]
 prompt = "Cinema.Prompt.cli.promptcli:main"
+ptplot = "Cinema.Prompt.cli.ptplot:main"
 
 [tool.hatch.metadata]
 allow-direct-references = true # To make git + magic happen
