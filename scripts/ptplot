@@ -1,4 +1,4 @@
 #!/usr/bin/env python3
 
-from Cinema.Prompt.cli.ptplot import main
+from Cinema.Prompt.cli.ptplotcli import main
 main()
