@@ -38,7 +38,7 @@ void Prompt::KillerMCPL::score(Prompt::Particle &particle)
     return;
 
   m_writer->write(particle);
-  particle.kill(Particle::KillType::SCORE);
+  // particle.kill(Particle::KillType::SCORE);
   
 
 }
