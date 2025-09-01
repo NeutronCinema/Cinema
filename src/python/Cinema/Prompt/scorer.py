@@ -158,7 +158,7 @@ _pt_ScorerPSD_new = importFunc('pt_ScorerPSD_new', type_voidp, [type_cstr, type_
 _pt_addMultiScatter1D = importFunc('pt_addMultiScatter1D', None, [type_voidp, type_voidp, type_int])
 _pt_addMultiScatter2D = importFunc('pt_addMultiScatter2D', None, [type_voidp, type_voidp, type_int])
 
-_pt_KillerMCPL_new = importFunc('pt_KillerMCPL_new', type_voidp, [type_cstr, type_uint, type_int])
+_pt_KillerMCPL_new = importFunc('pt_KillerMCPL_new', type_voidp, [type_cstr, type_uint, type_int, type_bool])
 class ScorerHelper:
     def __init__(self, name, min, max, numbin, pdg = 2112, ptstate = 'ENTRY', groupID=0) -> None:
         self.name = name
@@ -470,7 +470,7 @@ def makePSD(name, vol, numbin_dim1=1, numbin_dim2=1, ptstate : str = 'ENTRY', ty
 
         
 class KillMCPLHelper(MultiScatMixin1D):
-    def __init__(self, name, pdg : int = 0, groupID : int = 0) -> None:
+    def __init__(self, name, pdg : int = 0, groupID : int = 0, kill : bool = False) -> None:
         def get_rank_id():
             try:
                 # Initialize the MPI environment
@@ -492,11 +492,13 @@ class KillMCPLHelper(MultiScatMixin1D):
         self.name = name
         self.pdg = pdg 
         self.groupID = groupID
+        self.kill = kill
 
     def make(self, vol):
         cobj = _pt_KillerMCPL_new(self.name_mpi.encode('utf-8') if self.use_mpi else self.name.encode('utf-8'), 
                                         self.pdg,
-                                        self.groupID
+                                        self.groupID,
+                                        self.kill
                                         )
         vol.addScorer(self, cobj)
         self.cobj = cobj

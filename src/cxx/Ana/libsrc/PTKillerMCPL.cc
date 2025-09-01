@@ -21,9 +21,10 @@
 #include "PTKillerMCPL.hh"
 #include "PTMCPLBinaryWrite.hh"
 
-Prompt::KillerMCPL::KillerMCPL(const std::string &name, unsigned int pdg, int groupid)
+Prompt::KillerMCPL::KillerMCPL(const std::string &name, unsigned int pdg, int groupid, bool kill)
 :Scorer1D("KillerMCPL_"+name, Scorer::ScorerType::ENTRY, std::make_unique<Hist1D>("KillerMCPL_"+name, 0, 100, 101, true)),
-m_writer(new MCPLBinaryWrite(name+".mcpl"))
+m_writer(new MCPLBinaryWrite(name+".mcpl")),
+m_kill(kill)
 {
 }
 
@@ -38,8 +39,8 @@ void Prompt::KillerMCPL::score(Prompt::Particle &particle)
     return;
 
   m_writer->write(particle);
-  // particle.kill(Particle::KillType::SCORE);
-  
+  if(m_kill)
+    particle.kill(Particle::KillType::SCORE);
 
 }
 
