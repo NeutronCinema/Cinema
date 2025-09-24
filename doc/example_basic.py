@@ -14,8 +14,8 @@ class Simulation(PromptMPI):
     def makeWorld(self):
 
         # material defined in NCrystal configstring
-        mat = Material('Ge_sg227.ncmat;mos=0.267deg;' \
-        'dir1=@crys_hkl:5,1,1@lab:0,0,1;dir2=@crys_hkl:0,1,-1@lab:1,0,0')
+        nccfg = 'Ge_sg227.ncmat;mos=0.267deg;dir1=@crys_hkl:5,1,1@lab:0,0,1;dir2=@crys_hkl:0,1,-1@lab:1,0,0'
+        mat = Material(nccfg)
 
         # volume defined with shape, size and material
         vol = Volume("sampleSolid",Box(10,10,1),matCfg=mat.cfg)
