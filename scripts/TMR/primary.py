@@ -3,7 +3,8 @@
 from Cinema.Prompt import Prompt, PromptMPI
 from Cinema.Prompt.geo import Volume, Transformation3D
 from Cinema.Prompt.solid import Box,Tube
-from Cinema.Prompt.scorer import  ESpectrumHelper, WlSpectrumHelper, TOFHelper, VolFluenceHelper, PSDHelper
+from Cinema.Prompt.scorer import  ESpectrumHelper, WlSpectrumHelper, \
+    TOFHelper, VolFluenceHelper, PSDHelper, KillMCPLHelper
 from Cinema.Prompt.gun import PythonGun
 from Cinema.Prompt.physics import Material, Mirror
 from Cinema.Prompt.gun import UniModeratorGun
@@ -12,15 +13,16 @@ from Cinema.Prompt.GidiSetting import GidiSetting
 import numpy as np
 
 cdata=GidiSetting()
-cdata.setGidiThreshold(-5)
+cdata.setGidiThreshold(5)
 cdata.setEnableGidi(True)
-cdata.setGammaTransport(True)
+cdata.setGammaTransport(False)
 cdata.setGidiPops("/home/zypan/XS/ptdata/pops.xml")
 cdata.setGidiMap("/home/zypan/XS/ptdata/all.map")
 
 class MySim(PromptMPI):
     def __init__(self, seed=4096) -> None:
         super().__init__(seed)   
+        self.makeWorld()
 
     def make_symetric_vol(self, ):
         pass
@@ -148,12 +150,12 @@ class MySim(PromptMPI):
         target_z = (85. - -85.) * 0.5
         target_y = 35. 
         vol_target = Volume("vol_target", Box(target_x,target_y,target_z),mat_target_w)
-        ztrf_in_simbox = target_x - 89.8
+        ztrf_in_simbox = target_x - 89.8  #+ 80
 
 
         # >>> 
-        para_box_size = 1000
-        para_world_size = para_box_size + 200
+        para_box_size = 700
+        para_world_size = para_box_size + 1
         para_globalpsd_size = 600
         para_res = 5 
         para_bin = int(para_box_size / (para_res) * 5 )
@@ -165,7 +167,11 @@ class MySim(PromptMPI):
         world = Volume("world", Box(para_world_size , para_world_size, para_world_size), matCfg=void)
         simbox = Volume("simbox", Box(para_box_size, para_box_size, para_box_size), matCfg=void)
         simbox.placeChild("pv_botpart", vol_botpart, Transformation3D(z=botpart_zplane_insimbox).applyRotZ(60))
-        simbox.placeChild("pv_target", vol_target, Transformation3D(y=-ztrf_in_simbox).applyRotX(90).applyRotY(90)) #fixme
+
+        scokiller = self.makeKillerScorer()
+        simbox.placeChild("pv_scorerkiller", scokiller, 
+                          Transformation3D(x=-500.*np.sin(np.deg2rad(60)),y=-500.*np.cos(np.deg2rad(60)),z=botpart_zplane_insimbox+premo_zplane_inbotpart).applyRotZ(30).applyRotY(90))
+        # simbox.placeChild("pv_target", vol_target, Transformation3D(y=-ztrf_in_simbox).applyRotX(90).applyRotY(90)) #fixme
 
         name_moderator = 'moderator'
         mat_moderator = Material('LiquidWaterH2O_T293.6K.ncmat;density=1gcm3;temp=293.6')
@@ -183,34 +189,48 @@ class MySim(PromptMPI):
         for vol in Volume.volume_list:
             obxz.make(vol)
 
-        world.placeChild("pv_simulation_box", simbox, Transformation3D().applyRotX(-90))
+        world.placeChild("pv_simulation_box", simbox, Transformation3D().applyRotY(180))
         self.setWorld(world)
 
+    def makeKillerScorer(self):
+        mat_vacuum =            "vacuum.ncmat"
+        sol = Box(50,50,1e-6)
+        vol = Volume("src@guideEntry", sol, matCfg=mat_vacuum)
+        sco = KillMCPLHelper("scorerkiller@guideEntry", kill=True)
+        sco.make(vol)
 
-class PositionTestGun(PythonGun):
-    def samplePosition(self):
-        x = np.random.uniform(-600,600)
-        return np.array([x, -100, -700])
+        return vol
 
-    def sampleDirection(self):
-        x = np.random.uniform(-1,1)
-        return np.array([x, 0, 1])
+windowsize = 100
+class MyGun(UniModeratorGun):
+    def __init__(self, src_whz=[windowsize, windowsize, 0], slit_whz=[windowsize,windowsize, 1e6], wl_mean=50e6, wl_range=80e6):
+        super().__init__(src_whz, slit_whz, wl_mean, wl_range)
+
+
+# class PositionTestGun(PythonGun):
+#     def samplePosition(self):
+#         x = np.random.uniform(-600,600)
+#         return np.array([x, -100, -700])
+
+#     def sampleDirection(self):
+#         x = np.random.uniform(-1,1)
+#         return np.array([x, 0, 1])
     
-    def sampleEnergy(self):
-        x = np.random.uniform(0.9,1)
-        return x * 20e6
+#     def sampleEnergy(self):
+#         x = np.random.uniform(0.9,1)
+#         return x * 20e6
 
-class TestGun(PythonGun):
-    def samplePosition(self):
-        return np.array([0, 0, -500])
+# class TestGun(PythonGun):
+#     def samplePosition(self):
+#         return np.array([0, 0, 0])
 
-    def sampleDirection(self):
-        x = np.random.uniform(-1,1)
-        return np.array([0, 0, 1])
+#     def sampleDirection(self):
+#         x = np.random.uniform(-1,1)
+#         return np.array([0, -1, 0])
     
-    def sampleEnergy(self):
-        x = np.random.uniform(0.9,1)
-        return x * 20e6
+#     def sampleEnergy(self):
+#         x = np.random.uniform(0.9,1)
+#         return x * 20e6
     
 def main():
     # gun = PositionTestGun()
@@ -222,7 +242,7 @@ def main():
 
     # vis or production
     if True:
-        sim.show(gun, 100, byMat=1, mergeMesh=0, addLegend=1, geoClip=0)
+        sim.show(gun, 1000, byMat=1, mergeMesh=0, addLegend=1, geoClip=0)
     else:
         sim.simulate(gun, 100)
         draw_xz = sim.gatherHistData('PSDXZ')
