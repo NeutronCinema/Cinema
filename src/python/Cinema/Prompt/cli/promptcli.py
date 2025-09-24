@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from Cinema.Prompt import Prompt, PromptMPI, Launcher, Visualiser
-from Cinema.Prompt.gun import SurfaceSource
+from Cinema.Prompt.gun import Gun
 import argparse
 import inspect
 import importlib.util
@@ -284,7 +284,7 @@ class PromptPyScriptParser(PromptBaseParser):
     def simulate(self):
         args = self.parse_args()
         sim = self.instantiate(PromptMPI)
-        gun = self.instantiate(SurfaceSource)
+        gun = self.instantiate(Gun)
 
         if not sim.l.worldExist:
             raise ValueError("World not made.")
