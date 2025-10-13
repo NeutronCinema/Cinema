@@ -61,6 +61,7 @@ double Prompt::PhysicsFactory::nccalNumDensity(const std::string &cfgstr)
   // the material is LiquidHeavyWaterD2O_T293.6K.ncmat
   // showNCComposition(nccfgstr); 
 
+  // FIXME: issue #41
   NCrystal::MatCfg matcfg(nccfgstr);
   auto info = NCrystal::createInfo(matcfg);
   if(info->hasNumberDensity())

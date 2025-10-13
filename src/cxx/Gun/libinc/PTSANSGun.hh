@@ -1,5 +1,5 @@
-#ifndef Prompt_KillerMCPL_hh
-#define Prompt_KillerMCPL_hh
+#ifndef Prompt_SANSGun_hh
+#define Prompt_SANSGun_hh
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
@@ -22,21 +22,23 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "PromptCore.hh"
-#include "PTScorer1D.hh"
+#include "PTMPIGun.hh"
+#include "PTVector.hh"
+#include "PTRandCanonical.hh"
+#include "PTPointwiseDist.hh"
 
 namespace Prompt {
-  class MCPLBinaryWrite;
-
-  class KillerMCPL  : public Scorer1D {
+  class SANSGun : public MPIGun {
   public:
-    KillerMCPL(const std::string &name, unsigned int pdg, int groupid, bool kill=false);
-    virtual ~KillerMCPL();
-    virtual void score(Particle &particle) override;
+    //source size consist of 6 numbers x_front, y_front, z_front, x_back, y_back, z_back
+    SANSGun(const Particle &aParticle, std::array<double, 6> sourceSize);
+    virtual ~SANSGun();
+    virtual void sampleEnergy(double &ekin) override;
+
   private:
-    MCPLBinaryWrite *m_writer;
-    bool m_kill;
+    std::unique_ptr<PointwiseDist> m_distr;
   };
-  
 }
+
 
 #endif

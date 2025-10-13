@@ -7,14 +7,17 @@ from Cinema.Prompt.scorer import VolFluenceHelper
 from Cinema.Prompt.physics import Material
 from Cinema.Prompt.gun import IsotropicGun
 from Cinema.Prompt.GidiSetting import GidiSetting 
+from testsuite import *
 
+skip_test_gidi_not_compile()
+# pt_main_test()
 cdata=GidiSetting()
 cdata.setEnableGidi(True)
 cdata.setGammaTransport(False)
 
 class MySim(Prompt):
-    def __init__(self, seed=4096) -> None:
-        super().__init__(seed)   
+    def __init__(self, seed=4096, **kwargs) -> None:
+        super().__init__(seed, **kwargs)   
 
     def makeWorld(self):
 

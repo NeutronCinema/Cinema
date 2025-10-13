@@ -15,6 +15,7 @@ psutil
 # tetgen #tetrahedralise function in pyvista 
 # pymeshfix #reconstruct a manifold clean surface
 tqdm
+gvar
 
 #PiXiu
 # phonopy==2.14.0

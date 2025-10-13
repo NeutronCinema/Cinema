@@ -1,6 +1,6 @@
 [project]
 name="neutron-cinema"
-version="2.0.0a1"
+dynamic = ["version"]
 authors=[
     {name="Xiao-Xiao Cai"},
     {name="Ming Tang"},
@@ -8,35 +8,70 @@ authors=[
     {name="Ni Yang"},
     {email="cinema-users@outlook.com"},
     ]
+maintainers = [
+    { name = "Zi-Yi Pan", email = "zypan@ihep.ac.cn" },
+]
 description="China Spallation Neutron Source Monte Carlo System"
+license = "Apache-2.0"
 readme = "README.md"
 keywords = ["NCyrstal", "Neutron Scattering", "Spectroscopy"]
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 classifiers = [
     'Intended Audience :: Science/Research',
-
     'Topic :: Scientific/Engineering :: Physics',
-
-    'License :: OSI Approved',
-
-    'Programming Language :: Python :: 3.7',
-    'Programming Language :: Python :: 3.8',
-    'Programming Language :: Python :: 3.9',
-    'Programming Language :: Python :: 3.10',
-
     'Operating System :: POSIX :: Linux',
 ]
 dependencies = [
-    "pyvista",
-    "matplotlib",
-    "mcpl",
-    "scipy",
-    "h5py",
-    "optuna",
-    "mpi4py",
-    "psutil",
+    "ncrystal",
+    "ncrystal-pypluginmgr",
+    "ncrystal-plugin-bzscope @ git+https://code.ihep.ac.cn/cinema-developers/ncplugin-bzscope",
+    "scipy", "h5py", "mpi4py", "psutil", "tqdm", "gvar", "mcpl-core"
 ]
 
+[project.optional-dependencies]
+viz = [ "pyvista", "matplotlib"]
+
+# [project.scripts]
+# my_package_cli = 'my_package.console:run'
 
 [project.urls]
-repository = "https://gitlab.com/cinema-developers/prompt.git"
+repository = "https://code.ihep.ac.cn/cinema-developers/cinema"
+"Bug Tracker" = "https://code.ihep.ac.cn/cinema-developers/cinema/-/issues"
+"Paper" = "https://doi.org/10.1016/j.cpc.2023.109004"
+
+[build-system]
+requires = [
+    "hatchling", 
+    "hatch-build-scripts", 
+    "requests",
+    "ncrystal-core",
+    "mcpl-core"
+]
+build-backend = "hatchling.build"
+
+[project.scripts]
+prompt = "Cinema.Prompt.cli.promptcli:main"
+ptplot = "Cinema.Prompt.cli.ptplotcli:main"
+
+[tool.hatch.metadata]
+allow-direct-references = true # To make git + magic happen
+
+[tool.hatch.version]
+path = "src/python/Cinema/__init__.py"
+
+[[tool.hatch.build.hooks.build-scripts.scripts]]
+out_dir = "build"
+commands = [
+    "python tools/scripts/build_tool/install_cdeps.py",
+]
+artifacts = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/python/Cinema"]
+exclude = ["src/python/Cinema/PiXiu", "src/python/Cinema/Tak"]
+artifacts = [
+    "src/python/Cinema/*.so"
+]
+
+[tool.hatch.build.targets.wheel.force-include]
+"scripts/guide.py" = "Cinema/examples/guide.py"

@@ -19,15 +19,21 @@
 ################################################################################
 
 from ..Interface import *
+from .configstr import ConfigString
+from .histogram import wl2ekin
 
 _pt_PythonGun_new = importFunc('pt_PythonGun_new', type_voidp, [type_int])
 _pt_PythonGun_delete = importFunc('pt_PythonGun_delete', None, [type_voidp])
 _pt_PythonGun_pushToStack = importFunc('pt_PythonGun_pushToStack', None, [type_voidp, type_npdbl1d])
 
+class Gun():
+    def __init__(self):
+        self.pdg = 2112
 
-class PythonGun():
+class PythonGun(Gun):
     def __init__(self, pdg=2112):
-        self.cobj = _pt_PythonGun_new(int(pdg))
+        self.pdg = pdg
+        self.cobj = _pt_PythonGun_new(int(self.pdg))
         
     def __del__(self):
         _pt_PythonGun_delete(self.cobj)
@@ -62,16 +68,9 @@ class PythonGun():
 
 
 
-    
-from .configstr import ConfigString
-from .histogram import wl2ekin
-
-class Gun(ConfigString):
-    pass
-
 # gunCfg = f'gun=SimpleThermalGun;position=0,0,-12000;direction=0,0,1;energy={0}'
 
-class IsotropicGun(ConfigString):
+class IsotropicGun(Gun, ConfigString):
     def __init__(self) -> None:
         super().__init__()
         self.cfg_gun='IsotropicGun'
@@ -97,7 +96,7 @@ class SimpleThermalGun(IsotropicGun):
         self.cfg_direction = f'{dir[0]}, {dir[1]}, {dir[2]}'
 
 
-class SurfaceSource(ConfigString):
+class SurfaceSource(Gun, ConfigString):
     def __init__(self, src_whz=None, slit_whz=None) -> None:
         super().__init__()
         if src_whz:
@@ -147,3 +146,13 @@ class MCPLGun(ConfigString):
 
     def setMCPLFile(self, mcplfile):
         self.cfg_mcplfile = mcplfile
+
+class MPIGun(SurfaceSource):
+    def __init__(self, src_whz=None, slit_whz=None):
+        super().__init__(src_whz, slit_whz)
+        self.cfg_gun='MPIGun'
+
+class SANSGun(SurfaceSource):
+    def __init__(self, src_whz=None, slit_whz=None):
+        super().__init__(src_whz, slit_whz)
+        self.cfg_gun='SANSGun'

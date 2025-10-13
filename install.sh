@@ -201,11 +201,11 @@ if [ ! -f $CINEMAPATH/external/KDSource/install/lib/libkdsource.so ]; then
       mkdir  $CINEMAPATH/external/KDSource/build $CINEMAPATH/external/KDSource/install && cd $CINEMAPATH/external/KDSource/build
       # rm -rf $CINEMAPATH/external/KDSource/mcpl
       # ln -s $CINEMAPATH/external/mcpl $CINEMAPATH/external/KDSource/
-      cmake  -DCMAKE_INSTALL_PREFIX=$CINEMAPATH/external/KDSource/install -DCMAKE_PREFIX_PATH=$PROMPT_LIBXML2_LIB -DCMAKE_BUILD_TYPE=RELEASE ..
+      cmake  -DCMAKE_INSTALL_PREFIX=$CINEMAPATH/external/KDSource/install -DCMAKE_PREFIX_PATH=$PROMPT_LIBXML2_LIB -DCMAKE_BUILD_TYPE=RELEASE -DCMAKE_POLICY_VERSION_MINIMUM=3.24 ..
       make -j ${NUMCPU} && make install
       cd -
       cd $CINEMAPATH/external/KDSource/python
-      pip install .
+      # pip install .
       cd -
       echo "installed  KDSource"
   fi
@@ -229,7 +229,7 @@ if [ ! -f $CINEMAPATH/external/xerces-c/install/lib/libxerces-c.so ]; then
       git clone -b v3.2.3 --single-branch ${PREFIX}/xerces-c.git
       cd -
       mkdir $CINEMAPATH/external/xerces-c/build && cd $CINEMAPATH/external/xerces-c/build
-      cmake -DBUILD_SHARED_LIBS=ON -Dnetwork=OFF -Dextra-warnings=OFF  -DCMAKE_INSTALL_PREFIX=$CINEMAPATH/external/xerces-c/install ..
+      cmake -DBUILD_SHARED_LIBS=ON -Dnetwork=OFF -Dextra-warnings=OFF  -DCMAKE_INSTALL_PREFIX=$CINEMAPATH/external/xerces-c/install -DCMAKE_POLICY_VERSION_MINIMUM=3.24 ..
       make -j ${NUMCPU} && make install
       cd -
       echo "installed  libxerces"
@@ -409,4 +409,5 @@ fi
 
 export NCRYSTAL_DATA_PATH="$CINEMAPATH/ncmat"
 export PATH="$CINEMAPATH/src/python/ptgeo/examples:$PATH"
+export PYTHONPATH="$CINEMAPATH:$PYTHONPATH"
 echo "Added the ptgeo example directory into environment"

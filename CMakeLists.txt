@@ -50,8 +50,12 @@ message(STATUS "Using NCrystal version ${NCrystal_VERSION}")
 if($ENV{CINEMA_LOCAL_BUILD})
   set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/external/KDSource/install")
   set(MCPL_DIR  "${CMAKE_SOURCE_DIR}/external/KDSource/install/lib/cmake")
+  find_package(MCPL REQUIRED)
+else()
+  execute_process(COMMAND mcpl-config --show libdir OUTPUT_VARIABLE "MCPL_LIB" OUTPUT_STRIP_TRAILING_WHITESPACE)
+  execute_process(COMMAND mcpl-config --show includedir OUTPUT_VARIABLE "MCPL_INCDIR" OUTPUT_STRIP_TRAILING_WHITESPACE)
 endif()
-find_package(MCPL REQUIRED)
+# include_directories(${MCPL_INCDIR})
 message(STATUS "FOUND MCPL: ${MCPL_FOUND} ${MCPL_DIR}")
 
 if (NOT CMAKE_BUILD_TYPE)
@@ -95,6 +99,6 @@ foreach(TS ${TESTFILES})
 	  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cinemabin #fixme find a temp dir defined in the enviroment
 	)
   set_tests_properties(
-    python-${EXCNAME} PROPERTIES SKIP_REGULAR_EXPRESSION "raise SkipTest"
+    python-${EXCNAME} PROPERTIES SKIP_REGULAR_EXPRESSION "PT_SKIP_TEST"
   )
 endforeach(TS ${TESTFILES})

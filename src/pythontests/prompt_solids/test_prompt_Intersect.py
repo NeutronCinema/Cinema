@@ -11,7 +11,9 @@ from Cinema.Prompt.gun import IsotropicGun, PythonGun
 import numpy as np
 
 from Cinema.Prompt.GidiSetting import GidiSetting 
+from testsuite import skip_test_gidi_not_compile
 
+skip_test_gidi_not_compile()
 cdata=GidiSetting()
 cdata.setGidiThreshold(5)
 cdata.setEnableGidi(True)

@@ -17,7 +17,7 @@ class MySim(Prompt):
         world = Volume('world', Box(50, 50, 200))
         
         dtt = Volume('detector', Box(10, 10, 1))
-        scorerWl = WlSpectrumHelper('testObj', 0.1, 5, 20, 2112, 'ENTRY', 100)
+        scorerWl = WlSpectrumHelper('testObj', 0.1, 5, 20, 2112, 'ENTRY', 100, True)
         scorerWl.make(dtt)
 
         world.placeChild('detectorPhy', dtt, scorerGroup=100)

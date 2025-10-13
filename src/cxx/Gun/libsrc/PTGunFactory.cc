@@ -29,6 +29,7 @@
 #include "PTIsotropicGun.hh"
 #include "PTUniModeratorGun.hh"
 #include "PTMPIGun.hh"
+#include "PTSANSGun.hh"
 #include "PTMCPLGun.hh"
 Prompt::GunFactory::GunFactory()
 {}
@@ -249,6 +250,28 @@ std::shared_ptr<Prompt::PrimaryGun> Prompt::GunFactory::createGun(const std::str
       }
 
       return std::make_shared<MPIGun>(Neutron(),
+            std::array<double, 6> {src_w, src_h, src_z,
+                                 slit_w, slit_h, slit_z});
+    }
+    else if(gunDef == "SANSGun")
+    {
+      int parCount = 7;
+
+      // The mandatory parameters
+      bool force = true;
+      double src_w = ptstod(cfg.find("src_w", force));
+      double src_h = ptstod(cfg.find("src_h", force));
+      double src_z = ptstod(cfg.find("src_z", force));
+      double slit_w = ptstod(cfg.find("slit_w", force));
+      double slit_h = ptstod(cfg.find("slit_h", force));
+      double slit_z = ptstod(cfg.find("slit_z", force));
+
+      if(parCount!=cfg.size())
+      {
+        PROMPT_THROW2(BadInput, "SANSGun is missing or with extra config parameters" << cfg.size() << " " << parCount );
+      }
+
+      return std::make_shared<SANSGun>(Neutron(),
             std::array<double, 6> {src_w, src_h, src_z,
                                  slit_w, slit_h, slit_z});
     }

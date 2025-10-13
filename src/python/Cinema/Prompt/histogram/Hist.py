@@ -200,7 +200,7 @@ class Hist1D(HistBase):
         
         _pt_Hist1D_fill_many(self.cobj, x.size, np.ascontiguousarray(x), np.ascontiguousarray(weight) )
 
-    def plot(self, show=False, label=None, title=None, log=False, sigma=2):
+    def plot(self, show=False, label=None, title=None, log=False, sigma=1):
         try:
             import matplotlib.pyplot as plt
             from Cinema.Interface import plotStyle
@@ -208,7 +208,7 @@ class Hist1D(HistBase):
             center = self.getCentre()
             w = self.getWeight()
             err = self.getSdev()
-            plt.errorbar(center, w, yerr=err*sigma, fmt='s', label=f'Weight {w.sum()}' if label is None else f'{label} {w.sum()}')
+            plt.errorbar(center, w, yerr=err*sigma, fmt='s-', label=f'Weight {w.sum()}' if label is None else f'{label} {w.sum()}')
             if isinstance(log, list):
                 if list[0]:
                     plt.xscale('log')
@@ -236,6 +236,7 @@ class Hist1D(HistBase):
         import h5py
         f0=h5py.File(fn,"w")
         f0.create_dataset("center", data=self.getCentre(), compression="gzip")
+        f0.create_dataset("edge", data=self.getEdge(), compression="gzip")
         f0.create_dataset("weight", data=self.getWeight(), compression="gzip")
         f0.create_dataset("hit", data=self.getHit(), compression="gzip")
         f0.create_dataset("sdev", data=self.getSdev(), compression="gzip")
@@ -361,6 +362,8 @@ class Hist2D(HistBase):
         f0=h5py.File(fn,"w")
         f0.create_dataset("xcenter", data=self.xcenter, compression="gzip")
         f0.create_dataset("ycenter", data=self.ycenter, compression="gzip")
+        f0.create_dataset("xedge", data=self.xedgecenter, compression="gzip")
+        f0.create_dataset("yedge", data=self.yedge, compression="gzip")
         f0.create_dataset("weight", data=self.getWeight(), compression="gzip")
         f0.create_dataset("hit", data=self.getHit(), compression="gzip")
         f0.create_dataset("sdev", data=self.getSdev(), compression="gzip")

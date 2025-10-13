@@ -20,7 +20,6 @@
 import numpy as np
 from ..Interface import *
 from typing import Union
-import pyvista
 
 #box
 _pt_Box_new = importFunc('pt_Box_new', type_voidp, [type_dbl, type_dbl, type_dbl])
@@ -137,6 +136,10 @@ class Polyhedron(Solid):
 
 class Tessellated(Solid): #this one is not working
     def __init__(self, polydata, tranMat=None) -> None:
+        try:
+            import pyvista
+        except:
+            raise ImportError("pyvista is required to visualize.")
         super().__init__()
         if not isinstance(polydata, pyvista.core.pointset.PolyData):
             raise RuntimeError('Tessellated solid only supports pyvista.core.pointset.PolyData')

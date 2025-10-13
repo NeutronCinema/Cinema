@@ -140,7 +140,7 @@ from ..Interface import *
 _pt_ScorerDeposition_new = importFunc('pt_ScorerDeposition_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_uint, type_int, type_bool, type_int])
 _pt_ScorerESpectrum_new = importFunc('pt_ScorerESpectrum_new', type_voidp, [type_cstr, type_bool, type_dbl, type_dbl, type_uint, type_uint, type_int, type_int, type_bool ])
 _pt_ScorerTOF_new = importFunc('pt_ScorerTOF_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_uint, type_int, type_int ])
-_pt_ScorerWlSpectrum_new = importFunc('pt_ScorerWlSpectrum_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_uint, type_int, type_int ])
+_pt_ScorerWlSpectrum_new = importFunc('pt_ScorerWlSpectrum_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_uint, type_int, type_int, type_bool ])
 _pt_ScorerVolFluence_new = importFunc('pt_ScorerVolFluence_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_dbl, type_uint, type_int, type_bool, type_int])
 _pt_ScorerDeltaMomentum_new = importFunc('pt_ScorerDeltaMomentum_new',type_voidp, [type_cstr, type_dbl, type_dbl, type_dbl, type_uint,
                                                                                    type_uint, type_dbl, type_dbl, type_dbl, 
@@ -158,7 +158,7 @@ _pt_ScorerPSD_new = importFunc('pt_ScorerPSD_new', type_voidp, [type_cstr, type_
 _pt_addMultiScatter1D = importFunc('pt_addMultiScatter1D', None, [type_voidp, type_voidp, type_int])
 _pt_addMultiScatter2D = importFunc('pt_addMultiScatter2D', None, [type_voidp, type_voidp, type_int])
 
-_pt_KillerMCPL_new = importFunc('pt_KillerMCPL_new', type_voidp, [type_cstr, type_uint, type_int])
+_pt_KillerMCPL_new = importFunc('pt_KillerMCPL_new', type_voidp, [type_cstr, type_uint, type_int, type_bool])
 class ScorerHelper:
     def __init__(self, name, min, max, numbin, pdg = 2112, ptstate = 'ENTRY', groupID=0) -> None:
         self.name = name
@@ -264,8 +264,10 @@ class ESpectrumHelper(ScorerHelper, MultiScatMixin1D):
      
     
 class WlSpectrumHelper(ScorerHelper, MultiScatMixin1D):
-    def __init__(self, name, min=0.1, max=10, numbin = 100, pdg : int = 2112, ptstate : str = 'ENTRY', groupID : int = 0) -> None:
+    def __init__(self, name, min=0.1, max=10, numbin = 100, pdg : int = 2112, 
+                 ptstate : str = 'ENTRY', groupID : int = 0, linear = False) -> None:
         super().__init__(name, min, max, numbin, pdg, ptstate, groupID)
+        self.linear = linear
 
     def make(self, vol):
         cobj = _pt_ScorerWlSpectrum_new(self.name.encode('utf-8'), 
@@ -274,7 +276,8 @@ class WlSpectrumHelper(ScorerHelper, MultiScatMixin1D):
                                         self.numbin,
                                         self.pdg,
                                         self.ptsNum,
-                                        self.groupID
+                                        self.groupID,
+                                        self.linear
                                         )
         vol.addScorer(self, cobj)
         self.cobj = cobj
@@ -467,7 +470,7 @@ def makePSD(name, vol, numbin_dim1=1, numbin_dim2=1, ptstate : str = 'ENTRY', ty
 
         
 class KillMCPLHelper(MultiScatMixin1D):
-    def __init__(self, name, pdg : int = 0, groupID : int = 0) -> None:
+    def __init__(self, name, pdg : int = 0, groupID : int = 0, kill : bool = False) -> None:
         def get_rank_id():
             try:
                 # Initialize the MPI environment
@@ -489,11 +492,13 @@ class KillMCPLHelper(MultiScatMixin1D):
         self.name = name
         self.pdg = pdg 
         self.groupID = groupID
+        self.kill = kill
 
     def make(self, vol):
         cobj = _pt_KillerMCPL_new(self.name_mpi.encode('utf-8') if self.use_mpi else self.name.encode('utf-8'), 
                                         self.pdg,
-                                        self.groupID
+                                        self.groupID,
+                                        self.kill
                                         )
         vol.addScorer(self, cobj)
         self.cobj = cobj

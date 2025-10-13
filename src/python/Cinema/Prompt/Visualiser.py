@@ -22,12 +22,11 @@
 
 from ..Interface import *
 
-import pyvista as pv
 import random
 import matplotlib.colors as mcolors
 from .Mesh import Mesh
 
-
+import pyvista as pv
 # from https://stackoverflow.com/questions/57173235/how-to-detect-whether-in-jupyter-notebook-or-lab 
 def is_jupyterlab_session() -> bool:
     """Check whether we are in a Jupyter-Lab session.
@@ -56,15 +55,49 @@ def is_jupyterlab_session() -> bool:
 
     return False
 
-
-
-
 class Visualiser():
-    def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, dumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=False, geoClip=False):
+    def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, dumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=False, geoClip=False):       
         if is_jupyterlab_session():
             pv.set_jupyter_backend('trame')  
 
-        self.color =  list(mcolors.CSS4_COLORS.keys())
+        high_contrast_colors = [
+            "#FF0000",
+            "#FF4500",
+            "#FF8C00",
+            "#FFD700",
+            "#FFFF00",
+            "#FF6347",
+            "#CD5C5C",
+            
+            "#0000FF",
+            "#1E90FF",
+            "#00BFFF",
+            "#00FFFF",
+            "#00FF00",
+            "#32CD32",
+            "#2E8B57",
+            "#20B2AA",
+            
+            "#800080",
+            "#9370DB",
+            "#8A2BE2",
+            "#DA70D6",
+            "#FF00FF",
+            
+            "#00FF7F",
+            "#4B0082",
+            "#7FFF00",
+            "#FF1493",
+            "#9400D3",
+            
+            "#000000",
+            "#FFFFFF",
+            "#696969",
+            "#A9A9A9",
+            "#D3D3D3" 
+        ]
+        # self.color =  list(mcolors.CSS4_COLORS.keys())
+        self.color = high_contrast_colors
         self.worldMesh = Mesh()
         self.blacklist = blacklist
         if printWorld:
@@ -77,21 +110,23 @@ class Visualiser():
 
         self.loadMesh(nSegments, dumpMesh, mergeMesh, byMat, geoClip)
         if addLegend:
-            self.plotter.add_legend()
+            self.plotter.add_legend(size=(0.5,0.3))
         self.trj=pv.MultiBlock()
         self.redpoints=pv.MultiBlock()
 
-        self.plotter.show_bounds()
-        self.plotter.view_zy()
-        self.plotter.show_axes()
-
-        self.plotter.show_grid()
+        self.set_plotter_style()
         self.plotter.enable_mesh_picking(callback=self.callback, left_clicking=False, show_message=False)
         self.plotter.add_key_event('s', self.save)
 
+    def set_plotter_style(self):
+        self.plotter.show_bounds()
+        self.plotter.view_zy()
+        self.plotter.show_axes()
+        self.plotter.show_grid()
+
     def save(self):
         print('save screenshot.png')
-        self.plotter.screenshot('screenshot.png')
+        self.plotter.save_graphic('screenshot.svg')
 
     def addTrj(self, data):
         if data.size < 2:
@@ -134,7 +169,7 @@ class Visualiser():
             from tetgen import TetGen
         except:
             raise ImportError("tetgen is required. Use 'pip install tetgen' to install. ")
-        mesh.triangulate(True)
+        mesh.triangulate(inplace=True)
         tet = TetGen(mesh)
         tet.make_manifold()
         tet.tetrahedralize()
@@ -209,11 +244,15 @@ class Visualiser():
                 self.plotter.addClippedMesh(clippedMesh , label=matName, color=rcolor, opacity=0.5)
 
 
-    def getValidMesh(self, mesh : Mesh, nSegments):
+    def getValidMesh(self, mesh : Mesh, nSegments, byMat=True):
         name = mesh.getMeshName()
+        mat = mesh.getMaterialName()
         if self.blacklist is not None:
             if any(srchstr in name for srchstr in self.blacklist):
                 return None
+            if byMat:
+                if any(srchstr in mat for srchstr in self.blacklist):
+                    return None
         name, mesh = mesh.getMesh(nSegments)
         return mesh
 

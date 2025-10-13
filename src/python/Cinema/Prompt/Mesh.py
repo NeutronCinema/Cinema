@@ -19,7 +19,6 @@
 ################################################################################
 
 from ..Interface import *
-import pyvista as pv
 
 _pt_Transformation3D_new = importFunc('pt_Transformation3D_new', type_voidp, [type_voidp])
 _pt_Transformation3D_newfromID = importFunc('pt_Transformation3D_newfromID', type_voidp, [type_uint])
@@ -94,6 +93,11 @@ class Mesh():
         return self.getMeshName(), npoints.value, nPlolygen.value, faceSize.value
 
     def getMesh(self, nSegments=10):
+        try:
+            import pyvista as pv
+        except:
+            raise ImportError("pyvista is required to visualize.")
+
         name, npoints, nPlolygen, faceSize = self.meshInfo(nSegments)
         # The point cloud mode
         if npoints==0: 
