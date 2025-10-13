@@ -23,6 +23,7 @@
 #include "PTCfgParser.hh"
 #include "PTMirror.hh"
 #include "PTDiskChopper.hh"
+#include "PTEnergyReflector.hh"
 
 #include "NCrystal/NCrystal.hh"
 #include "PTNCrystalScat.hh"
@@ -344,6 +345,28 @@ std::shared_ptr<Prompt::SurfaceProcess> Prompt::PhysicsFactory::createSurfacePro
       }
 
       phy = std::make_shared<DiskChopper>(theta0_deg, r_mm, phase_deg, rotFreq_Hz, n);
+    }
+    else if(physDef=="EnergyReflector")
+    {
+      int parCount = 3;
+      double ekin = -1.;
+      if(!cfg.getDoubleIfExist("ekin", ekin))
+        parCount--;
+      
+      std::string islessthan = "1";
+      if(!cfg.getStringIfExist("islessthan", islessthan))
+        parCount--;
+
+      if(islessthan!="0" && islessthan!="1")
+        PROMPT_THROW2(BadInput, "'islessthan' should be \"0\" or \"1\". ");
+
+      if(parCount!=cfg.size())
+      {
+        PROMPT_THROW2(BadInput, "Cfgstr for a EnergyReflector physics is missing or with extra config parameters " << cfg.size() << " " << parCount );
+      }
+
+      bool b_lt = (islessthan=="1"); 
+      phy = std::make_shared<EnergyReflector>(ekin, b_lt);
     }
 
 
