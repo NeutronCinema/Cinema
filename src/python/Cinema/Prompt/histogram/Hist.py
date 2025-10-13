@@ -236,6 +236,7 @@ class Hist1D(HistBase):
         import h5py
         f0=h5py.File(fn,"w")
         f0.create_dataset("center", data=self.getCentre(), compression="gzip")
+        f0.create_dataset("edge", data=self.getEdge(), compression="gzip")
         f0.create_dataset("weight", data=self.getWeight(), compression="gzip")
         f0.create_dataset("hit", data=self.getHit(), compression="gzip")
         f0.create_dataset("sdev", data=self.getSdev(), compression="gzip")
@@ -361,6 +362,8 @@ class Hist2D(HistBase):
         f0=h5py.File(fn,"w")
         f0.create_dataset("xcenter", data=self.xcenter, compression="gzip")
         f0.create_dataset("ycenter", data=self.ycenter, compression="gzip")
+        f0.create_dataset("xedge", data=self.xedgecenter, compression="gzip")
+        f0.create_dataset("yedge", data=self.yedge, compression="gzip")
         f0.create_dataset("weight", data=self.getWeight(), compression="gzip")
         f0.create_dataset("hit", data=self.getHit(), compression="gzip")
         f0.create_dataset("sdev", data=self.getSdev(), compression="gzip")
