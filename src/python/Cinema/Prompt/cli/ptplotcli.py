@@ -8,6 +8,9 @@ from Cinema.Prompt import plotStyle
 import numpy as np
 import pathlib
 
+def get_markers():
+    return ['o', 's', '^', 'D', '*', 'x', 'p', 'h', 'v', '<', '>']
+
 def get_figure(h5file, show=True, save=False):
     plt.legend()
     if show:
@@ -35,14 +38,14 @@ def load_1dh5(filepath):
     if 'center' not in h5f:
         raise ValueError("May be not a Prompt h5 file.")
 
-    x = h5f[f'center'][()]
+    x = h5f[f'edge'][()]
     y = h5f[f'weight'][()]
     e = h5f[f'sdev'][()]
     return x, y, e
 
 def plot1d(file : str, xlog=False , ilog=True, 
            err=False, save=False, show=True,
-           xlabel='x', ylabel='y', title='title'):
+           xlabel='x', ylabel='y', title='title', marker=None):
 
     if file.endswith('.h5'):
         x,y,e = load_1dh5(file)
@@ -54,11 +57,11 @@ def plot1d(file : str, xlog=False , ilog=True,
     ilabel = f"{file}"
     if not err:
         try:
-            plt.step(x[:-1], y, label=ilabel)
+            plt.step(x[:-1], y, label=ilabel, marker=marker, markevery=2, markersize=6)
         except:
-            plt.step(x, y, label=ilabel)
+            plt.step(x, y, label=ilabel, marker=marker)
     else:
-        plt.errorbar(x[:-1],y,e)
+        plt.errorbar(x[:-1],y,e, marker=marker)
 
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
@@ -109,6 +112,7 @@ def parse():
     parser.add_argument('--ylabel', type=str, default='y', help='ylabel.')
     parser.add_argument('--title', type=str, default='title', help='title.')
     parser.add_argument('--err', action='store_true', help='err bar.')
+    parser.add_argument('--marker', action='store_true', help='show marker on lines.')
     args = parser.parse_args()
     return args
 
@@ -116,7 +120,9 @@ def main():
     plotStyle()
     args = parse()
 
-    for filepath in args.file:
+    m = get_markers() if args.marker else [None]
+
+    for i, filepath in enumerate(args.file):
         if filepath.endswith(".h5"):
             h5f = h5py.File(f'{filepath}')
             if 'xcenter' in h5f:
@@ -124,7 +130,7 @@ def main():
                     args.xlabel, args.ylabel, args.title)
             elif 'center' in h5f:
                 plot1d(filepath, args.xlog, args.ilog, args.err, args.save, args.show, 
-                    args.xlabel, args.ylabel, args.title)
+                    args.xlabel, args.ylabel, args.title, marker=m[i % len(m)])
             else:
                 raise ValueError("May be not a Prompt h5 file.")
         elif filepath.endswith(".dat"):
