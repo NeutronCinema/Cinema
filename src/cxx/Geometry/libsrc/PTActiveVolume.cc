@@ -279,7 +279,7 @@ bool Prompt::ActiveVolume::proprogateInAVolume(Particle &particle)
   ->GetNavigator()->ComputeStepAndPropagatedState(*p, *dir, stepLength, *m_currState, *m_nextState);
 
   bool sameVolume (m_currState->Top() == m_nextState->Top());
-    
+  
   if(stepLength < step)
     PROMPT_THROW2(CalcError, "stepLength < step " << stepLength << " " << step << "\n");
 
@@ -344,7 +344,9 @@ bool Prompt::ActiveVolume::proprogateInAVolume(Particle &particle)
   {
     #ifdef DEBUG_PTS
       std::cout << "Exiting volume " << getVolume()->GetName() 
-      << " at " << particle.getPosition() << std::endl;
+      << " at " << particle.getPosition() 
+      << " with energy " << particle.getEKin() 
+      << std::endl;
       std::cout << " " << std::endl;
     #endif
     scoreExit(particle);  //score exit before activeVolume changes, otherwise physical volume id and scorer id may be inconsistent.

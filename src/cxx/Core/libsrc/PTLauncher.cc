@@ -139,7 +139,9 @@ void Prompt::Launcher::simOneEvent(bool recordTrj)
           }
           #ifdef DEBUG_PTS
             std::cout << "Entering volume " << m_activeVolume.getVolume()->GetName() 
-            << " at " << particle->getPosition() << std::endl;
+            << " at " << particle->getPosition() 
+            << " with energy " << particle->getEKin() 
+            << std::endl;
           #endif
           m_activeVolume.scoreEntry(*particle);
         }
