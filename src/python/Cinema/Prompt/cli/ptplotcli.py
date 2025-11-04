@@ -106,7 +106,7 @@ def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('file', nargs='+',type=str, help='Path of h5 file produced by Prompt simulations.')
     parser.add_argument('--save', action='store_true', help='save plot as pdf file.')
-    parser.add_argument('--show', action='store_true', help='show plot.')
+    parser.add_argument('--show', action='store_true', default=True, help='show plot.')
     parser.add_argument('--xlog', action='store_true', help='xlog scale.')
     parser.add_argument('--ilog', action='store_true', help='intensity plotted in logscale.')
     parser.add_argument('--xlabel', type=str, default='x', help='xlabel.')
