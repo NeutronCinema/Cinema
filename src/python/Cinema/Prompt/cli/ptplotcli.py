@@ -66,6 +66,7 @@ def plot1d(file : str, xlog=False , ilog=True,
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.title(title)
+    plt.grid(True)
 
     if xlog:
         plt.xscale('log')
