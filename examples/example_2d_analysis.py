@@ -99,9 +99,10 @@ def main():
     plot_error_analysis(data2d)
     plt.show()
     
-    # Interpolation example
-    new_x = np.linspace(xedges[0], xedges[-1], 50)
-    new_y = np.linspace(yedges[0], yedges[-1], 50)
+    # Interpolation example - FIXED: Use bin centers instead of edges for interpolation
+    # The issue was that edges extend beyond the data range, causing out-of-bounds errors
+    new_x = np.linspace(data2d.x[0], data2d.x[-1], 50)  # Use data2d.x instead of xedges
+    new_y = np.linspace(data2d.y[0], data2d.y[-1], 50)  # Use data2d.y instead of yedges
     data2d_interp = data2d.interpolate(new_x, new_y)
     
     # Compare original vs interpolated

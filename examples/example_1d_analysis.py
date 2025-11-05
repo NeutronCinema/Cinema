@@ -37,7 +37,7 @@ def plot_array_1d(arr, title="CinemaArray 1D", ax=None):
     return ax
 
 def main():
-    hist = create_hist1d(npoints=200000, xbin=40, xmin=0.0, xmax=1.0)
+    hist = create_hist1d(npoints=100, xbin=10, xmin=0.0, xmax=1.0)
     # convert to CinemaArray (try multiple paths inside helper)
     data = hist.toArrayXY()
 
@@ -90,7 +90,8 @@ def main():
     # interpolation to a finer grid using histogram edges if available
     if hasattr(hist, "getEdges"):
         edges = hist.getEdges()
-        xlo, xhi = edges[0][0], edges[0][-1]
+        # Fixed: Access edges as 1D array for Hist1D
+        xlo, xhi = edges[0], edges[-1]  # Changed from edges[0][0], edges[0][-1]
     else:
         xlo, xhi = np.min(np.asarray(data.x)), np.max(np.asarray(data.x))
     new_x = np.linspace(xlo, xhi, 200)
