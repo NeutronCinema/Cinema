@@ -50,7 +50,7 @@ Prompt::Hist1D::~Hist1D()
 {
 }
 
-std::vector<double> Prompt::Hist1D::getEdge() const
+std::vector<double> Prompt::Hist1D::getEdges() const
 {
   if(m_linear)
     return linspace(m_xmin, m_xmax, m_nbins+1);
@@ -78,7 +78,7 @@ void Prompt::Hist1D::save(const std::string &filename) const
 
   bwr->addHeaderData("content", m_data.data(), {m_nbins}, Prompt::NumpyWriter::NPDataType::f8);
   bwr->addHeaderData("hit", m_hit.data(), {m_nbins}, Prompt::NumpyWriter::NPDataType::f8);
-  bwr->addHeaderData("edge", getEdge().data(), {m_nbins+1}, Prompt::NumpyWriter::NPDataType::f8);
+  bwr->addHeaderData("edge", getEdges().data(), {m_nbins+1}, Prompt::NumpyWriter::NPDataType::f8);
 
   char buffer [1000];
   int n =sprintf (buffer,

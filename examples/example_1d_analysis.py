@@ -88,8 +88,8 @@ def main():
         print("exp operation not available on CinemaArray; skipped exp plot.")
 
     # interpolation to a finer grid using histogram edges if available
-    if hasattr(hist, "getEdge"):
-        edges = hist.getEdge()
+    if hasattr(hist, "getEdges"):
+        edges = hist.getEdges()
         xlo, xhi = edges[0][0], edges[0][-1]
     else:
         xlo, xhi = np.min(np.asarray(data.x)), np.max(np.asarray(data.x))

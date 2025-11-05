@@ -172,13 +172,13 @@ class Hist1D(HistBase):
         if self.managedBySelf: 
             _pt_Hist1D_delete(self.cobj)
 
-    def getEdge(self):
+    def getEdges(self):
         edge = np.zeros(self.numbin+1)
         _pt_Hist1D_getEdge(self.cobj, edge)
         return edge
 
     def getCentre(self):
-        edge = self.getEdge()
+        edge = self.getEdges()
         center = edge[:-1]+np.diff(edge)*0.5
         return center
 
@@ -236,7 +236,7 @@ class Hist1D(HistBase):
         import h5py
         f0=h5py.File(fn,"w")
         f0.create_dataset("center", data=self.getCentre(), compression="gzip")
-        f0.create_dataset("edge", data=self.getEdge(), compression="gzip")
+        f0.create_dataset("edge", data=self.getEdges(), compression="gzip")
         f0.create_dataset("weight", data=self.getWeight(), compression="gzip")
         f0.create_dataset("hit", data=self.getHit(), compression="gzip")
         f0.create_dataset("sdev", data=self.getSdev(), compression="gzip")
@@ -244,7 +244,7 @@ class Hist1D(HistBase):
     
     def toArrayXY(self):
         from Cinema.Interface import CinemaXY
-        return CinemaXY.from_sdev(self.getWeight(), self.getSdev(), x=self.getCentre(), edges=self.getEdge())
+        return CinemaXY.from_sdev(self.getWeight(), self.getSdev(), x=self.getCentre(), edges=self.getEdges())
 
 class Hist2D(HistBase):
     def __init__(self, xmin=None, xmax=None, xnum=None, ymin=None, ymax=None, ynum=None, metadata=None, cobj=None):
@@ -269,11 +269,11 @@ class Hist2D(HistBase):
         self.yNumBin = _pt_Hist2D_getNBinY(self.cobj)
 
  
-        self.xedge = np.linspace(self.xmin, self.xmax, self.xNumBin+1)
-        self.xcenter = self.xedge[:-1]+np.diff(self.xedge)*0.5
+        self.xedges = np.linspace(self.xmin, self.xmax, self.xNumBin+1)
+        self.xcenter = self.xedges[:-1]+np.diff(self.xedges)*0.5
 
-        self.yedge = np.linspace(self.ymin, self.ymax, self.yNumBin+1)
-        self.ycenter = self.yedge[:-1]+np.diff(self.yedge)*0.5
+        self.yedges = np.linspace(self.ymin, self.ymax, self.yNumBin+1)
+        self.ycenter = self.yedges[:-1]+np.diff(self.yedges)*0.5
 
         self.metadata = metadata
     
@@ -283,12 +283,12 @@ class Hist2D(HistBase):
             _pt_Hist2D_delete(self.cobj)
 
 
-    def getEdge(self):
-        return self.xedge, self.yedge
+    def getEdges(self):
+        return self.xedges, self.yedges
     
     def getCentre(self):
-        xedge = self.getEdge()[0]
-        yedge = self.getEdge()[1]
+        xedge = self.getEdges()[0]
+        yedge = self.getEdges()[1]
         xcenter = xedge[:-1]+np.diff(xedge)*0.5
         ycenter = yedge[:-1]+np.diff(yedge)*0.5
         return xcenter, ycenter
@@ -366,8 +366,8 @@ class Hist2D(HistBase):
         f0=h5py.File(fn,"w")
         f0.create_dataset("xcenter", data=self.xcenter, compression="gzip")
         f0.create_dataset("ycenter", data=self.ycenter, compression="gzip")
-        f0.create_dataset("xedge", data=self.xedge, compression="gzip")
-        f0.create_dataset("yedge", data=self.yedge, compression="gzip")
+        f0.create_dataset("xedge", data=self.xedges, compression="gzip")
+        f0.create_dataset("yedge", data=self.yedges, compression="gzip")
         f0.create_dataset("weight", data=self.getWeight(), compression="gzip")
         f0.create_dataset("hit", data=self.getHit(), compression="gzip")
         f0.create_dataset("sdev", data=self.getSdev(), compression="gzip")
@@ -462,7 +462,7 @@ class NumpyHist1D():
         # if range.shape != 2:
         #     raise IOError('wrong range shape')
         self.range=range
-        self.xedge=np.linspace(range[0], range[1], xbin+1)
+        self.xedges=np.linspace(range[0], range[1], xbin+1)
         if range[0] == range[1]:
             raise IOError('wrong range input')
         self.xbinfactor=xbin/float(range[1]-range[0])
@@ -471,17 +471,17 @@ class NumpyHist1D():
         self.hist =np.zeros([xbin])
 
     def fill(self, x, weights=None):
-        h, xedge = np.histogram(x, bins=self.xedge, weights=weights)
+        h, xedge = np.histogram(x, bins=self.xedges, weights=weights)
         self.hist += h
 
     def getHistVal(self):
         return self.hist
 
     def getXedges(self):
-        return self.xedge
+        return self.xedges
 
     def getYedges(self):
-        return self.yedge
+        return self.yedges
 
 # Class NumpyHist2D is written to validate the class Hist2D only. It shouldn't be used in practice due to its significantly slower performance.
 class NumpyHist2D():
@@ -490,8 +490,8 @@ class NumpyHist2D():
         if range.shape != (2,2):
             raise IOError('wrong range shape')
         self.range=range
-        self.xedge=np.linspace(range[0][0], range[0][1], xbin+1)
-        self.yedge=np.linspace(range[1][0], range[1][1], ybin+1)
+        self.xedges=np.linspace(range[0][0], range[0][1], xbin+1)
+        self.yedges=np.linspace(range[1][0], range[1][1], ybin+1)
         if range[0][0] == range[0][1] or range[1][0] == range[1][1]:
             raise IOError('wrong range input')
         self.xbinfactor=xbin/float(range[0][1]-range[0][0])
@@ -503,17 +503,17 @@ class NumpyHist2D():
         self.hist =np.zeros([xbin, ybin])
 
     def fill(self, x, y, weights=None):
-        h, xedge, yedge = np.histogram2d(x, y, bins=[self.xedge, self.yedge], weights=weights)
+        h, xedge, yedge = np.histogram2d(x, y, bins=[self.xedges, self.yedges], weights=weights)
         self.hist += h
 
     def getHistVal(self):
         return self.hist
 
     def getXedges(self):
-        return self.xedge
+        return self.xedges
 
     def getYedges(self):
-        return self.yedge
+        return self.yedges
 
     def show(self):
         import matplotlib.pyplot as plt
@@ -521,7 +521,7 @@ class NumpyHist2D():
         ax = fig.add_subplot(111)
         H = self.hist.T
 
-        X, Y = np.meshgrid(self.xedge, self.yedge)
+        X, Y = np.meshgrid(self.xedges, self.yedges)
         import matplotlib.colors as colors
         pcm = ax.pcolormesh(X, Y, H, cmap=plt.cm.jet,  norm=colors.LogNorm(vmin=H.max()*1e-4, vmax=H.max()),)
         fig.colorbar(pcm, ax=ax)

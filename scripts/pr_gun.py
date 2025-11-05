@@ -48,7 +48,7 @@ class ParticleSet:
         else:
             hist.fillmany(self.data, w)
         x = hist.getCentre()
-        y = hist.getWeight()/np.diff(hist.getEdge())
+        y = hist.getWeight()/np.diff(hist.getEdges())
         return x, y/np.trapz(y,x)
     
 
@@ -201,7 +201,7 @@ for d, log in zip(attr, plotlog):
 
     hist_kd = hist[d]
     x = hist_kd.getCentre()
-    y = hist_kd.getWeight()/np.diff(hist_kd.getEdge())
+    y = hist_kd.getWeight()/np.diff(hist_kd.getEdges())
 
     if log:
         plt.loglog(x, y/np.trapz(y,x), label='sampled')
@@ -222,7 +222,7 @@ for d, log in zip(attr, plotlog):
 
     hist_kd = hist[d]
     x = hist_kd.getCentre()
-    y = hist_kd.getWeight()/np.diff(hist_kd.getEdge())
+    y = hist_kd.getWeight()/np.diff(hist_kd.getEdges())
 
     if log:
         plt.semilogx(x, y/np.trapz(y,x)*x, label='sampled')

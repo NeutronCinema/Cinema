@@ -31,7 +31,7 @@ namespace Prompt {
     virtual ~Hist1D();
 
     unsigned dimension() const override { return 1; }  
-    std::vector<double> getEdge() const;
+    std::vector<double> getEdges() const;
     void save(const std::string &filename) const override;
 
     virtual void fill(double val);

@@ -89,7 +89,7 @@ def main():
     hist2d = create_test_histogram()
     
     # Convert to CinemaXYZ array
-    xedges, yedges = hist2d.getEdge()
+    xedges, yedges = hist2d.getEdges()
     data2d = CinemaXYZ.from_hist2d(hist2d)
     
     # Create visualizations

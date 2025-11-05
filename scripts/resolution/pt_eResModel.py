@@ -156,7 +156,7 @@ def ekin2time(ekin, distance):
 
 def convert_tof2hw(scorermono, scorerdetector):
     tpm = scorermono.getMean() - scorermono.getMean() * para_lsp/(para_lpm+para_lsp)
-    tmd = scorerdetector.getEdge() - scorermono.getMean()
+    tmd = scorerdetector.getEdges() - scorermono.getMean()
     hw = const_neutron_mass_evc2 / const_c**2 * 0.5 * ((para_lpm*1e-3/tpm)**2 - (para_lsd*1e-3/(tmd-tpm*para_lms/para_lpm))**2)
     return hw
 
@@ -231,7 +231,7 @@ else:
 
     def fit_and_plot(scorer, fname, bounds, scale=1):
         plt.figure()
-        gaussian_plot(scorer.getEdge(), scorer.getWeight(), bounds, scale)
+        gaussian_plot(scorer.getEdges(), scorer.getWeight(), bounds, scale)
         plt.savefig(fname)
 
     def find_2nd_max(x : np.ndarray):
@@ -257,9 +257,9 @@ else:
         # engDetector.savefig('engDetector.png')
 
         # plt.figure()
-        # # plt.scatter(res.getEdge()[1][:-1], res.getWeight().sum(0), label="Histogram data" )
+        # # plt.scatter(res.getEdges()[1][:-1], res.getWeight().sum(0), label="Histogram data" )
         # bmin , bmax = 185, 315
-        # xx = res.getEdge()[1][bmin:bmax]
+        # xx = res.getEdges()[1][bmin:bmax]
         # yy = res.getWeight().sum(0)[bmin:bmax]
         # gaussian_plot(xx, yy)
         # print(res.getTotalWeight())

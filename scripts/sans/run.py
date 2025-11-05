@@ -18,7 +18,7 @@ def process(x):
     qq = sqw.getCentre()[0]
     sq = sqw.getWeight().sum(1)/sqw.getAccWeight()
 
-    qq1d = sqRaw.getEdge()[:-1]
+    qq1d = sqRaw.getEdges()[:-1]
     sq1d = sqRaw.getWeight()/sqRaw.getAccWeight()
     sim.clear()
     return (qq1d, sq1d)

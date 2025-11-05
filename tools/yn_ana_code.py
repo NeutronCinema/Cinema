@@ -30,7 +30,7 @@ class WgtFileAnalysor(Hist1D):
 
     def densityHist(self):
         x_hist = self.getCentre()
-        y_hist = self.getWeight()/np.diff(self.getEdge())
+        y_hist = self.getWeight()/np.diff(self.getEdges())
         return x_hist, y_hist
 
     def fillHist(self, seedStart, seedEnd, xmin, xmax, numbin, linear=True, scatnum=None):
