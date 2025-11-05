@@ -13,9 +13,10 @@ for i in range(10):
     histcpp.fillmany(data[0], data[1])
 
 
-# ca = CinemaXY.from_sdev(histcpp.getWeight(), histcpp.getSdev(), histcpp.getCentre()) 
-
 data = CinemaXY.from_hist1d(histcpp)
+# or use the magic one: data = histcpp.toArray()
+print(type(data))
+
 
 data = data*2
 np.testing.assert_allclose(data.mean , histcpp.getWeight()*2, rtol=1e-13, atol=1e-13)

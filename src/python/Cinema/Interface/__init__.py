@@ -161,20 +161,38 @@ class ArrayCoreMixin:
         return out_arr
     
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        """Handle NumPy ufuncs properly"""
+        """Handle NumPy ufuncs with proper error propagation"""
+        # Convert CinemaArray inputs to plain ndarray views
         args = [i.view(np.ndarray) if isinstance(i, type(self)) else i 
-               for i in inputs]
-        result = getattr(ufunc, method)(*args, **kwargs)
+                for i in inputs]
         
-        if method == '__call__' and ufunc.__name__ in ['multiply', 'add', 'subtract', 'divide']:
+        # Handle out= parameter if present
+        if 'out' in kwargs:
+            out = kwargs['out']
+            if isinstance(out, tuple):
+                kwargs['out'] = tuple(o.view(np.ndarray) if isinstance(o, type(self)) else o 
+                                    for o in out)
+            else:
+                kwargs['out'] = out.view(np.ndarray) if isinstance(out, type(self)) else out
+
+        # Call ufunc on raw arrays
+        result = getattr(ufunc, method)(*args, **kwargs)
+
+        # Wrap result back into CinemaArray if needed
+        if method == '__call__':
             if isinstance(result, np.ndarray):
+                # Convert back to CinemaArray and preserve attributes
                 result = result.view(type(self))
-                # Copy attributes from first input array
-                first_input = next(i for i in inputs if isinstance(i, type(self)))
-                for name in getattr(first_input, '_custom_attrs', []):
-                    setattr(result, name, getattr(first_input, name, None))
-                if hasattr(first_input, 'gvar'):
-                    result.gvar = first_input.gvar
+                first_input = next((i for i in inputs if isinstance(i, type(self))), None)
+                if first_input is not None:
+                    # Copy custom attributes
+                    for attr in getattr(first_input, '_custom_attrs', []):
+                        setattr(result, attr, getattr(first_input, attr))
+                    if hasattr(first_input, 'gvar'):
+                        result.gvar = first_input.gvar
+                    if hasattr(first_input, 'x'):
+                        result.x = first_input.x
+        
         return result
 
 class ArrayStatsMixin:
@@ -272,6 +290,7 @@ class CinemaXY(ArrayCoordinateMixin, ArrayPlotMixin, CinemaArray):
                     - getWeight() -> mean values
                     - getSdev() -> standard deviations
                     - getCentre() -> bin centers
+                    - getEdges() -> bin edges
         
         Returns:
             CinemaXY instance with statistical data and coordinates
@@ -279,7 +298,8 @@ class CinemaXY(ArrayCoordinateMixin, ArrayPlotMixin, CinemaArray):
         return cls.from_sdev(
             mean=hist1d.getWeight(),
             sdev=hist1d.getSdev(),
-            x=hist1d.getCentre()
+            x=hist1d.getCentre(),
+            edges=hist1d.getEdge()
         )
 
 

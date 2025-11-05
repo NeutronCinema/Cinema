@@ -241,6 +241,10 @@ class Hist1D(HistBase):
         f0.create_dataset("hit", data=self.getHit(), compression="gzip")
         f0.create_dataset("sdev", data=self.getSdev(), compression="gzip")
         f0.close()
+    
+    def toArray(self):
+        from Cinema.Interface import CinemaXY
+        return CinemaXY.from_sdev(self.getWeight(), self.getSdev(), x=self.getCentre(), edges=self.getEdge())
 
 class Hist2D(HistBase):
     def __init__(self, xmin=None, xmax=None, xnum=None, ymin=None, ymax=None, ynum=None, metadata=None, cobj=None):
