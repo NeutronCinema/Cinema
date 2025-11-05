@@ -149,7 +149,7 @@ class PromptBaseParser(argparse.ArgumentParser):
 
     def set_visualize_arguments(self):
         self.add_argument('-v', '--visualize', action='store_true', dest='visualize', help='flag to visualize geometry model')
-        self.add_argument('-Z', '--zscale', action='store', type=float, default=0.2, dest='zscale',
+        self.add_argument('-Z', '--zscale', action='store', type=float, default=1., dest='zscale',
                           help='Set visulization scale factor along Z direction. Must used along with "-v" flag')
 
     def set_general_arguments(self):
