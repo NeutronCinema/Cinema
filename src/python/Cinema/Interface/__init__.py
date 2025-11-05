@@ -241,30 +241,45 @@ class ArrayCoordinateMixin:
         self.x = getattr(obj, 'x', None)
         
     def __getitem__(self, item):
+        """Handle array indexing including tuple indices from matplotlib"""
+        # Get base array result using parent method
         result = super().__getitem__(item)
-        if isinstance(result, type(self)) and hasattr(self, 'x'):
-            result.x = self.x[item] if isinstance(item, (int, slice)) else self.x[np.asarray(item)]
+        
+        # If not array-like result or no x attribute, return as-is
+        if not isinstance(result, np.ndarray) or not hasattr(self, 'x'):
+            return result
+            
+        # Handle different index types
+        if isinstance(item, (int, slice)):
+            # Simple integer or slice
+            if isinstance(result, type(self)):
+                result.x = self.x[item]
+        elif isinstance(item, tuple):
+            # Multiple indices (e.g. from matplotlib)
+            if isinstance(result, type(self)):
+                result.x = self.x[item[0]]  # Use first index for x
+        elif isinstance(item, np.ndarray):
+            # Boolean or integer array indexing
+            if isinstance(result, type(self)):
+                result.x = self.x[item]
+        
         return result
 
 class ArrayPlotMixin:
     """Plotting functionality mixin"""
-    def plot(self, ax=None, plot_errors=True, **kwargs):
-        ax = ax or plt.gca()
-        x = getattr(self, 'x', np.arange(len(self)))
-        y = getattr(self, 'mean', np.asarray(self))
+    def plot(self, ax=None, **plot_kwargs):
+        """Plot data points with error bars"""
+        if ax is None:
+            import matplotlib.pyplot as plt
+            ax = plt.gca()
         
-        plot_kwargs = {
-            'marker': kwargs.pop('marker', 'o'),
-            'linestyle': kwargs.pop('linestyle', 'none'),
-            'capsize': kwargs.pop('capsize', 3),
-            **kwargs
-        }
+        # Convert data to plain numpy arrays to avoid indexing issues
+        x = np.asarray(self.x)
+        y = np.asarray(self.mean if hasattr(self, 'mean') else self.y)
+        yerr = np.asarray(self.sdev if hasattr(self, 'sdev') else self.err)
         
-        if plot_errors and hasattr(self, 'sdev'):
-            yerr = getattr(self, 'sdev')
-            ax.errorbar(x, y, yerr=yerr,**plot_kwargs)
-        else:
-            ax.plot(x, y, **plot_kwargs)
+        # Create errorbar plot
+        ax.errorbar(x, y, yerr=yerr, **plot_kwargs)
         return ax
 
 # Base array class
@@ -435,11 +450,14 @@ class CinemaXYZ(Array2DCoordinateMixin, Array2DPlotMixin, CinemaArray):
             CinemaXYZ instance with statistical data and coordinates
         """
         c = hist2d.getCentre()
+        edges = hist2d.getEdge()  # Get edges first
         return cls.from_sdev(
             mean=hist2d.getWeight(),
             sdev=hist2d.getSdev(),
             x=c[0],
-            y=c[1]
+            y=c[1],
+            xedges=edges[0],  # Use keyword arguments consistently
+            yedges=edges[1]
         )
     
     @classmethod
