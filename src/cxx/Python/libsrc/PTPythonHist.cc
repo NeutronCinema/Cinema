@@ -153,7 +153,7 @@ void* pt_Hist1D_new(double xmin, double xmax, unsigned nbins, bool linear)
 
 void pt_Hist1D_getEdge(void* obj, double* edge)
 {
-  auto edgevec = static_cast<pt::Hist1D *>(obj)->getEdge();
+  auto edgevec = static_cast<pt::Hist1D *>(obj)->getEdges();
   for(size_t i=0;i<edgevec.size();i++)
   {
     edge[i]=edgevec[i];

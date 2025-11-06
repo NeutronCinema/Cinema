@@ -3,7 +3,7 @@
 from Cinema.Prompt import Prompt, PromptMPI
 from Cinema.Prompt.geo import Volume, Transformation3D
 from Cinema.Prompt.solid import Box,Tube, Sphere
-from Cinema.Prompt.scorer import DirectSqwHelper, MultiScatCounter, KillMCPLHelper
+from Cinema.Prompt.scorer import DirectSqwHelper, MultiScatCounter, MCPLOutHelper
 from Cinema.Prompt.histogram import wl2ekin
 from Cinema.Prompt.physics import Material, Mirror
 from Cinema.Prompt.gun import IsotropicGun, PythonGun
@@ -39,7 +39,7 @@ class MySim(PromptMPI):
 
         world.placeChild('monPV', monitor, Transformation3D(0, 0., 0))
 
-        # KillMCPLHelper('test_killermcpl').make(monitor)       
+        # MCPLOutHelper('test_killermcpl').make(monitor)       
         
 
         self.setWorld(world)

@@ -314,7 +314,7 @@ class CinemaXY(ArrayCoordinateMixin, ArrayPlotMixin, CinemaArray):
             mean=hist1d.getWeight(),
             sdev=hist1d.getSdev(),
             x=hist1d.getCentre(),
-            edges=hist1d.getEdge()
+            edges=hist1d.getEdges()
         )
 
 
@@ -450,7 +450,7 @@ class CinemaXYZ(Array2DCoordinateMixin, Array2DPlotMixin, CinemaArray):
             CinemaXYZ instance with statistical data and coordinates
         """
         c = hist2d.getCentre()
-        edges = hist2d.getEdge()  # Get edges first
+        edges = hist2d.getEdges()  # Get edges first
         return cls.from_sdev(
             mean=hist2d.getWeight(),
             sdev=hist2d.getSdev(),
