@@ -11,6 +11,7 @@ import sys
 from typing import Dict, Any, Type, Optional, List, Set, get_type_hints, Union, TypeVar
 
 T = TypeVar('T')
+REQUIRED_CLASSES = [Prompt, Gun]
 
 def str_or_float(value: str):
     import re
@@ -212,7 +213,19 @@ class PromptPyScriptParser(PromptBaseParser):
         self.args,_ = self.parse_known_args()
         self.pyScriptPath = self.args.geo
         self.classes_defined = get_classes_from_filepath(self.pyScriptPath)
+        self._class_sanity_check()
         self.add_groups_from_classes()
+
+    def _class_sanity_check(self, req_cls = REQUIRED_CLASSES, ):
+        for cls in req_cls:
+            num_found = 0
+            for name, obj in self.classes_defined.items():
+                if cls in obj.mro():
+                    num_found += 1
+            if num_found == 0:
+                raise ValueError(f"Class '{cls.__name__}' is NOT defined")
+            if num_found > 1:
+                raise ValueError(f"Class '{cls.__name__}' is duplicated in {num_found} classes")
 
     def add_groups_from_classes(self):
         for clsname, clsobj in self.classes_defined.items():
@@ -283,7 +296,7 @@ class PromptPyScriptParser(PromptBaseParser):
 
     def simulate(self):
         args = self.parse_args()
-        sim = self.instantiate(PromptMPI)
+        sim = self.instantiate(Prompt)
         gun = self.instantiate(Gun)
 
         if not sim.l.worldExist:

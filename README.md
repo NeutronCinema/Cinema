@@ -2,13 +2,20 @@
 
 Prompt: Probability-Conserved Cross Section Biasing Monte Carlo Particle Transport System. 
 
-Introduction of system can be found at [arXiv](https://arxiv.org/abs/2304.06226).
+Introduction of system can be found at [Computer Physics Communications](https://doi.org/10.1016/j.cpc.2023.109004).
 
-## Installing on Linux(Ubuntu) from source
+## Installation 
+### Install pre-built conda package on linux
 
-### With native linux envrionment
+```
+conda install csns::cinema-prompt
+```
 
-To build Prompt, several prerequisites are needed.
+### Install from source on Linux(Ubuntu)
+
+#### Use native linux envrionment manager `apt`
+
+Use `apt` cml to manage prerequisites:
 ```
 sudo apt install g++ cmake python3-dev python3-pip python3-venv libxml2-dev libhdf5-dev libfftw3-dev libopenmpi-dev libgl1
 ```
@@ -16,17 +23,17 @@ sudo apt install g++ cmake python3-dev python3-pip python3-venv libxml2-dev libh
 Clone the source and compile it as
 
 ```
-git clone https://gitlab.com/cinema-developers/prompt.git
-cd prompt
+git clone https://code.ihep.ac.cn/cinema-developers/cinema.git
+cd cinema
 . env.sh
-cimbuild
+cimbuild -r
 ```
 
-### With conda envrionment
+#### Use conda envrionment manager `conda`
 
 Use `conda` cml to manage prerequisites:
 ```
-conda create -n tmp python=3.10 cxx-compiler=1.10 cmake make=4.3 fftw unzip openmpi libxml2 xerces-c mpi4py hdf5=1.12
+conda create -n tmp python=3.10 cxx-compiler=1.10 cmake make=4.3 fftw unzip openmpi libxml2=2.9.3 xerces-c=3.2.4 mpi4py hdf5=1.12
 ```
 
 Then source `env.sh`
@@ -34,15 +41,9 @@ Then source `env.sh`
 . env.sh
 ```
 
-## Installing on Linux with pip
+## Runing simulations
 
-```
-pip install neutron-cinema
-```
-
-
-## Runing Prompt simulations
-
+### Input by GDML file
 After installation, GDML formatted simulation input files can be launched by Prompt as   
 
 
