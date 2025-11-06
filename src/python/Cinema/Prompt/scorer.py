@@ -469,7 +469,7 @@ def makePSD(name, vol, numbin_dim1=1, numbin_dim2=1, ptstate : str = 'ENTRY', ty
     vol.addScorer(det.cfg)
 
         
-class KillMCPLHelper(MultiScatMixin1D):
+class MCPLOutHelper(MultiScatMixin1D):
     def __init__(self, name, pdg : int = 0, groupID : int = 0, kill : bool = False) -> None:
         def get_rank_id():
             try:

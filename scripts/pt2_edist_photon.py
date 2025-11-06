@@ -4,7 +4,7 @@ from Cinema.Prompt import Prompt, PromptMPI
 from Cinema.Prompt.geo import Volume, Transformation3D
 from Cinema.Prompt.component import DiskChopper
 from Cinema.Prompt.solid import Box, Sphere, Tube
-from Cinema.Prompt.scorer import VolFluenceHelper, ESpectrumHelper, DepositionHelper, KillMCPLHelper
+from Cinema.Prompt.scorer import VolFluenceHelper, ESpectrumHelper, DepositionHelper, MCPLOutHelper
 from Cinema.Prompt.physics import Material
 from Cinema.Prompt.gun import IsotropicGun, SimpleThermalGun, PythonGun
 from Cinema.Prompt.GidiSetting import GidiSetting 
@@ -80,7 +80,7 @@ class MySim(PromptMPI):
         media = Volume("media", Tube(0, radius_mm, hlen_mm), matCfg= lw)
         world.placeChild('media', media)
 
-        kill = KillMCPLHelper('part_gen', 2112)
+        kill = MCPLOutHelper('part_gen', 2112)
         kill.make(media)
         # VolFluenceHelper('volFlux', max=20e6, numbin=300).make(media)
         ESpectrumHelper('ESpec', min=loweredge, max=upperedge, numbin=numbin_en, ptstate='EXIT').make(media)

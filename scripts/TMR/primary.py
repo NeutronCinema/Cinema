@@ -4,7 +4,7 @@ from Cinema.Prompt import Prompt, PromptMPI
 from Cinema.Prompt.geo import Volume, Transformation3D
 from Cinema.Prompt.solid import Box,Tube
 from Cinema.Prompt.scorer import  ESpectrumHelper, WlSpectrumHelper, \
-    TOFHelper, VolFluenceHelper, PSDHelper, KillMCPLHelper
+    TOFHelper, VolFluenceHelper, PSDHelper, MCPLOutHelper
 from Cinema.Prompt.gun import PythonGun
 from Cinema.Prompt.physics import Material, Mirror
 from Cinema.Prompt.gun import UniModeratorGun
@@ -196,7 +196,7 @@ class MySim(PromptMPI):
         mat_vacuum =            "vacuum.ncmat"
         sol = Box(50,50,1e-6)
         vol = Volume("src@guideEntry", sol, matCfg=mat_vacuum)
-        sco = KillMCPLHelper("scorerkiller@guideEntry", kill=True)
+        sco = MCPLOutHelper("scorerkiller@guideEntry", kill=True)
         sco.make(vol)
 
         return vol

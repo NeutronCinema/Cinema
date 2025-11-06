@@ -3,7 +3,7 @@
 from Cinema.Prompt import Prompt, PromptMPI
 from Cinema.Prompt.geo import Volume, Transformation3D
 from Cinema.Prompt.solid import Box,Tube
-from Cinema.Prompt.scorer import ESpectrumHelper,MultiScatCounter, WlSpectrumHelper, TOFHelper, VolFluenceHelper, PSDHelper, DirectSqwHelper,DirectSqHelper, KillMCPLHelper
+from Cinema.Prompt.scorer import ESpectrumHelper,MultiScatCounter, WlSpectrumHelper, TOFHelper, VolFluenceHelper, PSDHelper, DirectSqwHelper,DirectSqHelper, MCPLOutHelper
 from Cinema.Prompt.gun import PythonGun, SimpleThermalGun, MaxwellianGun
 from Cinema.Prompt.histogram import wl2ekin
 from Cinema.Prompt.physics import Material, Mirror
@@ -76,7 +76,7 @@ class MySim(PromptMPI):
                                   numbin=50, distanceMS=mod_sam_dist, 
                                   linear=False)
         helperSq.make(detector)
-        # self.kill = KillMCPLHelper('part_gen', 2112)
+        # self.kill = MCPLOutHelper('part_gen', 2112)
         # self.kill.make(detector)
 
         self.setWorld(world)
