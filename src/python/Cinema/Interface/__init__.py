@@ -316,6 +316,17 @@ class CinemaXY(ArrayCoordinateMixin, ArrayPlotMixin, CinemaArray):
             x=hist1d.getCentre(),
             edges=hist1d.getEdges()
         )
+    
+    @classmethod
+    def from_hdf5(cls, fname, **kwargs):
+        import h5py
+        with h5py.File(fname, 'r') as f:
+            w = f['weight'][:]
+            sdev = f['sdev'][:]
+            x = f['center'][:]
+            edges = f['edge'][:]
+            return cls.from_sdev(mean=w, sdev =sdev, x=x, edges=edges, **kwargs) 
+        
 
 
 from scipy.interpolate import RegularGridInterpolator
