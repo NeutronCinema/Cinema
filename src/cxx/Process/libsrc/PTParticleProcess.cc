@@ -121,7 +121,7 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
   int secNum = stm.getUnweightedNum();
   for(int i=0; i<secNum; i++)
   {
-    stm.scalceSecondary(i, weightCorrection);
+    stm.scaleSecondary(i, weightCorrection);
   }
 
   // if it is an absorption reaction, the state of the particle is set,

@@ -45,7 +45,7 @@ namespace Prompt {
     std::unique_ptr<Particle> pop();
     bool empty() const;
     int getUnweightedNum() const { return m_unweighted; };
-    void scalceSecondary(int lastidx, double factor);
+    void scaleSecondary(int lastidx, double factor);
 
     void normaliseSecondStack(long unsigned num);
     void swapStack();

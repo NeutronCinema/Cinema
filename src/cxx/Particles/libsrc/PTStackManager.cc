@@ -58,7 +58,7 @@ void Prompt::StackManager::addSecondary(const Prompt::Particle& aparticle, bool 
   }
 }
     
-void Prompt::StackManager::scalceSecondary(int lastidx, double factor)
+void Prompt::StackManager::scaleSecondary(int lastidx, double factor)
 {
   m_stack[m_stack.size()-1-lastidx]->scaleWeight(factor);
   m_unweighted--;
