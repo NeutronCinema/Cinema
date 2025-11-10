@@ -9,6 +9,7 @@ import os
 import argparse
 import numpy as np
 import glob
+import matplotlib.pyplot as plt  # Add global import
 
 try:
     from Cinema.Interface import CinemaXY
@@ -53,18 +54,43 @@ def load_single_h5_file(h5_filepath):
         traceback.print_exc()
         return None, None
 
-def create_combined_plot(cinema_data_list, file_basenames, output_image=None, show_plot=True):
+def calculate_integral(cinema_data):
+    """Calculate the integral of CinemaXY curve
+    as the it is the histogram data, the sum of mean values is the integral"""
+    return np.sum(cinema_data.mean) 
+
+def format_integral_value(integral):
+    """
+    Format integral value for display based on its magnitude
+    
+    Args:
+        integral (float): The integral value to format
+        
+    Returns:
+        str: Formatted integral string
+    """
+    if integral >= 1e6:
+        return f"{integral:.2e}"
+    elif integral >= 1000:
+        return f"{integral:.0f}"
+    elif integral >= 1:
+        return f"{integral:.2f}"
+    else:
+        return f"{integral:.4f}"
+
+def create_combined_plot(cinema_data_list, file_basenames, output_image=None):
     """
     Create a combined plot for multiple CinemaXY objects
     
     Args:
         cinema_data_list: List of CinemaXY objects
-        file_basenames (list): List of base names for legend
+        file_basenames (list): List of base names for each file
         output_image (str): Output image file path (optional)
-        show_plot (bool): Whether to display the plot
+        
+    Returns:
+        matplotlib.figure.Figure: The created figure
     """
-    import matplotlib.pyplot as plt
-    
+    # Remove internal import, use global plt
     # Create a figure for combined plot
     fig, ax = plt.subplots(figsize=(12, 8))
     
@@ -76,9 +102,15 @@ def create_combined_plot(cinema_data_list, file_basenames, output_image=None, sh
         color = colors[i % len(colors)]
         marker = markers[i % len(markers)]
         
+        # Calculate integral
+        integral = calculate_integral(cinema_data)
+        
+        # Format integral value display using the new function
+        integral_str = format_integral_value(integral)
+        
         # Use CinemaXY's built-in plot method with different styles
         cinema_data.plot(ax=ax, fmt=f'{color}-', marker=marker, markersize=4, 
-                       label=f'{basename} ± Std Dev', capsize=3, elinewidth=1)
+                       label=f'{basename} ± Std Dev, integral {integral_str}', capsize=3, elinewidth=1)
     
     ax.set_xlabel('X Coordinate')
     ax.set_ylabel('Weight')
@@ -107,14 +139,19 @@ def create_individual_plot(cinema_data, file_basename, output_image=None):
     Returns:
         matplotlib.figure.Figure: The created figure
     """
-    import matplotlib.pyplot as plt
-    
+    # Remove internal import, use global plt
     # Create a figure for this file
     fig, ax = plt.subplots(figsize=(10, 6))
     
+    # Calculate integral
+    integral = calculate_integral(cinema_data)
+    
+    # Format integral value display using the new function
+    integral_str = format_integral_value(integral)
+    
     # Use CinemaXY's built-in plot method
     cinema_data.plot(ax=ax, fmt='b-', marker='o', markersize=4, 
-                   label='Weight ± Standard Deviation', capsize=3, elinewidth=1)
+                   label=f'Weight ± Standard Deviation, integral {integral_str}', capsize=3, elinewidth=1)
     ax.set_xlabel('X Coordinate')
     ax.set_ylabel('Weight')
     ax.set_title(f'HDF5 Data Visualization (File: {file_basename})')
@@ -251,11 +288,16 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
             )
             all_figures.append(fig)
             
+            # Calculate and display integral
+            integral = calculate_integral(cinema_data_list[0])
+            integral_str = format_integral_value(integral)  # Use the new function
+            
             # Print statistics for this file
             print(f"\nStatistics for {file_basenames[0]}:")
             print(f"  Data points: {len(cinema_data_list[0].x)}")
             print(f"  Weight range: [{cinema_data_list[0].mean.min():.6f}, {cinema_data_list[0].mean.max():.6f}]")
             print(f"  Std dev range: [{cinema_data_list[0].sdev.min():.6f}, {cinema_data_list[0].sdev.max():.6f}]")
+            print(f"  Curve integral: {integral:.6f}")
             
         else:
             # Combined plot
@@ -268,30 +310,24 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
                 cinema_data_list,
                 file_basenames,
                 output_image=output_path,
-                show_plot=show_plot
             )
             all_figures.append(fig)
             
-            # Print statistics for combined files
-            print(f"\nStatistics for combined files:")
-            for j, (data, basename) in enumerate(zip(cinema_data_list, file_basenames)):
-                print(f"  {basename}:")
-                print(f"    Data points: {len(data.x)}")
-                print(f"    Weight range: [{data.mean.min():.6f}, {data.mean.max():.6f}]")
-                print(f"    Std dev range: [{data.sdev.min():.6f}, {data.sdev.max():.6f}]")
+            # Display integrals for each file
+            print(f"\nIntegrals for combined plot {combined_name}:")
+            for cinema_data, basename in zip(cinema_data_list, file_basenames):
+                integral = calculate_integral(cinema_data)
+                integral_str = format_integral_value(integral)  # Use the new function
+                print(f"  {basename}: {integral_str}")
         
         success_count += 1
     
     # Show all plots at once if requested
     if show_plot and all_figures:
-        import matplotlib.pyplot as plt
-        print("\nDisplaying all plots...")
-        plt.show()
+        plt.show()  # Now plt is defined in global scope
     
-    print(f"\n=== Summary ===")
-    print(f"Successfully processed {success_count}/{len(file_groups)} file groups")
-    
-    return success_count > 0
+    print(f"\nSuccessfully processed {success_count}/{len(file_groups)} file groups")
+    return success_count == len(file_groups)
 
 def main():
     """Main function"""
