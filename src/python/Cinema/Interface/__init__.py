@@ -267,19 +267,25 @@ class ArrayCoordinateMixin:
 
 class ArrayPlotMixin:
     """Plotting functionality mixin"""
-    def plot(self, ax=None, **plot_kwargs):
+    def plot(self, ax=None, bar=False, **plot_kwargs):
         """Plot data points with error bars"""
         if ax is None:
             import matplotlib.pyplot as plt
             ax = plt.gca()
-        
+
         # Convert data to plain numpy arrays to avoid indexing issues
         x = np.asarray(self.x)
         y = np.asarray(self.mean if hasattr(self, 'mean') else self.y)
-        yerr = np.asarray(self.sdev if hasattr(self, 'sdev') else self.err)
-        
-        # Create errorbar plot
-        ax.errorbar(x, y, yerr=yerr, **plot_kwargs)
+        yerr = np.asarray(self.sdev if hasattr(self, 'sdev') else self.err)          
+    
+        # Check if edges attribute exists
+        if hasattr(self, 'edges') and bar:
+            edges = np.asarray(self.edges)
+            width = np.diff(edges)
+            ax.bar(x, y, width=width, yerr=yerr, **plot_kwargs)
+        else:
+            # Create errorbar plot
+            ax.errorbar(x, y, yerr=yerr, **plot_kwargs)
         return ax
 
 # Base array class

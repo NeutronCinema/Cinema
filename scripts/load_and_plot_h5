@@ -10,9 +10,6 @@ import argparse
 import numpy as np
 import glob
 
-# Add Cinema library path
-sys.path.insert(0, '/home/xxcai1/git/cinema/src/python')
-
 try:
     from Cinema.Interface import CinemaXY
     print("Successfully imported CinemaXY class")
