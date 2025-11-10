@@ -11,7 +11,6 @@ import sys
 from typing import Dict, Any, Type, Optional, List, Set, get_type_hints, Union, TypeVar
 
 T = TypeVar('T')
-REQUIRED_CLASSES = [Prompt, Gun]
 
 def str_or_float(value: str):
     import re
@@ -213,29 +212,38 @@ class PromptPyScriptParser(PromptBaseParser):
         self.args,_ = self.parse_known_args()
         self.pyScriptPath = self.args.geo
         self.classes_defined = get_classes_from_filepath(self.pyScriptPath)
-        self._class_sanity_check()
-        self.add_groups_from_classes()
+        self._preprocess_parse()
 
-    def _class_sanity_check(self, req_cls = REQUIRED_CLASSES, ):
-        for cls in req_cls:
-            num_found = 0
-            for name, obj in self.classes_defined.items():
-                if cls in obj.mro():
-                    num_found += 1
-            if num_found == 0:
-                raise ValueError(f"Class '{cls.__name__}' is NOT defined")
-            if num_found > 1:
-                raise ValueError(f"Class '{cls.__name__}' is duplicated in {num_found} classes")
+    def _preprocess_parse(self):
+        sim = self._preprocess_check(Prompt, duplication_allowed=False)
+        self._construct_argument_groups(sim[0], self.classes_defined[sim[0]])
+        
+        guns = self._preprocess_check(Gun, duplication_allowed=True)
+        self.add_argument('--gun', action='store', type=str, default=None,
+                            dest='gun', help=f'gun class name. Available: {guns}')
+        self.args,_ = self.parse_known_args()
+        if not self.args.gun:
+            raise ValueError("Gun class is NOT specified. Please use '--gun' to specify a gun class.")
+        if self.args.gun not in guns:
+            raise ValueError(f"Gun class '{self.args.gun}' is NOT defined. Available: {guns}")
+        self._construct_argument_groups(self.args.gun, self.classes_defined[self.args.gun])
 
-    def add_groups_from_classes(self):
-        for clsname, clsobj in self.classes_defined.items():
-            group = self.add_argument_group(f"{clsname}")
-            self.add_arguments_to_group(group, clsobj)
+    def _preprocess_check(self, req_cls , duplication_allowed=False):
+        num_found = 0
+        available_classes = []
+        for name, obj in self.classes_defined.items():
+            if req_cls in obj.mro():
+                num_found += 1
+                available_classes.append(name)
+        if num_found == 0:
+            raise ValueError(f"Class '{req_cls.__name__}' is NOT defined")
+        if not duplication_allowed and num_found > 1:
+            raise ValueError(f"Class '{req_cls.__name__}' is duplicated in {num_found} classes")
+        return available_classes
 
-    def add_arguments_to_group(self, group, cls: Type):
-        params_info = analyze_class_constructor(cls)
-        # print(f"Simulation parameters number in total: {len(params_info)}")
-        # print()
+    def _construct_argument_groups(self, clsname, clsobj):
+        group = self.add_argument_group(f"{clsname}")
+        params_info = analyze_class_constructor(clsobj)
         for param_name, info in params_info.items():
             arg_name = f"--{param_name}"
             arg_kwargs = {
@@ -297,7 +305,7 @@ class PromptPyScriptParser(PromptBaseParser):
     def simulate(self):
         args = self.parse_args()
         sim = self.instantiate(Prompt)
-        gun = self.instantiate(Gun)
+        gun = self.instantiate(self.classes_defined[self.args.gun])
 
         if not sim.l.worldExist:
             raise ValueError("World not made.")
