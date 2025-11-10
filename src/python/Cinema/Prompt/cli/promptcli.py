@@ -118,6 +118,7 @@ def parser_factory():
         if len(sys.argv) <= 1:
             raise ValueError("Not enough arguments!")
         elif args.geo == '':
+            parser = PromptBaseParser()
             raise ValueError("Prompt simulation can not run without a geometry file!")
         elif args.geo.endswith('.py'):
             parser = PromptPyScriptParser(add_help = False, parents = [parser])
