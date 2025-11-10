@@ -108,33 +108,28 @@ def build_argument_help(info: Dict[str, Any]) -> str:
     return " | ".join(help_parts)
 
 def parser_factory():
-    entry_parser = argparse.ArgumentParser(add_help=False)
-    entry_parser.add_argument('-g', '--geo', action='store', type=str, default='',
-                        dest='geo', help='Input geometry file. Support `.gdml` and `.py` file.' \
-                        'Run `prompt -g yourScript.py -h` to parse python script arguments.')
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('-g', '--geo', action='store', type=str, default='',
+                        dest='geo', help='Input geometry file. Support `.gdml` and `.py` file.' )
 
-    args, unknown = entry_parser.parse_known_args()
-
-    class PromptParserInputError(ValueError):
-        def __init__(self, *args):
-            super().__init__(*args)
-            parser = PromptBaseParser(add_help = True, parents = [entry_parser])
-            parser.print_help()
+    args, unknown = parser.parse_known_args()
 
     try:
         if len(sys.argv) <= 1:
-            raise PromptParserInputError("\n InputError: Not enough arguments!")
+            raise ValueError("Not enough arguments!")
         elif args.geo == '':
-            raise PromptParserInputError("\n InputError: PROMPT simulation did not run without providing a geometry file!")
+            raise ValueError("Prompt simulation can not run without a geometry file!")
         elif args.geo.endswith('.py'):
-            parser = PromptPyScriptParser(add_help = False, parents = [entry_parser])
+            parser = PromptPyScriptParser(add_help = False, parents = [parser])
         elif args.geo.endswith('.gdml'):
-            parser = PromptGdmlParser(add_help = False, parents = [entry_parser])
+            parser = PromptGdmlParser(add_help = False, parents = [parser])
         else:
-            raise PromptParserInputError("\n InputError: Command line input is NOT correct, simulation not run")
-    except PromptParserInputError as e:
-            print(e)
-            sys.exit(1)
+            raise ValueError("Command line input is NOT correct, simulation not run.")
+    except Exception as e:
+        parser.print_help()
+        print()
+        print(f'PromptCLI Error: {e}')
+        exit(1)
     # add help here so as to parse parameters in `.py` scripts
     # cannot move because it is intended to parse all arguments before print help message
     parser.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS,
@@ -233,7 +228,6 @@ class PromptPyScriptParser(PromptBaseParser):
         self.guns = self._preprocess_check(Gun, duplication_allowed=True)
         self.add_argument('--gun', action='store', type=str, default=None,
                             dest='gun', help=f'gun class name. Available: {self.guns}')
-        self.args,_ = self.parse_known_args()
         for g in self.guns:
                 self._construct_argument_groups(g, self.classes_defined[g])
 
@@ -333,8 +327,8 @@ class PromptPyScriptParser(PromptBaseParser):
             sim.save_all_scorers()
     
 def main():
+    parser = parser_factory()
     try:
-        parser = parser_factory()
         parser.simulate()
     except Exception as e:
         parser.print_help()
