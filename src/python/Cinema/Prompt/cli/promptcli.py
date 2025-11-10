@@ -138,6 +138,14 @@ def parser_factory():
     
     return parser
 
+class RawNoMetavarFormatter(argparse.RawDescriptionHelpFormatter):
+    def _format_action_invocation(self, action):
+        if action.option_strings:
+            return ', '.join(action.option_strings)
+        else:
+            return action.dest
+
+
 class PromptBaseParser(argparse.ArgumentParser):
     def __init__(self, des="", *args, **kwargs):
         description = """
@@ -147,28 +155,32 @@ class PromptBaseParser(argparse.ArgumentParser):
             2. by `.gdml` file.
         If a `.py` file is the way, run `prompt -g <yourScript.py> -h` for available arguments.
         """ + des
-        super().__init__(*args, **kwargs, description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
+        super().__init__(*args, **kwargs, description=description, formatter_class=RawNoMetavarFormatter)
         self.general_arguments = self.set_general_arguments()
 
     def set_visualize_arguments(self):
-        self.add_argument('-v', '--visualize', action='store_true', dest='visualize', help='flag to visualize geometry model')
-        self.add_argument('-Z', '--zscale', action='store', type=float, default=1., dest='zscale',
+        g = self.add_argument_group('Visualization Arguments')
+        g.add_argument('-v', '--visualize', action='store_true', dest='visualize', help='flag to visualize geometry model')
+        g.add_argument('-Z', '--zscale', action='store', type=float, default=1., dest='zscale',
                           help='Set visulization scale factor along Z direction. Must used along with "-v" flag')
+        g.add_argument('-b', '--blacklist',  type=str, nargs='+', dest='blacklist', help='solid mesh blacklist to inform the geometry mesh loader ')
+        g.add_argument('-m', '--mergemesh', action='store_true', dest='mergemesh', help='flag to merge mesh for efficient visualize')
+        g.add_argument('-d', '--dumpmesh', action='store_true', dest='dumpmesh', help='dump mesh into disk')
+        g.add_argument('--nSeg', action='store', type=int, default=30,
+                            dest='nSegments', help='number of verts a volume')
+        self.viz_args_group = g
 
     def set_general_arguments(self):
         #TODO:
         # parser.add_argument('-l', '--geoLayer', action='store', type=float, default=0,
         #                     dest='geoLayer', help='geometry tree layers to be shown')
         self.set_visualize_arguments()
-        self.add_argument('-s', '--seed', action='store', type=int, default=4096,
+        g = self.add_argument_group('Particle Gun Arguments')
+        g.add_argument('-s', '--seed', action='store', type=int, default=4096,
                             dest='seed', help='random seed number')
-        self.add_argument('-n', '--neutronNum', action='store', type=float, default=100,
+        g.add_argument('-n', '--neutronNum', action='store', type=float, default=100,
                             dest='neutronNum', help='neutron number')
-        self.add_argument('-b', '--blacklist',  type=str, nargs='+', dest='blacklist', help='solid mesh blacklist to inform the geometry mesh loader ')
-        self.add_argument('-d', '--dumpmesh', action='store_true', dest='dumpmesh', help='dump mesh into disk')
-        self.add_argument('-m', '--mergemesh', action='store_true', dest='mergemesh', help='flag to merge mesh for efficient visualize')
-        self.add_argument('--nSeg', action='store', type=int, default=30,
-                            dest='nSegments', help='number of verts a volume')
+        self.gun_args_group = g
         return self.parse_known_args()[0]
 
     def simulate(self):
@@ -213,8 +225,8 @@ class PromptPyScriptParser(PromptBaseParser):
     def __init__(self, *args, **kwargs):
         description = """
         Provide a `.py` file to define a simulation, where 2 ingredients are required: 
-        1. A Simulation object. Derived from `PromptMPI` and defines the materials, geometries, and scorers.
-        2. A Gun object. Derived from `Gun` and defines the particles positions, directions, and energies.
+            1. A Simulation object. Derived from `PromptMPI` and defines the materials, geometries, and scorers.
+            2. A Gun object. Derived from `Gun` and defines the particles positions, directions, and energies.
         """
         super().__init__(des = description, *args, **kwargs)
         self.args,_ = self.parse_known_args()
@@ -227,7 +239,7 @@ class PromptPyScriptParser(PromptBaseParser):
         self._construct_argument_groups(self.sim[0], self.classes_defined[self.sim[0]])
         
         self.guns = self._preprocess_check(Gun, duplication_allowed=True)
-        self.add_argument('--gun', action='store', type=str, default=None,
+        self.gun_args_group.add_argument('--gun', action='store', type=str, default=None,
                             dest='gun', help=f'gun class name. Available: {self.guns}')
         for g in self.guns:
             self._construct_argument_groups(g, self.classes_defined[g])
