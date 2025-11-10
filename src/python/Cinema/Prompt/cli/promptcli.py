@@ -234,10 +234,7 @@ class PromptPyScriptParser(PromptBaseParser):
         self.add_argument('--gun', action='store', type=str, default=None,
                             dest='gun', help=f'gun class name. Available: {self.guns}')
         self.args,_ = self.parse_known_args()
-        if self.args.gun:
-            self._construct_argument_groups(self.args.gun, self.classes_defined[self.args.gun])
-        else:
-            for g in self.guns:
+        for g in self.guns:
                 self._construct_argument_groups(g, self.classes_defined[g])
 
     def _preprocess_check(self, req_cls , duplication_allowed=False):
@@ -248,7 +245,7 @@ class PromptPyScriptParser(PromptBaseParser):
                 num_found += 1
                 available_classes.append(name)
         if num_found == 0:
-            raise ValueError(f"Class '{req_cls.__name__}' is NOT defined")
+            raise ValueError(f"No class '{req_cls.__name__}' is defined.")
         if not duplication_allowed and num_found > 1:
             raise ValueError(f"Class '{req_cls.__name__}' is duplicated in {num_found} classes")
         return available_classes
@@ -288,7 +285,7 @@ class PromptPyScriptParser(PromptBaseParser):
 
     def _check_args(self):
         if not self.args.gun:
-            raise ValueError(f"Gun class is NOT specified. Please use '--gun' to specify a gun class. Available: {self.guns}")
+            raise ValueError(f"Gun class is NOT specified. Please use option '--gun' to specify a gun class. Available: {self.guns}")
         if self.args.gun not in self.guns:
             raise ValueError(f"Gun class '{self.args.gun}' is NOT defined. Available: {self.guns}")
         
@@ -336,8 +333,13 @@ class PromptPyScriptParser(PromptBaseParser):
             sim.save_all_scorers()
     
 def main():
-    parser = parser_factory()
-    parser.simulate()
+    try:
+        parser = parser_factory()
+        parser.simulate()
+    except Exception as e:
+        parser.print_help()
+        print()
+        print(f'PromptCLI Error: {e}')
 
 if __name__ == '__main__':
 
