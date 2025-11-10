@@ -345,7 +345,8 @@ bool Prompt::ActiveVolume::proprogateInAVolume(Particle &particle)
     #ifdef DEBUG_PTS
       std::cout << "Exiting volume " << getVolume()->GetName() 
       << " at " << particle.getPosition() 
-      << " with energy " << particle.getEKin() 
+      << " with energy " << particle.getEKin() << ";"
+      << " weight " << particle.getWeight() << ";"
       << std::endl;
       std::cout << " " << std::endl;
     #endif
