@@ -229,7 +229,7 @@ class PromptPyScriptParser(PromptBaseParser):
         self.add_argument('--gun', action='store', type=str, default=None,
                             dest='gun', help=f'gun class name. Available: {self.guns}')
         for g in self.guns:
-                self._construct_argument_groups(g, self.classes_defined[g])
+            self._construct_argument_groups(g, self.classes_defined[g])
 
     def _preprocess_check(self, req_cls , duplication_allowed=False):
         num_found = 0
@@ -277,11 +277,11 @@ class PromptPyScriptParser(PromptBaseParser):
                     group.add_argument(arg_name, **arg_kwargs)
         return group
 
-    def _check_args(self):
-        if not self.args.gun:
+    def _check_args(self, args):
+        if not args.gun:
             raise ValueError(f"Gun class is NOT specified. Please use option '--gun' to specify a gun class. Available: {self.guns}")
-        if self.args.gun not in self.guns:
-            raise ValueError(f"Gun class '{self.args.gun}' is NOT defined. Available: {self.guns}")
+        if args.gun not in self.guns:
+            raise ValueError(f"Gun class '{args.gun}' is NOT defined. Available: {self.guns}")
         
     def instantiate(self, targetBaseClass : Type[T]) -> T:
         parsed_args = self.parse_args()
@@ -313,9 +313,9 @@ class PromptPyScriptParser(PromptBaseParser):
 
     def simulate(self):
         args = self.parse_args()
-        self._check_args()
+        self._check_args(args)
         sim = self.instantiate(Prompt)
-        gun = self.instantiate(self.classes_defined[self.args.gun])
+        gun = self.instantiate(self.classes_defined[args.gun])
 
         if not sim.l.worldExist:
             raise ValueError("World not made.")
@@ -334,6 +334,9 @@ def main():
         parser.print_help()
         print()
         print(f'PromptCLI Error: {e}')
+        # import traceback
+        # traceback.print_exc()
+        # exit(1)
 
 if __name__ == '__main__':
 
