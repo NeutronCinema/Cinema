@@ -1,4 +1,3 @@
-
 ################################################################################
 ##                                                                            ##
 ##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
@@ -19,8 +18,65 @@
 ##                                                                            ##
 ################################################################################
 from .solid import Box
-
 from .configstr import ConfigString
+from enum import Enum, auto
+
+# Particle tracing status enumeration
+class ParticleTracingState(Enum):
+    """Particle tracing status enumeration"""
+    SURFACE = auto()
+    ENTRY = auto()
+    PROPAGATE_PRE = auto()
+    PROPAGATE_POST = auto()
+    EXIT = auto()
+    PEA_PRE = auto()
+    PEA_POST = auto()
+    ABSORB = auto()
+    
+    @property
+    def value_num(self):
+        """Return the corresponding numerical representation"""
+        mapping = {
+            ParticleTracingState.SURFACE: 0,
+            ParticleTracingState.ENTRY: 1,
+            ParticleTracingState.PROPAGATE_PRE: 2,
+            ParticleTracingState.PROPAGATE_POST: 3,
+            ParticleTracingState.EXIT: 4,
+            ParticleTracingState.PEA_PRE: 5,
+            ParticleTracingState.PEA_POST: 6,
+            ParticleTracingState.ABSORB: 7
+        }
+        return mapping[self]
+    
+    @classmethod
+    def from_string(cls, state_str):
+        """Create enum instance from string"""
+        mapping = {
+            'SURFACE': cls.SURFACE,
+            'ENTRY': cls.ENTRY,
+            'PROPAGATE_PRE': cls.PROPAGATE_PRE,
+            'PROPAGATE_POST': cls.PROPAGATE_POST,
+            'EXIT': cls.EXIT,
+            'PEA_PRE': cls.PEA_PRE,
+            'PEA_POST': cls.PEA_POST,
+            'ABSORB': cls.ABSORB
+        }
+        return mapping.get(state_str.upper(), cls.ENTRY)
+
+    def to_string(self):
+        """Convert enum instance to string representation"""
+        mapping = {
+            ParticleTracingState.SURFACE: 'SURFACE',
+            ParticleTracingState.ENTRY: 'ENTRY',
+            ParticleTracingState.PROPAGATE_PRE: 'PROPAGATE_PRE',
+            ParticleTracingState.PROPAGATE_POST: 'PROPAGATE_POST',
+            ParticleTracingState.EXIT: 'EXIT',
+            ParticleTracingState.PEA_PRE: 'PEA_PRE',
+            ParticleTracingState.PEA_POST: 'PEA_POST',
+            ParticleTracingState.ABSORB: 'ABSORB'
+        }
+        return mapping[self]
+
 
 class Scorer(ConfigString):
     pass
@@ -89,7 +145,12 @@ class ScorerHelperV1:
         self.min = min
         self.max = max
         self.numbin = numbin
-        self.ptstate = ptstate
+        if isinstance(ptstate, ParticleTracingState):
+            self.ptstate = ptstate.to_string()
+        elif isinstance(ptstate, str):
+            self.ptstate = ptstate
+        else:
+            raise TypeError(f"ptstate must be a string or ParticleTracingState enum, got {type(ptstate)}")
 
     def __realinit(self):
         self.score.cfg_name = self.name
@@ -160,15 +221,95 @@ _pt_addMultiScatter2D = importFunc('pt_addMultiScatter2D', None, [type_voidp, ty
 
 _pt_KillerMCPL_new = importFunc('pt_KillerMCPL_new', type_voidp, [type_cstr, type_uint, type_int, type_bool])
 class ScorerHelper:
-    def __init__(self, name, min, max, numbin, pdg = 2112, ptstate = 'ENTRY', groupID=0) -> None:
+    def __init__(self, name, min, max, numbin, pdg = 2112, ptstate=None, groupID=0) -> None:
         self.name = name
         self.min = min
         self.max = max
         self.numbin = numbin
         self.pdg = pdg
-        self.ptstate = ptstate
+        if isinstance(ptstate, ParticleTracingState):
+            self.ptstate = ptstate.to_string()
+        elif isinstance(ptstate, str):
+            self.ptstate = ptstate
+        else:
+            raise TypeError(f"ptstate must be a string or ParticleTracingState enum, got {type(ptstate)}")
         self.groupID = groupID
         self.linear = True
+
+    """
+    ScorerHelper Class Documentation
+    
+    Base class for particle tracing scorers in the Cinema framework. Provides common configuration
+    and validation logic for various types of particle detectors and scoring mechanisms.
+    
+    Constructor Parameters:
+        name (str): Unique identifier for the scorer instance
+        min (float): Minimum value of the scoring range
+        max (float): Maximum value of the scoring range
+        numbin (int): Number of bins to divide the scoring range into
+        pdg (int, optional): Particle Data Group code, defaults to 2112 (neutron)
+        ptstate (str or ParticleTracingState, optional): Particle tracing state, defaults to None
+        groupID (int, optional): Group identifier for organizing multiple scorers, defaults to 0
+    
+    Important Behavior Notes:
+    
+    ptstate Parameter Validation:
+        - Default Value: ptstate=None - This means derived classes MUST explicitly provide a valid value
+        - Type Checking: The constructor performs strict type validation:
+            * If ptstate is a ParticleTracingState enum, it calls to_string() to convert to string
+            * If ptstate is a string, it uses it directly
+            * If ptstate is any other type (including None), it raises a TypeError
+        - Derived Class Requirement: Since the default is None, all derived classes must:
+            * Pass a valid ptstate value in their super().__init__() call
+            * Ensure the value is either a string or ParticleTracingState enum
+    
+    ParticleTracingState Enum Values:
+        SURFACE (0): Surface interaction
+        ENTRY (1): Volume entry
+        PROPAGATE_PRE (2): Pre-propagation
+        PROPAGATE_POST (3): Post-propagation
+        EXIT (4): Volume exit
+        PEA_PRE (5): Pre-point of equal arrival
+        PEA_POST (6): Post-point of equal arrival
+        ABSORB (7): Absorption
+    
+    Instance Attributes:
+        name: Scorer identifier
+        min: Minimum scoring range
+        max: Maximum scoring range
+        numbin: Number of bins
+        pdg: Particle type code
+        ptstate: Particle tracing state (always stored as string)
+        groupID: Group identifier
+        linear: Flag indicating linear binning (vs logarithmic), defaults to True
+    
+    Example Usage:
+        # Valid usage in derived classes
+        class MyScorer(ScorerHelper):
+            def __init__(self, name, min, max, numbin):
+                # Must provide ptstate explicitly - using enum
+                super().__init__(name, min, max, numbin, ptstate=ParticleTracingState.ENTRY)
+        
+        # Or using string directly
+        class MyScorer2(ScorerHelper):
+            def __init__(self, name, min, max, numbin):
+                super().__init__(name, min, max, numbin, ptstate="ENTRY")
+        
+        # Invalid usage (will raise TypeError)
+        class BadScorer(ScorerHelper):
+            def __init__(self, name, min, max, numbin):
+                # Missing ptstate - will fail validation
+                super().__init__(name, min, max, numbin)  # TypeError!
+    
+    Error Handling:
+        The constructor will raise a TypeError with a descriptive message if:
+            - ptstate is None (not provided)
+            - ptstate is not a string or ParticleTracingState enum
+            - The type cannot be converted to a valid string representation
+    
+    This design ensures type safety and forces derived classes to be explicit about the particle
+    tracing state they intend to use.
+    """
 
     def __realinit(self):
         self.score.cfg_name = self.name
@@ -502,4 +643,3 @@ class MCPLOutHelper(MultiScatMixin1D):
                                         )
         vol.addScorer(self, cobj)
         self.cobj = cobj
-
