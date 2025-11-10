@@ -143,8 +143,15 @@ def parser_factory():
     return parser
 
 class PromptBaseParser(argparse.ArgumentParser):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, des="", *args, **kwargs):
+        description = """
+        Particle tracing simulation via Prompt.
+        There are 2 ways to input simulation configurations:
+            1. by `.py` file.
+            2. by `.gdml` file.
+        If a `.py` file is the way, run `prompt -g <yourScript.py> -h` for available arguments.
+        """ + des
+        super().__init__(*args, **kwargs, description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
         self.general_arguments = self.set_general_arguments()
 
     def set_visualize_arguments(self):
@@ -208,25 +215,30 @@ class PromptGdmlParser(PromptBaseParser):
 
 class PromptPyScriptParser(PromptBaseParser):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        description = """
+        Provide a `.py` file to define a simulation, where 2 ingredients are required: 
+        1. A Simulation object. Derived from `PromptMPI` and defines the materials, geometries, and scorers.
+        2. A Gun object. Derived from `Gun` and defines the particles positions, directions, and energies.
+        """
+        super().__init__(des = description, *args, **kwargs)
         self.args,_ = self.parse_known_args()
         self.pyScriptPath = self.args.geo
         self.classes_defined = get_classes_from_filepath(self.pyScriptPath)
         self._preprocess_parse()
 
     def _preprocess_parse(self):
-        sim = self._preprocess_check(Prompt, duplication_allowed=False)
-        self._construct_argument_groups(sim[0], self.classes_defined[sim[0]])
+        self.sim = self._preprocess_check(Prompt, duplication_allowed=False)
+        self._construct_argument_groups(self.sim[0], self.classes_defined[self.sim[0]])
         
-        guns = self._preprocess_check(Gun, duplication_allowed=True)
+        self.guns = self._preprocess_check(Gun, duplication_allowed=True)
         self.add_argument('--gun', action='store', type=str, default=None,
-                            dest='gun', help=f'gun class name. Available: {guns}')
+                            dest='gun', help=f'gun class name. Available: {self.guns}')
         self.args,_ = self.parse_known_args()
-        if not self.args.gun:
-            raise ValueError("Gun class is NOT specified. Please use '--gun' to specify a gun class.")
-        if self.args.gun not in guns:
-            raise ValueError(f"Gun class '{self.args.gun}' is NOT defined. Available: {guns}")
-        self._construct_argument_groups(self.args.gun, self.classes_defined[self.args.gun])
+        if self.args.gun:
+            self._construct_argument_groups(self.args.gun, self.classes_defined[self.args.gun])
+        else:
+            for g in self.guns:
+                self._construct_argument_groups(g, self.classes_defined[g])
 
     def _preprocess_check(self, req_cls , duplication_allowed=False):
         num_found = 0
@@ -274,6 +286,12 @@ class PromptPyScriptParser(PromptBaseParser):
                     group.add_argument(arg_name, **arg_kwargs)
         return group
 
+    def _check_args(self):
+        if not self.args.gun:
+            raise ValueError(f"Gun class is NOT specified. Please use '--gun' to specify a gun class. Available: {self.guns}")
+        if self.args.gun not in self.guns:
+            raise ValueError(f"Gun class '{self.args.gun}' is NOT defined. Available: {self.guns}")
+        
     def instantiate(self, targetBaseClass : Type[T]) -> T:
         parsed_args = self.parse_args()
 
@@ -304,6 +322,7 @@ class PromptPyScriptParser(PromptBaseParser):
 
     def simulate(self):
         args = self.parse_args()
+        self._check_args()
         sim = self.instantiate(Prompt)
         gun = self.instantiate(self.classes_defined[self.args.gun])
 
