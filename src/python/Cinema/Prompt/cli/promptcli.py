@@ -149,11 +149,12 @@ class RawNoMetavarFormatter(argparse.RawDescriptionHelpFormatter):
 class PromptBaseParser(argparse.ArgumentParser):
     def __init__(self, des="", *args, **kwargs):
         description = """
-        Particle tracing simulation via Prompt.
-        There are 2 ways to input simulation configurations:
-            1. by `.py` file.
-            2. by `.gdml` file.
-        If a `.py` file is the way, run `prompt -g <yourScript.py> -h` for available arguments.
+        Particle transport and ray-tracing simulation by Prompt.
+        There are 2 ways to run simulation configurations:
+            1. via a `.gdml` file, which is the only supported xml input format in version 1, as introduced in http://doi.org/10.1016/j.cpc.2023.109004.
+            2. via a `.py` file, a newly added method for defining simulations through Python scripts that offers greater flexibility and more functionalities.
+        Please refer to the paper for the method to run a `.gdml` file.  
+        In either case, run `prompt -g <yourScript.py or .gdml> -h` for available arguments.
         """ + des
         super().__init__(*args, **kwargs, description=description, formatter_class=RawNoMetavarFormatter)
         self.general_arguments = self.set_general_arguments()
@@ -224,9 +225,10 @@ class PromptGdmlParser(PromptBaseParser):
 class PromptPyScriptParser(PromptBaseParser):
     def __init__(self, *args, **kwargs):
         description = """
-        Provide a `.py` file to define a simulation, where 2 ingredients are required: 
-            1. A Simulation object. Derived from `PromptMPI` and defines the materials, geometries, and scorers.
-            2. A Gun object. Derived from `Gun` and defines the particles positions, directions, and energies.
+        Two derived classes are required in the Python script: 
+            1. One and only one simulation class. Derived from either `PromptMPI` or `Prompt` and defines the materials, geometries, and scorers.
+            2. One or multiple Gun classes derived from `Gun` and samples the initial particles positions, directions, and energies.
+        An ideal instrument with an almost 4pi detector configuration and monitors can be found in `example/instrument.py`.
         """
         super().__init__(des = description, *args, **kwargs)
         self.args,_ = self.parse_known_args()
