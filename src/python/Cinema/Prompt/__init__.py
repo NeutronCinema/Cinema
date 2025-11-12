@@ -212,8 +212,12 @@ class Optimiser:
 class Prompt:
     def __init__(self, seed : int = 4096, isSubmodel = False) -> None:
         self.l = Launcher()
-        self.seed = seed
+        self._seed = seed
         self.isSubmodel = isSubmodel
+
+    @property
+    def seed(self):
+        return self._seed
 
     @property
     def scorer(self):

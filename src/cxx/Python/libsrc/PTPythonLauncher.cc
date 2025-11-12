@@ -36,7 +36,7 @@ void* pt_Launcher_getInstance()
 
 void pt_Launcher_setSeed(void* obj, uint64_t seed)
 {
-  std::cout << "set seed\n";
+  std::cout << "set random seed: " << seed << std::endl;
   static_cast<pt::Launcher *>(obj)->setSeed(seed);
 }
 
