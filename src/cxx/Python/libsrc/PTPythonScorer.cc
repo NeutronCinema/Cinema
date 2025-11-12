@@ -124,7 +124,7 @@ void pt_addMultiScatter2D(void* scatter, void* scorer, int scatNumReq=-1)
 }
 
 
-void* pt_KillerMCPL_new(const char* name, unsigned pdg, int groupid, bool kill)
+void* pt_KillerMCPL_new(const char* name, unsigned pdg, int groupid, bool kill, bool compress)
 {
-  return static_cast<void *>(new pt::KillerMCPL(name, pdg, groupid, kill));
+  return static_cast<void *>(new pt::KillerMCPL(name, pdg, groupid, kill, compress));
 }

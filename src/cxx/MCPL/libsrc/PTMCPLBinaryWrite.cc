@@ -25,8 +25,8 @@
 #include "PTMCPLBinaryWrite.hh"
 
 
-Prompt::MCPLBinaryWrite::MCPLBinaryWrite(const std::string &fn, bool enable_double,  bool enable_extra3double, bool enable_extraUnsigned)
-:MCPLBinary(fn), m_fileCreated(true), m_headerClosed(false) 
+Prompt::MCPLBinaryWrite::MCPLBinaryWrite(const std::string &fn, bool enable_double,  bool enable_extra3double, bool enable_extraUnsigned, bool compress)
+:MCPLBinary(fn), m_fileCreated(true), m_headerClosed(false), m_compress(compress) 
 { 
    m_using_double = enable_double;
    m_with_extra3double = enable_extra3double;
@@ -49,8 +49,12 @@ void Prompt::MCPLBinaryWrite::init()
 Prompt::MCPLBinaryWrite::~MCPLBinaryWrite()
 {
     if(!m_fileCreated)
-      // mcpl_close_outfile(m_file);
-      mcpl_closeandgzip_outfile(m_file); // fixme: should provide option to gzip
+    {
+      if(m_compress)
+        mcpl_closeandgzip_outfile(m_file);
+      else
+        mcpl_close_outfile(m_file);
+    }
 }
 
 void Prompt::MCPLBinaryWrite::addHeaderComment(const std::string &comment)
