@@ -77,7 +77,7 @@ namespace Prompt {
   class MCPLBinaryWrite : public MCPLBinary {
   public:
     MCPLBinaryWrite(const std::string &fn, bool enable_double=false, bool enable_extra3double=false, 
-                bool enable_extraUnsigned=false, bool compress=true);
+                bool enable_extraUnsigned=true, bool compress=true);
     virtual ~MCPLBinaryWrite();
 
     // Header
