@@ -24,7 +24,7 @@
 Prompt::KillerMCPL::KillerMCPL(const std::string &name, unsigned int pdg, int groupid, bool kill, bool compress)
 :Scorer1D("KillerMCPL_"+name, Scorer::ScorerType::ENTRY, std::make_unique<Hist1D>("KillerMCPL_"+name, 0, 100, 101, true)),
 m_writer(new MCPLBinaryWrite(name+".mcpl", false, false, false, compress)),
-m_kill(kill), m_compress(compress)
+m_kill(kill)
 {
 }
 

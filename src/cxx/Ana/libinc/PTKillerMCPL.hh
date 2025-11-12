@@ -34,7 +34,7 @@ namespace Prompt {
     virtual void score(Particle &particle) override;
   private:
     MCPLBinaryWrite *m_writer;
-    bool m_kill, m_compress;
+    bool m_kill;
   };
   
 }
