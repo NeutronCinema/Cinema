@@ -193,7 +193,7 @@ class VolFluenceHelperV1(ScorerHelperV1):
         if linear:
             self.score.cfg_linear = 'yes'
         else: 
-            self.score.cfg_linear = 'no'
+self.score.cfg_linear = 'no'
         self._ScorerHelperV1__realinit()
 
 
@@ -212,7 +212,6 @@ _pt_ScorerMultiScat_new = importFunc('pt_ScorerMultiScat_new', type_voidp, [type
 _pt_ScorerDirectSqw_new = importFunc('pt_ScorerDirectSqw_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, 
                                                                             type_dbl, type_dbl, type_uint,
                                                                             type_uint, type_int, type_dbl, type_dbl,
-                                                                            type_dbl, type_dbl, type_dbl,
                                                                             type_dbl, type_dbl, type_dbl, type_int, type_bool])
 _pt_ScorerPSD_new = importFunc('pt_ScorerPSD_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint,
                                                                 type_dbl, type_dbl, type_uint,
@@ -452,8 +451,61 @@ class VolFluenceHelper(ScorerHelper, MultiScatMixin1D):
         self.cobj = cobj
 
 class DirectSqHelper(ScorerHelper, MultiScatMixin1D):
+    """
+    Helper class for calculating direct scattering structure factors S(Q) in neutron scattering experiments.
+    
+    This scorer computes the momentum transfer (Q) distribution for particles interacting with
+    a sample, providing the direct scattering structure factor S(Q) which characterizes
+    the spatial correlations in the sample material.
+    
+    Inherits from:
+        ScorerHelper: Base class for particle scoring functionality
+        MultiScatMixin1D: Mixin for 1D multiple scattering analysis
+    """
     def __init__(self, name, qmin, qmax, numbin, distanceMS, pdg=2112, 
                  refDir=[0,0,1], samplePos=[0,0,0], ptstate='ENTRY', method=0, linear=False, groupID=0):
+        """
+        Initialize a DirectSqHelper instance for direct scattering structure factor calculation.
+        
+        Parameters:
+        -----------
+        name : str
+            Unique identifier for this scorer instance
+        qmin : float
+            Minimum momentum transfer Q value (Å⁻¹) for the histogram binning
+        qmax : float
+            Maximum momentum transfer Q value (Å⁻¹) for the histogram binning
+        numbin : int
+            Number of bins for Q-value histogram
+        distanceMS : float
+            Distance from moderator to sample (mm) - critical for flight path calculations
+        pdg : int, optional
+            Particle Data Group code for particle type (default: 2112 for neutron)
+        refDir : list, optional
+            Reference direction vector [x,y,z] for incident beam direction (default: [0,0,1])
+        samplePos : list, optional
+            Sample position coordinates [x,y,z] in the simulation geometry (default: [0,0,0])
+        ptstate : str, optional
+            Particle tracing state when scoring occurs. Options: 'ENTRY', 'EXIT', 'PROPAGATE_POST', etc.
+            (default: 'ENTRY')
+        method : int, optional
+            Calculation method for momentum transfer:
+                0 = Dynamic Energy Transfer Method (uses actual particle energy transfer)
+                1 = Static Approximation Method (assumes zero energy transfer)
+            (default: 0)
+        linear : bool, optional
+            If True, use linear binning; if False, use logarithmic binning (default: False)
+        groupID : int, optional
+            Group identifier for organizing multiple scorers (default: 0)
+        
+        Notes:
+        ------
+        - The momentum transfer Q is calculated using the neutron scattering angle and energy transfer
+        - Method 0 provides more accurate results for inelastic scattering processes
+        - Method 1 is faster but less accurate, suitable for elastic scattering approximations
+        - The structure factor S(Q) is proportional to the Fourier transform of the pair correlation function
+        - Distance parameters use millimeters (mm) for consistency with typical neutron scattering setups
+        """
         super().__init__(name, qmin, qmax, numbin, pdg, ptstate, groupID)
         self.distanceMS = distanceMS
         self.refDir = refDir
@@ -563,10 +615,70 @@ class PSDHelper(ScorerHelper2D, MultiScatMixin2D):
         self.cobj = cobj
 
 class DirectSqwHelper(ScorerHelper2D, MultiScatMixin2D):
+    """
+    Helper class for calculating dynamic scattering structure factors S(Q,ω) in neutron scattering experiments.
+    
+    This scorer computes the 2D distribution of momentum transfer (Q) versus energy transfer (ω),
+    providing the dynamic structure factor S(Q,ω) which characterizes both spatial and temporal
+    correlations in the sample material.
+    
+    Inherits from:
+        ScorerHelper2D: Base class for 2D particle scoring functionality
+        MultiScatMixin2D: Mixin for 2D multiple scattering analysis
+    """
     def __init__(self, name, mod_smp_dist, mean_ekin, mean_incident_dir=np.array([0,0,1]), sample_position=np.array([0,0,0]),
                  qmin = 1e-1, qmax = 10, num_qbin = 50, 
                  ekinmin=-0.1 , ekinmax=0.1,  num_ebin = 30,
                  pdg = 2112, groupID  = 0, logx=False, ptstate = 'ENTRY') -> None:
+        """
+        Initialize a DirectSqwHelper instance for dynamic scattering structure factor calculation.
+        
+        Parameters:
+        -----------
+        name : str
+            Unique identifier for this scorer instance
+        mod_smp_dist : float
+            Distance from moderator to sample (mm) - critical for flight path calculations
+        mean_ekin : float
+            Mean kinetic energy of incident neutrons (eV) - defines the incident energy spectrum
+        mean_incident_dir : array-like, optional
+            Mean incident direction vector [x,y,z] for the neutron beam (default: [0,0,1])
+        sample_position : array-like, optional
+            Sample position coordinates [x,y,z] in the simulation geometry (default: [0,0,0])
+        qmin : float, optional
+            Minimum momentum transfer Q value (Å⁻¹) for the Q-axis histogram binning (default: 0.1)
+        qmax : float, optional
+            Maximum momentum transfer Q value (Å⁻¹) for the Q-axis histogram binning (default: 10)
+        num_qbin : int, optional
+            Number of bins for Q-value histogram (default: 50)
+        ekinmin : float, optional
+            Minimum energy transfer value (eV) for the ω-axis histogram binning (default: -0.1)
+        ekinmax : float, optional
+            Maximum energy transfer value (eV) for the ω-axis histogram binning (default: 0.1)
+        num_ebin : int, optional
+            Number of bins for energy transfer histogram (default: 30)
+        pdg : int, optional
+            Particle Data Group code for particle type (default: 2112 for neutron)
+        groupID : int, optional
+            Group identifier for organizing multiple scorers (default: 0)
+        logx : bool, optional
+            If True, use logarithmic binning for Q-axis; if False, use linear binning (default: False)
+        ptstate : str, optional
+            Particle tracing state when scoring occurs. Options: 'ENTRY', 'EXIT', 'PROPAGATE_POST', etc.
+            (default: 'ENTRY')
+        
+        Notes:
+        ------
+        - The dynamic structure factor S(Q,ω) provides information about both spatial correlations (via Q)
+          and temporal correlations (via ω) in the sample material
+        - Energy transfer ω = E_final - E_initial, where positive values indicate energy gain
+          (neutron gains energy from sample) and negative values indicate energy loss
+        - This is particularly useful for studying inelastic scattering processes, phonons,
+          and other dynamic phenomena in materials
+        - The 2D histogram provides a comprehensive view of scattering dynamics across
+          different momentum and energy transfer regimes
+        - Distance parameters use millimeters (mm) for consistency with typical neutron scattering setups
+        """
         super().__init__(name, qmin, qmax, num_qbin, ekinmin, ekinmax, num_ebin, pdg, ptstate, groupID)
         self.mod_smp_dist = mod_smp_dist
         self.mean_ekin = mean_ekin
