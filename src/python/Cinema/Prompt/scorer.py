@@ -462,7 +462,7 @@ class DirectSqHelper(ScorerHelper, MultiScatMixin1D):
         ScorerHelper: Base class for particle scoring functionality
         MultiScatMixin1D: Mixin for 1D multiple scattering analysis
     """
-    def __init__(self, name, qmin, qmax, numbin, distanceMS, pdg=2112, 
+    def __init__(self, name, qmin, qmax, numbin, mod_smp_dist, pdg=2112, 
                  refDir=[0,0,1], samplePos=[0,0,0], ptstate='ENTRY', method=0, linear=False, groupID=0):
         """
         Initialize a DirectSqHelper instance for direct scattering structure factor calculation.
@@ -507,7 +507,7 @@ class DirectSqHelper(ScorerHelper, MultiScatMixin1D):
         - Distance parameters use millimeters (mm) for consistency with typical neutron scattering setups
         """
         super().__init__(name, qmin, qmax, numbin, pdg, ptstate, groupID)
-        self.distanceMS = distanceMS
+        self.distanceMS = mod_smp_dist
         self.refDir = refDir
         self.samplePos = samplePos
         self.method = method

@@ -73,7 +73,7 @@ class MySim(PromptMPI):
         helpersqw.make(detector)
 
         helperSq = DirectSqHelper('sq', qmin=2e-3, qmax=0.1,
-                                  numbin=50, distanceMS=mod_sam_dist, 
+                                  numbin=50, mod_smp_dist=mod_sam_dist, 
                                   linear=False)
         helperSq.make(detector)
         # self.kill = MCPLOutHelper('part_gen', 2112)
