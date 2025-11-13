@@ -145,6 +145,16 @@ const char* pt_HistBase_getName(void* obj)
   return static_cast<pt::Hist1D *>(obj)->getName().c_str();
 }
 
+const char* pt_HistBase_getNote(void* obj)
+{
+  return static_cast<pt::HistBase *>(obj)->getNote().c_str();
+}
+
+void pt_HistBase_addNote(void* obj, const char* note)
+{
+  static_cast<pt::HistBase *>(obj)->addNote(note);
+}
+
 
 void* pt_Hist1D_new(double xmin, double xmax, unsigned nbins, bool linear)
 {

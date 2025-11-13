@@ -74,6 +74,8 @@ void pt_HistBase_getww_2dalias(void *obj, double *data);
 unsigned pt_HistBase_dimension(void* obj);
 const char* pt_HistBase_getName(void* obj);
 
+const char* pt_HistBase_getNote(void* obj);
+void pt_HistBase_addNote(void* obj, const char* note);
 
 // Prompt::Hist1D
 void* pt_Hist1D_new(double xmin, double xmax, unsigned nbins, bool linear);

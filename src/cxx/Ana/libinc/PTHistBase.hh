@@ -55,6 +55,17 @@ namespace Prompt {
     double getUnderflow() const {return m_underflow;};
     size_t getDataSize() const {return m_nbins;};
 
+    void addNote(const std::string &note) {
+      if(m_note!="")
+      {
+        m_note += ";";
+        m_note += note;
+      }
+      else
+        m_note = note;
+    }
+    const std::string& getNote() const {return m_note;}
+
     double getAccWeight() const {
       double sum(0);
       for(const auto v: m_data)
@@ -83,7 +94,7 @@ namespace Prompt {
 
   protected:
 
-    std::string m_name;
+    std::string m_name, m_note;
     mutable std::mutex m_hist_mutex;
     std::vector<double> m_data, m_hit, m_ww;
     double m_xmin;

@@ -74,12 +74,21 @@ _pt_HistBase_setWeight = importFunc('pt_HistBase_setWeight', None, [type_voidp, 
 _pt_HistBase_setHit = importFunc('pt_HistBase_setHit', None, [type_voidp, type_npdbl1d, type_sizet])
 _pt_HistBase_setWW  = importFunc('pt_HistBase_setWW', None, [type_voidp, type_npdbl1d, type_sizet])
 
+_pt_HistBase_getNote = importFunc('pt_HistBase_getNote', type_cstr, [type_voidp])
+_pt_HistBase_addNote = importFunc('pt_HistBase_addNote', None, [type_voidp, type_cstr])
+
+
+
 class HistBase():
     def __init__(self, cobj) -> None:
         self.cobj = cobj
 
     def merge(self, anotherhist):
+        if self.getNote() != anotherhist.getNote():
+            raise RuntimeError(f'histogram {self.getName()} note {self.note} != {anotherhist.note}')
+        
         _pt_HistBase_merge(self.cobj, anotherhist.cobj)
+        
 
     def setWeight(self, w: np.ndarray):
         if w.size != self.getDataSize():
@@ -151,6 +160,12 @@ class HistBase():
     def getName(self):
         return _pt_HistBase_getName(self.cobj).decode('utf-8')
     
+    def addNote(self, note : str):
+        _pt_HistBase_addNote(self.cobj, note.encode('utf-8'))
+
+    def getNote(self):
+        return _pt_HistBase_getNote(self.cobj).decode('utf-8')
+    
 
     
 class Hist1D(HistBase):
@@ -196,7 +211,7 @@ class Hist1D(HistBase):
         if weight is None:
             weight = np.ones(x.size)
         if(x.size !=weight.size):
-            raise RunTimeError('fillnamy different size')
+            raise RuntimeError('fillnamy different size')
         
         _pt_Hist1D_fill_many(self.cobj, x.size, np.ascontiguousarray(x), np.ascontiguousarray(weight) )
 
@@ -240,6 +255,8 @@ class Hist1D(HistBase):
         f0.create_dataset("weight", data=self.getWeight(), compression="gzip")
         f0.create_dataset("hit", data=self.getHit(), compression="gzip")
         f0.create_dataset("sdev", data=self.getSdev(), compression="gzip")
+        f0.create_dataset("note", data=self.note)
+        f0.create_dataset("type", data=self.getName().split('_')[0])
         f0.close()
     
     def toArrayXY(self):
@@ -320,7 +337,7 @@ class Hist2D(HistBase):
         if weight is None:
             weight = np.ones(x.size)
         if x.size !=weight.size and x.size !=y.size:
-            raise RunTimeError('fillnamy different size')
+            raise RuntimeError('fillnamy different size')
         _pt_Hist2D_fill_many(self.cobj, x.size, x, y, weight )
 
     def plot(self, show=False, title=None, log=True, logx=False, dynrange=1e-3):
@@ -371,6 +388,8 @@ class Hist2D(HistBase):
         f0.create_dataset("weight", data=self.getWeight(), compression="gzip")
         f0.create_dataset("hit", data=self.getHit(), compression="gzip")
         f0.create_dataset("sdev", data=self.getSdev(), compression="gzip")
+        f0.create_dataset("note", data=self.note)
+        f0.create_dataset("type", data=self.getName().split('_')[0])
         f0.close()
 
     def merge(self, hist2):

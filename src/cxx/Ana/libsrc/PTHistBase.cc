@@ -26,7 +26,7 @@
 
 
 Prompt::HistBase::HistBase(const std::string &name, unsigned nbin)
-:m_name(name), m_data(nbin,0.), m_hit(nbin,0.),  m_ww(nbin,0.), m_xmin(0), m_xmax(0),
+:m_name(name), m_data(nbin,0.), m_note(), m_hit(nbin,0.),  m_ww(nbin,0.), m_xmin(0), m_xmax(0),
  m_sumW(0), m_underflow(0), m_overflow(0),m_nbins(0)
 {
   auto seed = Singleton<SingletonPTRand>::getInstance().getSeed();

@@ -17,8 +17,10 @@
 ##  limitations under the License.                                            ##
 ##                                                                            ##
 ################################################################################
-from .solid import Box
+from .solid import Box # why box here alone??? X.
 from .configstr import ConfigString
+from .launcher import Launcher
+
 from enum import Enum, auto
 
 # Particle tracing status enumeration
@@ -318,6 +320,10 @@ class ScorerHelper:
         self.score.cfg_numbin = self.numbin
         self.score.cfg_ptstate = self.ptstate
 
+    def getHistogram(self):
+        launcher = Launcher()
+        return launcher.getHist(self.name)
+    
     @property
     def ptsNum(self):
         """Enum of particle tracing state.
