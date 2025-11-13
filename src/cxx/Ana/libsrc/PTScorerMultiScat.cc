@@ -21,12 +21,15 @@
 #include "PTScorerMultiScat.hh"
 
 Prompt::ScorerMultiScat::ScorerMultiScat(const std::string &name, double xmin, double xmax, unsigned nxbins, 
-                                        unsigned int pdg, bool linear, int groupid)
-:ScorerWithoutMixin("ScorerMultiScat_"+ name, Scorer::ScorerType::PROPAGATE_POST, std::make_unique<Hist1D>("ScorerMultiScat_"+ name, xmin, xmax, nxbins, linear), pdg, groupid), 
+                                        unsigned int pdg, Scorer::ScorerType stype, bool linear, int groupid)
+:ScorerWithoutMixin("ScorerMultiScat_"+ name, stype, std::make_unique<Hist1D>("ScorerMultiScat_"+ name, xmin, xmax, nxbins, linear), pdg, groupid), 
 m_lasteventid(0), 
 m_p_counter(0), 
 m_p_weight(0)
-{}
+{
+  if(stype!=Scorer::ScorerType::PROPAGATE_POST)
+    PROMPT_THROW(BadInput, "ScorerType must be PROPAGATE_POST for ScorerMultiScat");
+}
 
 Prompt::ScorerMultiScat::~ScorerMultiScat() 
 {}

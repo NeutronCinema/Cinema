@@ -374,7 +374,7 @@ class MultiScatMixin2D():
 # Counter 
 class MultiScatCounter(ScorerHelper):
     def __init__(self, name="ScatterCounter") -> None:
-        super().__init__(name, min=-3., max=10, numbin=10, pdg=2112, ptstate='ENTRY', groupID=0)
+        super().__init__(name, min=-3., max=10, numbin=13, pdg=2112, ptstate = 'PROPAGATE_POST', groupID=0)
 
     def make(self, vol):
         cobj = _pt_ScorerMultiScat_new(self.name.encode('utf-8'), 
@@ -382,6 +382,7 @@ class MultiScatCounter(ScorerHelper):
                                         self.max,
                                         self.numbin,
                                         self.pdg,
+                                        self.ptsNum,
                                         self.groupID)
         vol.addScorer(self, cobj)
         self.cobj = cobj

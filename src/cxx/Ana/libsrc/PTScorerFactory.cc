@@ -511,7 +511,7 @@ Prompt::Scorer* Prompt::ScorerFactory::createScorer(const std::string &cfgstr, d
         PROMPT_THROW2(BadInput, "Scorer type MultiScat is missing or with extra config parameters" << ", " << cfg.size() << " are given, but there is " <<   parCount <<" known parameters"  );
       }
 
-      auto multiscat = new ScorerMultiScat(name, minNumber-0.5, maxNumber+0.5, numBin, const_neutron_pgd, linear);
+      auto multiscat = new ScorerMultiScat(name, minNumber-0.5, maxNumber+0.5, numBin, const_neutron_pgd, Scorer::ScorerType::PROPAGATE_POST, linear);
       m_multiScatcorers.insert({name, multiscat});
       return multiscat;
     }

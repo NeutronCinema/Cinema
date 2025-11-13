@@ -28,7 +28,9 @@ namespace Prompt {
   class ScorerMultiScat : public ScorerWithoutMixin {
   public:
     ScorerMultiScat(const std::string &name, double xmin, double xmax, unsigned nxbins, 
-                    unsigned int pdg, bool linear=true,
+                    unsigned int pdg, 
+                    ScorerType stype=Scorer::ScorerType::PROPAGATE_POST,
+                    bool linear=true,
                     int groupid=0);
     virtual ~ScorerMultiScat();
     virtual void score(Particle &particle) override;
