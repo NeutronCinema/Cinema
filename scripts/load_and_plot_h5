@@ -21,6 +21,8 @@ except ImportError as e:
     print(f"Failed to import CinemaXY class: {e}")
     sys.exit(1)
 
+COM_SEPARATOR = [',', ':', '|', '\t', '&', '#', '@', '~', '!', '$', '%', '^', '(', ')', '[', ']', '{', '}', '<', '>', '/', '\\']
+
 def load_single_h5_file(h5_filepath):
     """
     Load a single HDF5 file and return CinemaXY object with statistics
@@ -37,7 +39,7 @@ def load_single_h5_file(h5_filepath):
             print(f"Error: File {h5_filepath} does not exist")
             return None, None
         
-        print(f"Loading HDF5 file: {h5_filepath}")
+        print(f"\nLoading HDF5 file: {h5_filepath}")
         
         # Use the from_hdf5 method you implemented
         cinema_data = CinemaXY.from_hdf5(h5_filepath)
@@ -53,6 +55,78 @@ def load_single_h5_file(h5_filepath):
         
     except Exception as e:
         print(f"Error processing HDF5 file {h5_filepath}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None, None
+
+def parse_filestring(file_config_string):
+    """
+    Parse MCPL file string with format: filename;x=aa;bmin=bb;bmax=cc;bnum=dd
+    
+    Args:
+        file_config_string (str): String in format "filename;x=aa;bmin=bb;bmax=cc;bnum=dd"
+        
+    Returns:
+        dict: Dictionary with keys: 'filename', 'xpara', 'binmin', 'binmax', 'binnum'
+    """
+    if not isinstance(file_config_string, str):
+        raise TypeError("Must be a string")
+    
+    # Split by semicolon to separate filename from parameters
+    parts = file_config_string.split(';')
+    filename = parts[0].strip()
+    if filename.endswith('.h5'):
+        raise ValueError(f"ERROR: .h5 files with ; mechanism is not implemented. Got: {file_config_string}")
+
+    wrong_format_bools = ['=' not in item for item in parts[1:]]
+    if any(wrong_format_bools):
+        raise ValueError(f"ERROR: format must be in 'key=value'. Got: {parts[1:]}")
+    para_dict = {}
+    para_dict['filename'] = filename
+
+    # Parse parameters from the remaining parts
+    para_dict.update(dict(item.split('=') for item in parts[1:]))
+    
+    return para_dict
+
+def load_single_mcpl_file(mcplfilepath, **kwargs):
+    """
+    Load a single MCPL file and create a CinemaXY object.
+    
+    Args:
+        mcplfilepath (str): Path to the MCPL file
+        **kwargs: Additional parameters for CinemaXY.from_mcpl:
+            - xpara (str): X parameter, default "time"
+            - binmin (float): Minimum bin value
+            - binmax (float): Maximum bin value  
+            - binnum (int): Number of bins
+            - binscale (float): Scale factor for bins, default 1.
+    
+    Returns:
+        tuple: (CinemaXY object, file_basename) or (None, None) on error
+    """
+    try:
+        # Check if file exists
+        if not os.path.exists(mcplfilepath):
+            print(f"Error: File {mcplfilepath} does not exist")
+            return None, None
+        
+        print(f"\nLoading MCPL file: {mcplfilepath}")
+        
+        # Use the from_mcpl method you implemented
+        cinema_data = CinemaXY.from_mcpl(mcplfilepath, **kwargs)
+        
+        file_basename = os.path.basename(mcplfilepath)  
+        print(f"Successfully created CinemaXY object for {file_basename}")
+        print(f"Data shape: {cinema_data.shape}")
+        print(f"X coordinate range: [{cinema_data.x.min():.3f}, {cinema_data.x.max():.3f}]")
+        print(f"Weight range: [{cinema_data.mean.min():.3f}, {cinema_data.mean.max():.3f}]")
+        print(f"Standard deviation range: [{cinema_data.sdev.min():.3f}, {cinema_data.sdev.max():.3f}]")
+        
+        return cinema_data, file_basename
+        
+    except Exception as e:
+        print(f"Error processing MCPL file {mcplfilepath}: {e}")
         import traceback
         traceback.print_exc()
         return None, None
@@ -182,54 +256,68 @@ def create_individual_plot(cinema_data, file_basename, output_image=None):
 
 def parse_file_groups(file_patterns):
     """
-    Parse file patterns and group files using "+" notation
+    Parse file patterns and return a list of dictionaries with file information.
     
     Args:
-        file_patterns (list): List of file paths, glob patterns, or combined groups
+        file_patterns (list): List of file paths, glob patterns, or combined groups using "+" notation
         
     Returns:
-        list: List of file groups, where each group is a list of file paths
+        list: List of dictionaries, each containing:
+            - 'filepath': Full file path
+            - 'xpara': X parameter (default "time")
+            - 'binmin': Minimum bin value (optional)
+            - 'binmax': Maximum bin value (optional)
+            - 'binnum': Number of bins (optional)
     """
-    file_groups = []
     
+    def _individual_parse(ind_pattern):
+        file_dicts = []
+        parsed_dict = {}
+        # Parse mcpl file string to extract filename and parameters
+        if ';' in ind_pattern:
+            parsed_dict = parse_filestring(ind_pattern)
+        else:
+            parsed_dict.update({'filename': ind_pattern})
+        
+        filename = parsed_dict.get('filename', None)
+
+        if '*' in filename or '?' in filename:
+            # This is a glob pattern
+            matched_files = glob.glob(filename)
+            for filepath in matched_files:
+                parsed_dict.update({'filename': filepath})
+                status_pdict = parsed_dict.copy() # avoid modify original dict
+                file_dicts.append(status_pdict)
+        else:
+            # This is a specific file path
+            if os.path.exists(filename):
+                status_pdict = parsed_dict.copy() # avoid modify original dict
+                file_dicts.append(status_pdict)
+            else:
+                print(f"Warning: File '{filename}' does not exist")
+        return file_dicts
+    
+    groups = []
+    dictgroup = []
     for pattern in file_patterns:
-        # Check if this pattern contains "+" notation for combined plots
+        pattern = pattern.strip()
+        if any([sep in pattern for sep in COM_SEPARATOR]):
+            raise ValueError(f"ERROR: wrong separator in pattern: {pattern}, use ';' instead'")
+
+        # Check if this is a combined pattern (contains "+")
         if '+' in pattern:
-            # Split by "+" to get individual file patterns
-            individual_patterns = [p.strip() for p in pattern.split('+')]
-            group_files = []
+            # Split by "+" to get individual patterns
+            individual_patterns = pattern.split('+')
             
             for individual_pattern in individual_patterns:
-                if '*' in individual_pattern or '?' in individual_pattern:
-                    # This is a glob pattern
-                    matched_files = glob.glob(individual_pattern)
-                    group_files.extend(matched_files)
-                else:
-                    # This is a specific file path
-                    if os.path.exists(individual_pattern):
-                        group_files.append(individual_pattern)
-                    else:
-                        print(f"Warning: File {individual_pattern} does not exist")
-            
-            if group_files:
-                file_groups.append(group_files)
-                print(f"Created combined plot group with {len(group_files)} files: {pattern}")
+                dictgroup.extend(_individual_parse(individual_pattern))
+            print(f"\nProcessed combined pattern: {pattern}")
         else:
             # This is a single file or glob pattern
-            if '*' in pattern or '?' in pattern:
-                # This is a glob pattern
-                matched_files = glob.glob(pattern)
-                for filepath in matched_files:
-                    file_groups.append([filepath])
-                print(f"Found {len(matched_files)} files matching pattern: {pattern}")
-            else:
-                # This is a specific file path
-                if os.path.exists(pattern):
-                    file_groups.append([pattern])
-                else:
-                    print(f"Warning: File {pattern} does not exist")
-    
-    return file_groups
+            # Parse mcpl file string to extract filename and parameters
+            dictgroup = _individual_parse(pattern)
+        groups.append(dictgroup)
+    return groups
 
 def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
     """
@@ -243,32 +331,52 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
     Returns:
         bool: True if all files processed successfully, False otherwise
     """
-    # Parse file groups
-    file_groups = parse_file_groups(file_patterns)
-    
-    if not file_groups:
-        print("No valid HDF5 files found to process")
+    # Parse file groups - now returns a list of dictionaries
+    file_dicts = parse_file_groups(file_patterns)
+    print(file_dicts)
+    if not file_dicts:
+        print("No valid HDF5 or MCPL files found to process")
         return False
     
-    print(f"\nProcessing {len(file_groups)} file groups:")
-    for i, group in enumerate(file_groups, 1):
+    print(f"\nProcessing {len(file_dicts)} file groups:")
+    for i, group in enumerate(file_dicts, 1):
         if len(group) == 1:
-            print(f"  {i}. Individual: {group[0]}")
+            file_dict = group[0]
+            print(f"  {i}. Individual: {file_dict.get('filename', None)} (x={file_dict.get('x', None)}, bmin={file_dict.get('bmin', None)}, bmax={file_dict.get('bmax', None)}, bnum={file_dict.get('bnum', None)})")
         else:
-            print(f"  {i}. Combined: {' + '.join([os.path.basename(f) for f in group])}")
+            file_list = [f['filename'] for f in group]
+            print(f"  {i}. Combined: {' + '.join([os.path.basename(f) for f in file_list])}")
     
     success_count = 0
     all_figures = []  # Store all figures to show at once
     
-    for i, file_group in enumerate(file_groups, 1):
-        print(f"\n--- Processing group {i}/{len(file_groups)} ---")
+    for i, file_group in enumerate(file_dicts, 1):
+        print(f"\n--- Processing group {i}/{len(file_dicts)} ---")
         
         # Load all files in this group
         cinema_data_list = []
         file_basenames = []
         
-        for filepath in file_group:
-            cinema_data, file_basename = load_single_h5_file(filepath)
+        for file_dict in file_group:
+            filepath = file_dict.get('filename', None)
+            xpara = file_dict.get('x', None)
+            binmin = file_dict.get('bmin', None)
+            binmax = file_dict.get('bmax', None)
+            binnum = file_dict.get('bnum', None)
+            binscale = file_dict.get('bscale', 1.)
+            
+            if filepath.endswith('.h5'):
+                cinema_data, file_basename = load_single_h5_file(filepath)
+            elif filepath.endswith('.mcpl') or filepath.endswith('.mcpl.gz'):
+                # Pass parameters to load_single_mcpl_file
+                cinema_data, file_basename = load_single_mcpl_file(
+                    filepath, 
+                    xpara=xpara,
+                    binmin=binmin,
+                    binmax=binmax,
+                    binnum=binnum,
+                    binscale=binscale
+                )
             
             if cinema_data is None:
                 print(f"Failed to process file: {filepath}")
@@ -304,7 +412,7 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
             
         else:
             # Combined plot
-            combined_name = "+".join([os.path.basename(f).replace('.h5', '') for f in file_group])
+            combined_name = "+".join([os.path.basename(f.get('filename', None)).replace('.h5', '') for f in file_group])
             output_path = None
             if output_dir and os.path.isdir(output_dir):
                 output_path = os.path.join(output_dir, f"combined_{combined_name}.png")
@@ -329,8 +437,8 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
     if show_plot and all_figures:
         plt.show()  # Now plt is defined in global scope
     
-    print(f"\nSuccessfully processed {success_count}/{len(file_groups)} file groups")
-    return success_count == len(file_groups)
+    print(f"\nSuccessfully processed {success_count}/{len(file_dicts)} file groups")
+    return success_count == len(file_dicts)
 
 def main():
     """Main function"""
@@ -343,6 +451,7 @@ Examples:
   python load_and_plot_h5.py *.h5
   python load_and_plot_h5.py monitor1_TOF.h5+monitor2_TOF.h5
   python load_and_plot_h5.py data/*.h5 -o plots/
+  python load_and_plot_h5.py "monitor*_MCPL.mcpl;x=time;bmin=0;bmax=10;bnum=100;bscale=1e-3+"
   python load_and_plot_h5.py --help
         ''',
         formatter_class=argparse.RawDescriptionHelpFormatter
@@ -355,11 +464,15 @@ Examples:
     args = parser.parse_args()
     
     # Run main function
-    success = load_and_plot_files(
-        args.input_files,
-        output_dir=args.output,
-        show_plot=not args.no_show
-    )
+    success = False
+    try:
+        success = load_and_plot_files(
+            args.input_files,
+            output_dir=args.output,
+            show_plot=not args.no_show
+        )
+    except Exception as e:
+        print(f"\nError message: {e}")
     
     if success:
         print("\n✅ Processing completed successfully!")
