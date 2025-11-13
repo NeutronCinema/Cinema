@@ -111,6 +111,7 @@ def parser_factory():
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('-g', '--geo', action='store', type=str, default='',
                         dest='geo', help='Input geometry file. Support `.gdml` and `.py` file.' )
+    parser.add_argument('--debug', action='store_true', dest='debug', help='flag to enable traceback')
 
     args, unknown = parser.parse_known_args()
 
@@ -130,7 +131,10 @@ def parser_factory():
         parser.print_help()
         print()
         print(f'PromptCLI Error: {e}')
-        exit(1)
+        if args.debug:
+            import traceback
+            traceback.print_exc()
+            exit(1)
     # add help here so as to parse parameters in `.py` scripts
     # cannot move because it is intended to parse all arguments before print help message
     parser.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS,
@@ -349,9 +353,10 @@ def main():
         parser.print_help()
         print()
         print(f'PromptCLI Error: {e}')
-        # import traceback
-        # traceback.print_exc()
-        # exit(1)
+        if parser.debug:
+            import traceback
+            traceback.print_exc()
+            exit(1)
 
 if __name__ == '__main__':
 
