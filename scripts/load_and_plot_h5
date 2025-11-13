@@ -10,6 +10,9 @@ import argparse
 import numpy as np
 import glob
 import matplotlib.pyplot as plt  # Add global import
+from Cinema.Interface import plotStyle
+
+plotStyle()
 
 try:
     from Cinema.Interface import CinemaXY
