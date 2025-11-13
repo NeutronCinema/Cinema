@@ -193,7 +193,7 @@ class VolFluenceHelperV1(ScorerHelperV1):
         if linear:
             self.score.cfg_linear = 'yes'
         else: 
-self.score.cfg_linear = 'no'
+            self.score.cfg_linear = 'no'
         self._ScorerHelperV1__realinit()
 
 
@@ -640,7 +640,7 @@ class DirectSqwHelper(ScorerHelper2D, MultiScatMixin2D):
         mod_smp_dist : float
             Distance from moderator to sample (mm) - critical for flight path calculations
         mean_ekin : float
-            Mean kinetic energy of incident neutrons (eV) - defines the incident energy spectrum
+            Mean kinetic energy of incident neutrons (eV) - defines the incident energy 
         mean_incident_dir : array-like, optional
             Mean incident direction vector [x,y,z] for the neutron beam (default: [0,0,1])
         sample_position : array-like, optional
