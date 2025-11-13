@@ -212,7 +212,9 @@ _pt_ScorerMultiScat_new = importFunc('pt_ScorerMultiScat_new', type_voidp, [type
 _pt_ScorerDirectSqw_new = importFunc('pt_ScorerDirectSqw_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, 
                                                                             type_dbl, type_dbl, type_uint,
                                                                             type_uint, type_int, type_dbl, type_dbl,
-                                                                            type_dbl, type_dbl, type_dbl, type_int, type_bool])
+                                                                            type_dbl, type_dbl, type_dbl, 
+                                                                            type_dbl, type_dbl, type_dbl, 
+                                                                            type_int, type_bool])
 _pt_ScorerPSD_new = importFunc('pt_ScorerPSD_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint,
                                                                 type_dbl, type_dbl, type_uint,
                                                                 type_uint, type_int, type_int, type_int, type_bool])
