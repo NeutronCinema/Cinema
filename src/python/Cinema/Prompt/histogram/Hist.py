@@ -85,7 +85,7 @@ class HistBase():
 
     def merge(self, anotherhist):
         if self.getNote() != anotherhist.getNote():
-            raise RuntimeError(f'histogram {self.getName()} note {self.note} != {anotherhist.note}')
+            raise RuntimeError(f'histogram {self.getName()} note {self.getNote()} != {anotherhist.getNote()}')
         
         _pt_HistBase_merge(self.cobj, anotherhist.cobj)
         
@@ -255,7 +255,7 @@ class Hist1D(HistBase):
         f0.create_dataset("weight", data=self.getWeight(), compression="gzip")
         f0.create_dataset("hit", data=self.getHit(), compression="gzip")
         f0.create_dataset("sdev", data=self.getSdev(), compression="gzip")
-        f0.create_dataset("note", data=self.note)
+        f0.create_dataset("note", data=self.getNote())
         f0.create_dataset("type", data=self.getName().split('_')[0])
         f0.close()
     
@@ -388,7 +388,7 @@ class Hist2D(HistBase):
         f0.create_dataset("weight", data=self.getWeight(), compression="gzip")
         f0.create_dataset("hit", data=self.getHit(), compression="gzip")
         f0.create_dataset("sdev", data=self.getSdev(), compression="gzip")
-        f0.create_dataset("note", data=self.note)
+        f0.create_dataset("note", data=self.getNote())
         f0.create_dataset("type", data=self.getName().split('_')[0])
         f0.close()
 
