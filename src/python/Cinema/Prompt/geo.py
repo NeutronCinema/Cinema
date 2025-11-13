@@ -18,6 +18,8 @@
 ##                                                                            ##
 ################################################################################
 
+from typing import Union
+
 from scipy.spatial.transform import Rotation as scipyRot
 from ..Interface import *
 from .Mesh import _pt_Transformation3D_transform
@@ -234,7 +236,7 @@ class Volume:
     def setMaterial(self, cfg : str):
         _pt_ResourceManager_cfgVolPhysics(self.volid, cfg.encode('utf-8')) # set as the universe
 
-    def addScorer(self, scorer : Scorer or str, cppScorer=ctypes.c_voidp()):
+    def addScorer(self, scorer : Union[Scorer, str], cppScorer=ctypes.c_voidp()):
         if isinstance(cppScorer, int):
             self.__class__.scorerDict[scorer.name] = scorer.name
             _pt_ResourceManager_addScorer(self.volid, scorer.name.encode('utf-8'), cppScorer) 
