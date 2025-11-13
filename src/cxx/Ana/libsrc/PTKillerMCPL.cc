@@ -22,7 +22,7 @@
 #include "PTMCPLBinaryWrite.hh"
 
 Prompt::KillerMCPL::KillerMCPL(const std::string &name, unsigned int pdg, int groupid, bool kill, bool compress)
-:Scorer1D("KillerMCPL_"+name, Scorer::ScorerType::ENTRY, std::make_unique<Hist1D>("KillerMCPL_"+name, 0, 100, 101, true)),
+:Scorer1D("KillerMCPL_"+name, Scorer::ScorerType::ENTRY, std::make_unique<Hist1D>("KillerMCPL_"+name, -2.5, 100.5, 103, true)),
 m_writer(new MCPLBinaryWrite(name+".mcpl", false, false, true, compress)),
 m_kill(kill)
 {
@@ -37,8 +37,9 @@ void Prompt::KillerMCPL::score(Prompt::Particle &particle)
 {
   if(!rightScorer(particle))
     return;
-
+   
   m_writer->write(particle);
+  m_hist->fill(m_scatterNumberRequired);
   if(m_kill)
     particle.kill(Particle::KillType::SCORE);
 
