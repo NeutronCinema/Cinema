@@ -1,28 +1,18 @@
 import numpy as np
 from enum import Enum
-from typing import Union, Tuple
+from typing import Union, Tuple, Type, List
+from abc import ABC, abstractmethod
 
 from mcpl import MCPLFile
 from .Prompt.histogram.Hist import Hist1D, Hist2D
+from .convertor import angleCosine2Q, wl2ekin, ekin2wl, ekin2v, v2ekin, MeV2eV, eV2MeV, meV2eV, eV2MeV
 
 
 class ParticleParameter(Enum):
     """
-    Enumeration of available MCPL particle parameters.
-    
-    These parameters correspond to the properties available in MCPL particle blocks:
-    - time: Time of flight (ms)
-    - ekin: Kinetic energy (MeV)
-    - x, y, z: Position coordinates (cm)
-    - ux, uy, uz: Direction cosines
-    - polx, poly, polz: Polarization components
-    - pdgcode: Particle Data Group code
-    - weight: Particle weight
-    - userflags: User-defined flags
-    - position: Combined position vector (x, y, z)
-    - polarisation: Combined polarization vector (polx, poly, polz)
-    - direction: Combined direction vector (ux, uy, uz)
+    Enumeration of available MCPL particle parameters and calculated parameters.
     """
+    # Direct MCPL parameters
     TIME = 'time'
     KINETIC_ENERGY = 'ekin'
     X_POSITION = 'x'
@@ -36,19 +26,24 @@ class ParticleParameter(Enum):
     Z_POLARIZATION = 'polz'
     PDG_CODE = 'pdgcode'
     WEIGHT = 'weight'
-    EVENT_ID = 'userflags' # the userflag is used to store neutron source event ID
+    EVENT_ID = 'userflags'
     POSITION_VECTOR = 'position'
     POLARIZATION_VECTOR = 'polarisation'
     DIRECTION_VECTOR = 'direction'
     
+    # Calculated parameters
+    MOMENTUM_TRANSFER_Q = 'momentum_transfer_q'
+    ENERGY_TRANSFER_OMEGA = 'energy_transfer_omega'
+    SCATTERING_ANGLE = 'scattering_angle'
+    WAVELENGTH = 'wavelength'
+    VELOCITY = 'velocity'
+    
     def get_label(self) -> str:
         """
-        Get appropriate axis label for this particle parameter using correct MCPL units.
-        
-        Returns:
-            str: Formatted axis label with correct units
+        Get appropriate axis label for this particle parameter.
         """
         labels = {
+            # Direct MCPL parameters
             ParticleParameter.TIME: "Time of Flight (ms)",
             ParticleParameter.KINETIC_ENERGY: "Kinetic Energy (MeV)",
             ParticleParameter.X_POSITION: "X Position (cm)",
@@ -65,52 +60,341 @@ class ParticleParameter(Enum):
             ParticleParameter.EVENT_ID: "Event ID",
             ParticleParameter.POSITION_VECTOR: "Position Vector",
             ParticleParameter.POLARIZATION_VECTOR: "Polarization Vector",
-            ParticleParameter.DIRECTION_VECTOR: "Direction Vector"
+            ParticleParameter.DIRECTION_VECTOR: "Direction Vector",
+            
+            # Calculated parameters
+            ParticleParameter.MOMENTUM_TRANSFER_Q: "Momentum Transfer Q (Å⁻¹)",
+            ParticleParameter.ENERGY_TRANSFER_OMEGA: "Energy Transfer ω (eV)",
+            ParticleParameter.SCATTERING_ANGLE: "Scattering Angle (rad)",
+            ParticleParameter.WAVELENGTH: "Wavelength (Å)",
+            ParticleParameter.VELOCITY: "Velocity (mm/s)",
         }
         
         return labels.get(self, self.value.replace('_', ' ').title())
+    
+    def is_calculated(self) -> bool:
+        """
+        Check if this parameter is a calculated parameter (not directly from MCPL).
+        """
+        calculated_params = {
+            ParticleParameter.MOMENTUM_TRANSFER_Q,
+            ParticleParameter.ENERGY_TRANSFER_OMEGA,
+            ParticleParameter.SCATTERING_ANGLE,
+            ParticleParameter.WAVELENGTH,
+            ParticleParameter.VELOCITY
+        }
+        return self in calculated_params
+    
+    def get_required_incident_class(self) -> Type:
+        """
+        Get the required IncidentParameters subclass for this calculated parameter.
+        
+        Returns:
+            Type: The required IncidentParameters subclass type
+            
+        Raises:
+            ValueError: If this is not a calculated parameter
+        """
+        if not self.is_calculated():
+            raise ValueError(f"Parameter {self} is not a calculated parameter")
+        
+        param_to_class = {
+            ParticleParameter.MOMENTUM_TRANSFER_Q: MomentumTransferQParameters,
+            ParticleParameter.ENERGY_TRANSFER_OMEGA: EnergyTransferOmegaParameters,
+            ParticleParameter.SCATTERING_ANGLE: ScatteringAngleParameters,
+            # WAVELENGTH and VELOCITY don't require incident parameters
+            ParticleParameter.WAVELENGTH: None,
+            ParticleParameter.VELOCITY: None
+        }
+        
+        return param_to_class[self]
+
+
+class IncidentParameters(ABC):
+    """
+    Base class for incident parameters required for calculated parameters.
+    
+    This class encapsulates the incident neutron properties needed to calculate
+    derived parameters like Q, ω, etc.
+    """
+    
+    def __init__(self, 
+incident_energy_eV: float = None,
+                 incident_wavelength_A: float = None,
+                 incident_direction: Tuple[float, float, float] = (0.0, 0.0, 1.0),
+                 sample_position: Tuple[float, float, float] = (0.0, 0.0, 0.0)):
+        """
+        Initialize incident parameters.
+        
+        Args:
+            incident_energy_eV: Incident neutron energy in eV
+            incident_wavelength_A: Incident neutron wavelength in Å
+            incident_direction: Incident direction vector (ux, uy, uz) - should be normalized by caller
+            sample_position: Sample position in cm (x, y, z)
+            
+        Raises:
+            ValueError: If both energy and wavelength are provided, or neither is provided
+        """
+        # Validate that exactly one of energy or wavelength is provided
+        if incident_energy_eV is not None and incident_wavelength_A is not None:
+            raise ValueError("Cannot specify both incident_energy_eV and incident_wavelength_A. Choose one.")
+        
+        if incident_energy_eV is None and incident_wavelength_A is None:
+            raise ValueError("Must specify either incident_energy_eV or incident_wavelength_A.")
+        
+        # Calculate energy from wavelength if wavelength is provided
+        if incident_wavelength_A is not None:
+            self.incident_energy_eV = wl2ekin(incident_wavelength_A)
+            self.incident_wavelength_A = float(incident_wavelength_A)
+        else:
+            self.incident_energy_eV = float(incident_energy_eV)
+            self.incident_wavelength_A = ekin2wl(self.incident_energy_eV)
+        
+        # Direction normalization is responsibility of the caller
+        self.incident_direction = tuple(float(x) for x in incident_direction)
+        self.sample_position = tuple(float(x) for x in sample_position)
+# Validate inputs
+        if self.incident_energy_eV <= 0:
+            raise ValueError("Incident energy must be positive")
+        
+        if len(self.incident_direction) != 3:
+            raise ValueError("Incident direction must be a 3-element tuple")
+        
+        if len(self.sample_position) != 3:
+            raise ValueError("Sample position must be a 3-element tuple")
+    
+    @abstractmethod
+    def calc(self, particle_data: dict) -> np.ndarray:
+        """
+        Calculate the parameter values from particle data.
+        
+        Args:
+            particle_data: Dictionary containing particle properties
+                - 'position': (x, y, z) positions in cm
+                - 'direction': (ux, uy, uz) direction cosines
+                - 'ekin': kinetic energy in MeV
+                - 'weight': particle weights
+                
+        Returns:
+            np.ndarray: Calculated parameter values
+        """
+        pass
+    
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}(energy={self.incident_energy_eV:.3f}eV, wavelength={self.incident_wavelength_A:.3f}Å)"
+
+
+class MomentumTransferQParameters(IncidentParameters):
+    """
+    Parameters for calculating momentum transfer Q.
+    
+    Required for: MOMENTUM_TRANSFER_Q
+    """
+    
+    def __init__(self, 
+                 incident_energy_eV: float = None,
+                 incident_wavelength_A: float = None,
+                 incident_direction: Tuple[float, float, float] = (0.0, 0.0, 1.0),
+                 sample_position: Tuple[float, float, float] = (0.0, 0.0, 0.0)):
+        """
+        Initialize Q parameters.
+        
+        Args:
+            incident_energy_eV: Incident neutron energy in eV
+            incident_wavelength_A: Incident neutron wavelength in Å
+            incident_direction: Incident direction vector
+            sample_position: Sample position in cm
+        """
+        super().__init__(incident_energy_eV, incident_wavelength_A, incident_direction, sample_position)
+    
+    def calc(self, particle_data: dict) -> np.ndarray:
+        """
+        Calculate momentum transfer Q values.
+        
+        Q = neutronAngleCosine2Q(angle_cos, enin_eV, enout_eV)
+        where angle_cos is the cosine of scattering angle.
+        """
+        positions = particle_data['position']  # (N, 3) array
+        directions = particle_data['direction']  # (N, 3) array
+        ekin_out_MeV = particle_data['ekin']  # (N,) array
+        
+        # Convert outgoing energy from MeV to eV using safe conversion function
+        ekin_out_eV = MeV2eV(ekin_out_MeV)
+        
+        # Calculate scattering angle cosine
+        # For simplicity, assume scattering from incident direction
+        incident_dir = np.array(self.incident_direction)
+        angle_cos = np.dot(directions, incident_dir)
+        
+        # Calculate Q using the conversion function
+        Q_values = angleCosine2Q(angle_cos, self.incident_energy_eV, ekin_out_eV)
+        
+        return Q_values
+
+
+class EnergyTransferOmegaParameters(IncidentParameters):
+    """
+    Parameters for calculating energy transfer ω.
+    
+    Required for: ENERGY_TRANSFER_OMEGA
+    """
+    
+    def __init__(self, 
+                 incident_energy_eV: float = None,
+                 incident_wavelength_A: float = None):
+        """
+        Initialize energy transfer parameters.
+        
+        Args:
+            incident_energy_eV: Incident neutron energy in eV
+            incident_wavelength_A: Incident neutron wavelength in Å
+        """
+        # Call parent constructor with default values for direction and position
+        super().__init__(incident_energy_eV, incident_wavelength_A, 
+                         incident_direction=(0.0, 0.0, 1.0), 
+                         sample_position=(0.0, 0.0, 0.0))
+    
+    def calc(self, particle_data: dict) -> np.ndarray:
+        """
+        Calculate energy transfer ω values.
+        
+        ω = enin_eV - enout_eV
+        """
+        ekin_out_MeV = particle_data['ekin']  # (N,) array
+        
+        # Convert outgoing energy from MeV to eV using safe conversion function
+        ekin_out_eV = MeV2eV(ekin_out_MeV)
+        
+        # Calculate energy transfer
+        omega_values = self.incident_energy_eV - ekin_out_eV
+        
+        return omega_values
+
+
+class ScatteringAngleParameters(IncidentParameters):
+    """
+    Parameters for calculating scattering angle.
+    
+    Required for: SCATTERING_ANGLE
+    """
+    
+    def calc(self, particle_data: dict) -> np.ndarray:
+        """
+        Calculate scattering angle values.
+        
+        angle = arccos(dot(incident_dir, scattered_dir))
+        """
+        directions = particle_data['direction']  # (N, 3) array
+        
+        # Calculate scattering angle cosine
+        incident_dir = np.array(self.incident_direction)
+        angle_cos = np.sum(directions * incident_dir, axis=1)
+        
+        # Calculate angle in radians
+        angle_values = np.arccos(np.clip(angle_cos, -1.0, 1.0))
+        
+        return angle_values
 
 
 class MCPL_Analyzer_1D(Hist1D):
     """
-    A class for analyzing MCPL files that inherits from Hist1D.
-    
-    This class reads MCPL files and fills specified particle parameters into
-    the histogram for analysis and visualization.
+    Enhanced 1D MCPL analyzer with support for calculated parameters.
     """
     
-    def __init__(self, para : Union [ParticleParameter, str] = ParticleParameter.TIME, 
-                 binmin=0.0, binmax=10.0, binnum=100, linear=True, auto_range_file : str = ''):
+    def __init__(self, para: Union[ParticleParameter, str] = ParticleParameter.TIME, 
+                 incident_params: IncidentParameters = None,
+                 binmin=0.0, binmax=10.0, binnum=100, linear=True, 
+                 auto_range_file: str = ''):
+        """
+        Initialize the 1D analyzer.
         
+        Args:
+            para: Particle parameter to analyze
+            incident_params: Incident parameters for calculated parameters
+            binmin: Minimum bin value
+            binmax: Maximum bin value  
+            binnum: Number of bins
+            linear: Whether bins are linear (True) or logarithmic (False)
+            auto_range_file: File to use for automatic range detection
+            
+        Raises:
+            ValueError: If parameter and incident parameters don't match
+        """
+        # Convert parameter to enum if it's a string
         if isinstance(para, str):
             self.para = ParticleParameter(para)
         elif isinstance(para, ParticleParameter):
             self.para = para
         else:
-            raise ValueError(f"Invalid parameter type: {type(para)}. Must be either a ParticleParameter enum member or a string.")
+            raise ValueError(f"Invalid parameter type: {type(para)}")
         
+        # Validate parameter and incident parameters compatibility
+        self._validate_parameter_compatibility(incident_params)
+        self.incident_params = incident_params
+        
+        # Auto-range detection if specified
         if auto_range_file:
             min_val, max_val = self.getRange(auto_range_file)
             super().__init__(min_val*0.9, max_val*1.1, binnum, linear=linear)
         else:
             super().__init__(binmin, binmax, binnum, linear=linear)
-
-
+    
+    def _validate_parameter_compatibility(self, incident_params: IncidentParameters) -> None:
+        """
+        Validate that the parameter and incident parameters are compatible.
+        
+        Args:
+            incident_params: Incident parameters to validate
+            
+        Raises:
+            ValueError: If parameter and incident parameters don't match
+        """
+        if self.para.is_calculated():
+            # Special case: WAVELENGTH and VELOCITY don't require incident parameters
+            # as they only depend on outgoing energy
+            if self.para in {ParticleParameter.WAVELENGTH, ParticleParameter.VELOCITY}:
+                # These parameters can work without incident parameters
+                # If incident_params is provided, we'll ignore it for these parameters
+                pass
+            else:
+                # For other calculated parameters, incident parameters are required
+                if incident_params is None:
+                    raise ValueError(f"Calculated parameter {self.para} requires incident parameters")
+                
+                required_class = self.para.get_required_incident_class()
+                if not isinstance(incident_params, required_class):
+                    raise ValueError(
+                        f"Parameter {self.para} requires {required_class.__name__}, "
+                        f"but got {type(incident_params).__name__}"
+                    )
+        else:
+            if incident_params is not None:
+                raise ValueError(
+                    f"Direct parameter {self.para} does not require incident parameters"
+                )
+    
     def getRange(self, filename) -> Tuple[float, float]:
+        """
+        Get the range of parameter values in the MCPL file.
+        """
+        if self.para.is_calculated():
+            return self._get_calculated_range(filename)
+        else:
+            return self._get_direct_range(filename)
+    
+    def _get_direct_range(self, filename) -> Tuple[float, float]:
+        """Get range for direct MCPL parameters."""
         file = MCPLFile(filename)
         
-        # Initialize min and max values
         min_val = float('inf')
         max_val = float('-inf')
         has_data = False
         
         for pb in file.particle_blocks:
-            # Get the parameter values for this particle block
             param_values = getattr(pb, self.para.value)
             
             if len(param_values) > 0:
                 has_data = True
-                # Update min and max values
                 min_val = min(min_val, np.min(param_values))
                 max_val = max(max_val, np.max(param_values))
         
@@ -119,187 +403,114 @@ class MCPL_Analyzer_1D(Hist1D):
         
         return min_val, max_val
     
+    def _get_calculated_range(self, filename) -> Tuple[float, float]:
+        """Get range for calculated parameters."""
+        # Calculate values for all particles to determine range
+        values = self._calculate_parameter_values(filename)
+        
+        if len(values) == 0:
+            raise ValueError(f"No particle data found in file: {filename}")
+        
+        return np.min(values), np.max(values)
+    
+    def _calculate_parameter_values(self, filename) -> np.ndarray:
+        """
+        Calculate parameter values for all particles in the file.
+        """
+        file = MCPLFile(filename)
+        
+        all_values = []
+        for pb in file.particle_blocks:
+            if len(pb.ekin) == 0:
+                continue
+            
+            # Prepare particle data for calculation - use existing attributes
+            particle_data = {
+                'position': np.array(pb.position),  
+                'direction': np.array(pb.direction), 
+                'ekin': np.array(pb.ekin),
+                'weight': np.array(pb.weight)
+            }
+            
+            # Calculate parameter values based on parameter type
+            if self.para == ParticleParameter.WAVELENGTH:
+                # Wavelength calculation: convert energy to wavelength
+                ekin_out_eV = MeV2eV(particle_data['ekin'])
+                values = ekin2wl(ekin_out_eV)
+            elif self.para == ParticleParameter.VELOCITY:
+                # Velocity calculation: convert energy to velocity
+                ekin_out_eV = MeV2eV(particle_data['ekin'])
+                values = ekin2v(ekin_out_eV)
+            else:
+                # For other calculated parameters, use incident parameters
+                if self.incident_params is None:
+                    raise ValueError(f"Incident parameters required for {self.para}")
+                values = self.incident_params.calc(particle_data)
+            
+            all_values.extend(values)
+        
+        return np.array(all_values)
+    
     def analyze(self, filename):
+        """
+        Analyze the MCPL file and fill the histogram.
+        """
+        if self.para.is_calculated():
+            self._analyze_calculated(filename)
+        else:
+            self._analyze_direct(filename)
+    
+    def _analyze_direct(self, filename):
+        """Analyze direct MCPL parameters."""
         file = MCPLFile(filename)
         
         for pb in file.particle_blocks:
-            self.fillmany(np.asarray( getattr(pb, self.para.value), dtype=np.float64), np.asarray(pb.weight, dtype=np.float64) )
-    
-    def plot(self, show=False, *args, **kwargs):
-        """
-        Enhanced plot method that automatically sets axis labels based on particle parameters.
-        
-        This method calls the underlying Hist1D.plot() method and adds appropriate
-        axis labels based on the parameter type being analyzed.
-        
-        Args:
-            show (bool): Whether to immediately display the plot
-            *args: Positional arguments passed to the underlying plot method
-            **kwargs: Keyword arguments passed to the underlying plot method
-        """
-        # Get parameter name for axis label using the enum's get_label method
-        x_label = self.para.get_label()
-        
-        # Call the underlying plot method with show=False to prevent immediate display
-        result = super().plot(show=False, *args, **kwargs)
-        
-        # Set axis labels if not already set
-        import matplotlib.pyplot as plt
-        ax = plt.gca()
-        if not ax.get_xlabel():
-            ax.set_xlabel(x_label)
-        if not ax.get_ylabel():
-            ax.set_ylabel("Weight")
-        
-        # Handle display if requested
-        if show:
-            plt.show()
-        
-        return result
-
-
-class MCPL_Analyzer_2D(Hist2D):
-    """
-    A class for analyzing MCPL files that inherits from Hist2D.
-    
-    This class reads MCPL files and fills two specified particle parameters into
-    a 2D histogram for analysis and visualization.
-    """
-    
-    def __init__(self, xpara : Union[ParticleParameter, str] = ParticleParameter.TIME,
-                 ypara : Union[ParticleParameter, str] = ParticleParameter.KINETIC_ENERGY,
-                 xmin=0.0, xmax=10.0, xnum=100,
-                 ymin=0.0, ymax=10.0, ynum=100,
-                 auto_range_file : str = ''):
-        
-        # Convert parameters to enum if they are strings
-        if isinstance(xpara, str):
-            self.xpara = ParticleParameter(xpara)
-        elif isinstance(xpara, ParticleParameter):
-            self.xpara = xpara
-        else:
-            raise ValueError(f"Invalid x parameter type: {type(xpara)}. Must be either a ParticleParameter enum member or a string.")
-        
-        if isinstance(ypara, str):
-            self.ypara = ParticleParameter(ypara)
-        elif isinstance(ypara, ParticleParameter):
-            self.ypara = ypara
-        else:
-            raise ValueError(f"Invalid y parameter type: {type(ypara)}. Must be either a ParticleParameter enum member or a string.")
-        
-        # Auto-range detection if specified
-        if auto_range_file:
-            xmin_val, xmax_val = self.getRange1D(auto_range_file, self.xpara)
-            ymin_val, ymax_val = self.getRange1D(auto_range_file, self.ypara)
-            super().__init__(xmin_val*0.9, xmax_val*1.1, xnum, 
-                            ymin_val*0.9, ymax_val*1.1, ynum)
-        else:
-            super().__init__(xmin, xmax, xnum, ymin, ymax, ynum)
-    
-    def getRange1D(self, filename, para: ParticleParameter) -> Tuple[float, float]:
-        """
-        Get the minimum and maximum values of a specified particle parameter
-        across all particle blocks in the MCPL file.
-        
-        Args:
-            filename (str): Path to the MCPL file to analyze
-            para (ParticleParameter): The parameter to analyze
-            
-        Returns:
-            Tuple[float, float]: (min_value, max_value) of the parameter
-            
-        Raises:
-            FileNotFoundError: If the specified file does not exist
-            ValueError: If no particle data is found in the file
-        """
-        file = MCPLFile(filename)
-        
-        # Initialize min and max values
-        min_val = float('inf')
-        max_val = float('-inf')
-        has_data = False
-        
-        for pb in file.particle_blocks:
-            # Get the parameter values for this particle block
-            param_values = getattr(pb, para.value)
-            
+            param_values = getattr(pb, self.para.value)
             if len(param_values) > 0:
-                has_data = True
-                # Update min and max values
-                min_val = min(min_val, np.min(param_values))
-                max_val = max(max_val, np.max(param_values))
-        
-        if not has_data:
-            raise ValueError(f"No particle data found in file: {filename}")
-        
-        return min_val, max_val
+                self.fillmany(
+                    np.asarray(param_values, dtype=np.float64), 
+                    np.asarray(pb.weight, dtype=np.float64)
+                )
     
-    def getRange2D(self, filename) -> Tuple[Tuple[float, float], Tuple[float, float]]:
-        """
-        Get the 2D range (x and y min/max) of the specified particle parameters.
-        
-        Args:
-            filename (str): Path to the MCPL file to analyze
-            
-        Returns:
-            Tuple[Tuple[float, float], Tuple[float, float]]: 
-                ((x_min, x_max), (y_min, y_max))
-        """
-        x_range = self.getRange1D(filename, self.xpara)
-        y_range = self.getRange1D(filename, self.ypara)
-        return x_range, y_range
-    
-    def analyze(self, filename):
-        """
-        Analyze the MCPL file and fill the 2D histogram with the specified parameters.
-        
-        Args:
-            filename (str): Path to the MCPL file to analyze
-        """
+    def _analyze_calculated(self, filename):
+        """Analyze calculated parameters."""
         file = MCPLFile(filename)
         
         for pb in file.particle_blocks:
-            # Get the parameter values for x and y axes
-            x_values = np.asarray(getattr(pb, self.xpara.value), dtype=np.float64)
-            y_values = np.asarray(getattr(pb, self.ypara.value), dtype=np.float64)
-            weights = np.asarray(pb.weight, dtype=np.float64)
+            if len(pb.ekin) == 0:
+                continue
             
-            # Fill the 2D histogram
-            self.fillmany(x_values, y_values, weights)
-    
-    def plot(self, show=False, *args, **kwargs):
-        """
-        Enhanced plot method that automatically sets axis labels based on particle parameters.
-        
-        This method calls the underlying Hist2D.plot() method and adds appropriate
-        axis labels based on the parameter types being analyzed.
-        
-        Args:
-            show (bool): Whether to immediately display the plot
-            *args: Positional arguments passed to the underlying plot method
-            **kwargs: Keyword arguments passed to the underlying plot method
+            # Prepare particle data for calculation - use existing attributes
+            particle_data = {
+                'position': np.array(pb.position),  
+                'direction': np.array(pb.direction),  
+                'ekin': np.array(pb.ekin),
+                'weight': np.array(pb.weight)
+            }
             
-        Returns:
-            matplotlib.pyplot: The pyplot object for further customization
-        """
-        # Get parameter names for axis labels using the enum's get_label method
-        x_label = self.xpara.get_label()
-        y_label = self.ypara.get_label()
-        
-        # Call the underlying plot method with show=False to prevent immediate display
-        result = super().plot(show=False, *args, **kwargs)
-        
-        # Set axis labels
-        import matplotlib.pyplot as plt
-        fig = plt.gcf()
-        ax = fig.get_axes()[0]  # Get the first axes in the figure
-        
-        # Set axis labels
-        ax.set_xlabel(x_label)
-        ax.set_ylabel(y_label)
-        
-        # Handle display if requested
-        if show:
-            plt.show()
-        
-        return result
+            # Calculate parameter values based on parameter type
+            if self.para == ParticleParameter.WAVELENGTH:
+                # Wavelength calculation: convert energy to wavelength
+                ekin_out_eV = MeV2eV(particle_data['ekin'])
+                values = ekin2wl(ekin_out_eV)
+            elif self.para == ParticleParameter.VELOCITY:
+                # Velocity calculation: convert energy to velocity
+                ekin_out_eV = MeV2eV(particle_data['ekin'])
+                values = ekin2v(ekin_out_eV)
+            else:
+                # For other calculated parameters, use incident parameters
+                if self.incident_params is None:
+                    raise ValueError(f"Incident parameters required for {self.para}")
+                values = self.incident_params.calc(particle_data)
+            
+            # Fill histogram with calculated values
+            if len(values) > 0:
+                self.fillmany(
+                    np.asarray(values, dtype=np.float64), 
+                    np.asarray(particle_data['weight'], dtype=np.float64)
+                )
+
+
+# Keep the existing MCPL_Analyzer_2D class for now (will be updated later)
+class MCPL_Analyzer_2D(Hist2D):
+    pass

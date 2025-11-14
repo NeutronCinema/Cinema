@@ -215,26 +215,47 @@ class Hist1D(HistBase):
         
         _pt_Hist1D_fill_many(self.cobj, x.size, np.ascontiguousarray(x), np.ascontiguousarray(weight) )
 
-    def plot(self, show=False, label=None, title=None, log=False, sigma=1):
+    def plot(self, show=False, label=None, title=None, log=False, sigma=1, ax=None):
         try:
             import matplotlib.pyplot as plt
             from Cinema.Interface import plotStyle
             plotStyle()
+            
             center = self.getCentre()
             w = self.getWeight()
             err = self.getSdev()
-            plt.errorbar(center, w, yerr=err*sigma, fmt='s-', label=f'Weight {w.sum()}' if label is None else f'{label} {w.sum()}')
+            
+            if ax is None:
+                fig, ax = plt.subplots()
+                created_new_figure = True
+            else:
+                created_new_figure = False
+            
+            ax.errorbar(center, w, yerr=err*sigma, fmt='s-', label=f'Weight {w.sum()}' if label is None else f'{label} {w.sum()}')
+            
             if isinstance(log, list):
                 if list[0]:
-                    plt.xscale('log')
+                    ax.set_xscale('log')
                 if list[1]:
-                    plt.yscale('log')
+                    ax.set_yscale('log')
             elif log:
-                plt.yscale('log')
-                plt.xscale('log')
-            plt.title(_pt_HistBase_getName(self.cobj).decode('utf-8') if title is None else title)
+                ax.set_yscale('log')
+                ax.set_xscale('log')
+            
+            ax.set_title(_pt_HistBase_getName(self.cobj).decode('utf-8') if title is None else title)
+            ax.legend(loc=0)
+            ax.grid(True, alpha=0.3)
+            
+            if show:                
+                plt.show()
+            else:
+                if created_new_figure:
+                    return fig
+                else:
+                    return ax
+        except Exception as e:
+            print (e)
 
-            plt.legend(loc=0)
             if show:                
                 plt.show()
             else: 
@@ -340,35 +361,45 @@ class Hist2D(HistBase):
             raise RuntimeError('fillnamy different size')
         _pt_Hist2D_fill_many(self.cobj, x.size, x, y, weight )
 
-    def plot(self, show=False, title=None, log=True, logx=False, dynrange=1e-3):
+    def plot(self, show=False, title=None, log=True, logx=False, dynrange=1e-3, ax=None):
         try:
             import matplotlib.pyplot as plt
             import matplotlib.colors as colors
             from Cinema.Interface import plotStyle
             plotStyle()
-            fig=plt.figure()
-            ax = fig.add_subplot(111)
+            
+            if ax is None:
+                fig = plt.figure()
+                ax = fig.add_subplot(111)
+                created_new_figure = True
+            else:
+                created_new_figure = False
+            
             H = self.getWeight().T
-
             X, Y = np.meshgrid(self.xcenter, self.ycenter)
+            
             if log:
                 pcm = ax.pcolormesh(X, Y, H, cmap=plt.cm.jet, norm=colors.LogNorm(vmin=H.max()*dynrange, vmax=H.max()), shading='auto')
             else:
                 pcm = ax.pcolormesh(X, Y, H, cmap=plt.cm.jet, shading='auto')
-
-            fig.colorbar(pcm, ax=ax)
+            
+            if created_new_figure:
+                fig.colorbar(pcm, ax=ax)
+            
             if logx:
-                plt.xscale('log')
-
-            plt.grid()
-            plt.title((_pt_HistBase_getName(self.cobj).decode('utf-8') if title is None else title) + f', Weight {H.sum()}')
+                ax.set_xscale('log')
+            
+            ax.grid()
+            ax.set_title((_pt_HistBase_getName(self.cobj).decode('utf-8') if title is None else title) + f', Weight {H.sum()}')
 
             if show:
                 plt.show()
             else:
-                return plt
+                if created_new_figure:
+                    return fig
+                else:
+                    return ax
                 
-
         except Exception as e:
             print(e)
 
