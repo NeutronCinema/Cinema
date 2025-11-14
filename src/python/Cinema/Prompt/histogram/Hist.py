@@ -260,7 +260,7 @@ class Hist1D(HistBase):
         f0.close()
     
     def toArrayXY(self):
-        from Cinema.Interface import CinemaXY
+        from Cinema import CinemaXY
         return CinemaXY.from_sdev(self.getWeight(), self.getSdev(), x=self.getCentre(), edges=self.getEdges())
 
 class Hist2D(HistBase):

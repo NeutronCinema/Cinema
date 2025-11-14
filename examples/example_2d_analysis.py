@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from Cinema.Prompt.histogram import Hist2D
-from Cinema.Interface import CinemaXYZ
+from Cinema import CinemaXYZ
 
 def create_test_histogram(N=100000):
     """Create a 2D histogram with gaussian-weighted random data.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from Cinema.Interface import CinemaArray
+from Cinema import CinemaArray
 import numpy as np
 
 RNG = np.random.default_rng(12345)

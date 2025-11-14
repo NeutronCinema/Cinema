@@ -15,7 +15,7 @@ from Cinema.Interface import plotStyle
 plotStyle()
 
 try:
-    from Cinema.Interface import CinemaXY
+    from Cinema import CinemaXY
     print("Successfully imported CinemaXY class")
 except ImportError as e:
     print(f"Failed to import CinemaXY class: {e}")
