@@ -5,7 +5,7 @@ from Cinema.Prompt.geo import Volume, Transformation3D
 from Cinema.Prompt.solid import Box,Tube
 from Cinema.Prompt.scorer import ESpectrumHelper,MultiScatCounter, WlSpectrumHelper, TOFHelper, VolFluenceHelper, PSDHelper, DirectSqwHelper,DirectSqHelper, MCPLOutHelper
 from Cinema.Prompt.gun import PythonGun, SimpleThermalGun, MaxwellianGun
-from Cinema.Prompt.histogram import wl2ekin
+from Cinema.convertor import wl2ekin
 from Cinema.Prompt.physics import Material, Mirror
 
 import matplotlib.pyplot as plt

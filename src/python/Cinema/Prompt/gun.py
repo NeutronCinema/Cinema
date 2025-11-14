@@ -20,7 +20,7 @@
 
 from ..Interface import *
 from .configstr import ConfigString
-from .histogram import wl2ekin
+from Cinema.convertor import wl2ekin
 
 _pt_PythonGun_new = importFunc('pt_PythonGun_new', type_voidp, [type_int])
 _pt_PythonGun_delete = importFunc('pt_PythonGun_delete', None, [type_voidp])

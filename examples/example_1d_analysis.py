@@ -12,7 +12,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from Cinema.Prompt.histogram import Hist1D
-from Cinema.Interface import CinemaArray
+from Cinema import CinemaArray
 
 def create_hist1d(npoints=100000, xbin=50, xmin=0.0, xmax=1.0):
     """Create and fill a 1D histogram with weighted random data."""

@@ -1,7 +1,7 @@
 import numpy as np
 from  Cinema.Prompt.histogram import Hist1D, NumpyHist1D
 import matplotlib.pyplot as plt
-from Cinema.Interface import CinemaArray, CinemaXY
+from Cinema import CinemaArray, CinemaXY
 
 xbin=10
 xmin=0.

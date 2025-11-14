@@ -5,7 +5,7 @@ from Cinema.Prompt.geo import Volume, Transformation3D
 from Cinema.Prompt.solid import Box,Tube, Ellipsoid
 from Cinema.Prompt.scorer import makePSD, ESpectrumHelper, WlSpectrumHelper, TOFHelper
 from Cinema.Prompt.gun import PythonGun
-from Cinema.Prompt.histogram import wl2ekin
+from Cinema.convertor import wl2ekin
 from Cinema.Prompt.physics import Material, Mirror
 from Cinema.Prompt.component import makeTrapezoidGuide
 from Cinema.Prompt.gun import UniModeratorGun

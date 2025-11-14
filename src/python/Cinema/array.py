@@ -7,9 +7,9 @@ except ImportError:
     print("To install using conda, run: conda install -c conda-forge gvar")
 from scipy.interpolate import interp1d  # CinemaXY
 
+from .convertor import *
 
 import numpy as np
-import gvar as gv
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 
