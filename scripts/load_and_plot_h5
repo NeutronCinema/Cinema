@@ -11,6 +11,9 @@ import numpy as np
 import glob
 import matplotlib.pyplot as plt  # Add global import
 from Cinema.Interface import plotStyle
+from Cinema.analysis import ParticleParameter
+from dataclasses import dataclass, fields
+from typing import Optional, Union, Literal
 
 plotStyle()
 
@@ -21,7 +24,88 @@ except ImportError as e:
     print(f"Failed to import CinemaXY class: {e}")
     sys.exit(1)
 
-COM_SEPARATOR = [',', ':', '|', '\t', '&', '#', '@', '~', '!', '$', '%', '^', '(', ')', '[', ']', '{', '}', '<', '>', '/', '\\']
+
+@dataclass
+class MCPLDataCfgStr:
+    """
+    Config String Parser for loading MCPL data
+    
+    This class parses configuration strings in the format:
+    "filename.mcpl;x=time;bmin=0;bmax=10;bnum=50"
+    
+    """
+
+    filename: str
+    x: Optional[str] = "time"
+    bmin: Optional[Union[Literal["auto"], float]] = "auto"  
+    bmax: Optional[Union[Literal["auto"], float]] = "auto"
+    bnum: Optional[int] = 100
+
+    @classmethod
+    def from_filestring(cls, file_config_string):
+        """Create MCPLDataCfgStr from string format"""
+        if not isinstance(file_config_string, str):
+            raise TypeError("Must be a string")
+
+        # Split by separator
+        parts = file_config_string.split(";")
+        parts.remove('')
+
+        filename = parts[0]
+
+        if filename.endswith('.h5'):
+            raise ValueError(f"ERROR: .h5 files with ; mechanism is not implemented. Got: {file_config_string}")
+        
+        para_dict = {}
+        para_dict['filename'] = filename
+
+        # Parse parameters from the remaining parts
+        for item in parts[1:]:
+            if '=' not in item:
+                raise ValueError(f"ERROR: wrong format in parameter: {item}, use 'key=value' instead")
+            else:
+                key, value = item.split('=', 1)
+                para_dict[key.strip()] = value.strip()
+        
+        # Check for unknown parameters
+        valid_fields = {field.name for field in fields(cls)}
+        for param_name in para_dict.keys():
+            if param_name not in valid_fields:
+                valid_fields.remove('filename') # filename is not a parameter
+                valid_params_str = ", ".join(valid_fields)
+                raise ValueError(
+                    f"ERROR: unknown parameter: '{param_name}'\n"
+                    f"Valid parameters are: {valid_params_str}"
+                )
+        
+        return cls(**para_dict)
+
+    def __post_init__(self):
+
+        def _validate(v, typeconvert : type, exceptions=[], exception_only = False):
+            errmsg = f"ERROR: invalid value: '{v}'\nValid values are: '{', '.join(exceptions)}' or {type.__name__}"
+            if v in exceptions:
+                return v
+            if exception_only:
+                raise ValueError(errmsg)
+            
+            try:
+                v = typeconvert(v)
+                return v
+            except ValueError:
+                raise ValueError(errmsg)
+            
+        self.x = _validate(self.x, str, 
+                           [v.value for k,v in ParticleParameter.__members__.items()], 
+                           exception_only=True)
+        self.bmin = _validate(self.bmin, float, ["auto"])
+        self.bmax = _validate(self.bmax, float, ["auto"])
+        self.bnum = _validate(self.bnum, int, [])
+
+    def to_dict(self):
+        """Return dictionary representation of the config"""
+        return self.__dict__
+    
 
 def load_single_h5_file(h5_filepath):
     """
@@ -59,52 +143,9 @@ def load_single_h5_file(h5_filepath):
         traceback.print_exc()
         return None, None
 
-def parse_filestring(file_config_string):
-    """
-    Parse MCPL file string with format: filename;x=aa;bmin=bb;bmax=cc;bnum=dd
-    
-    Args:
-        file_config_string (str): String in format "filename;x=aa;bmin=bb;bmax=cc;bnum=dd"
-        
-    Returns:
-        dict: Dictionary with keys: 'filename', 'xpara', 'binmin', 'binmax', 'binnum'
-    """
-    if not isinstance(file_config_string, str):
-        raise TypeError("Must be a string")
-    
-    # Split by semicolon to separate filename from parameters
-    parts = file_config_string.split(';')
-    filename = parts[0].strip()
-    if filename.endswith('.h5'):
-        raise ValueError(f"ERROR: .h5 files with ; mechanism is not implemented. Got: {file_config_string}")
-
-    wrong_format_bools = ['=' not in item for item in parts[1:]]
-    if any(wrong_format_bools):
-        raise ValueError(f"ERROR: format must be in 'key=value'. Got: {parts[1:]}")
-    para_dict = {}
-    para_dict['filename'] = filename
-
-    # Parse parameters from the remaining parts
-    para_dict.update(dict(item.split('=') for item in parts[1:]))
-    
-    return para_dict
 
 def load_single_mcpl_file(mcplfilepath, **kwargs):
-    """
-    Load a single MCPL file and create a CinemaXY object.
-    
-    Args:
-        mcplfilepath (str): Path to the MCPL file
-        **kwargs: Additional parameters for CinemaXY.from_mcpl:
-            - xpara (str): X parameter, default "time"
-            - binmin (float): Minimum bin value
-            - binmax (float): Maximum bin value  
-            - binnum (int): Number of bins
-            - binscale (float): Scale factor for bins, default 1.
-    
-    Returns:
-        tuple: (CinemaXY object, file_basename) or (None, None) on error
-    """
+
     try:
         # Check if file exists
         if not os.path.exists(mcplfilepath):
@@ -116,12 +157,13 @@ def load_single_mcpl_file(mcplfilepath, **kwargs):
         # Use the from_mcpl method you implemented
         cinema_data = CinemaXY.from_mcpl(mcplfilepath, **kwargs)
         
-        file_basename = os.path.basename(mcplfilepath)  
+        file_basename = os.path.basename(mcplfilepath)
         print(f"Successfully created CinemaXY object for {file_basename}")
         print(f"Data shape: {cinema_data.shape}")
         print(f"X coordinate range: [{cinema_data.x.min():.3f}, {cinema_data.x.max():.3f}]")
         print(f"Weight range: [{cinema_data.mean.min():.3f}, {cinema_data.mean.max():.3f}]")
         print(f"Standard deviation range: [{cinema_data.sdev.min():.3f}, {cinema_data.sdev.max():.3f}]")
+        print(f"Parameters: {kwargs}")
         
         return cinema_data, file_basename
         
@@ -275,10 +317,9 @@ def parse_file_groups(file_patterns):
         parsed_dict = {}
         # Parse mcpl file string to extract filename and parameters
         if ';' in ind_pattern:
-            parsed_dict = parse_filestring(ind_pattern)
+            parsed_dict = MCPLDataCfgStr.from_filestring(ind_pattern).to_dict()
         else:
-            parsed_dict.update({'filename': ind_pattern})
-        
+            parsed_dict.update({'filename': ind_pattern}) # update on parsed_dict will act on the class behind: MCPLDataConfig
         filename = parsed_dict.get('filename', None)
 
         if '*' in filename or '?' in filename:
@@ -301,8 +342,8 @@ def parse_file_groups(file_patterns):
     dictgroup = []
     for pattern in file_patterns:
         pattern = pattern.strip()
-        if any([sep in pattern for sep in COM_SEPARATOR]):
-            raise ValueError(f"ERROR: wrong separator in pattern: {pattern}, use ';' instead'")
+        # if any([sep in pattern for sep in COM_SEPARATOR]):
+        #     raise ValueError(f"ERROR: wrong separator in pattern: {pattern}, use ';' instead'")
 
         # Check if this is a combined pattern (contains "+")
         if '+' in pattern:
@@ -333,7 +374,6 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
     """
     # Parse file groups - now returns a list of dictionaries
     file_dicts = parse_file_groups(file_patterns)
-    print(file_dicts)
     if not file_dicts:
         print("No valid HDF5 or MCPL files found to process")
         return False
@@ -342,7 +382,7 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
     for i, group in enumerate(file_dicts, 1):
         if len(group) == 1:
             file_dict = group[0]
-            print(f"  {i}. Individual: {file_dict.get('filename', None)} (x={file_dict.get('x', None)}, bmin={file_dict.get('bmin', None)}, bmax={file_dict.get('bmax', None)}, bnum={file_dict.get('bnum', None)})")
+            print(f"  {i}. Individual: {file_dict.get('filename', None)} ")
         else:
             file_list = [f['filename'] for f in group]
             print(f"  {i}. Combined: {' + '.join([os.path.basename(f) for f in file_list])}")
@@ -359,24 +399,13 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
         
         for file_dict in file_group:
             filepath = file_dict.get('filename', None)
-            xpara = file_dict.get('x', None)
-            binmin = file_dict.get('bmin', None)
-            binmax = file_dict.get('bmax', None)
-            binnum = file_dict.get('bnum', None)
-            binscale = file_dict.get('bscale', 1.)
+            kwargs = {k: v for k, v in file_dict.items() if k not in ['filename']}
             
             if filepath.endswith('.h5'):
                 cinema_data, file_basename = load_single_h5_file(filepath)
             elif filepath.endswith('.mcpl') or filepath.endswith('.mcpl.gz'):
                 # Pass parameters to load_single_mcpl_file
-                cinema_data, file_basename = load_single_mcpl_file(
-                    filepath, 
-                    xpara=xpara,
-                    binmin=binmin,
-                    binmax=binmax,
-                    binnum=binnum,
-                    binscale=binscale
-                )
+                cinema_data, file_basename = load_single_mcpl_file(filepath, **kwargs)
             
             if cinema_data is None:
                 print(f"Failed to process file: {filepath}")
