@@ -333,6 +333,85 @@ class CinemaXY(ArrayCoordinateMixin, ArrayPlotMixin, CinemaArray):
             edges = f['edge'][:]
             return cls.from_sdev(mean=w, sdev =sdev, x=x, edges=edges, **kwargs) 
         
+    @classmethod
+    def from_mcpl(cls, fn, **kwargs):
+        """Initialize from a MCPL file.
+        
+        Args:
+            fn: MCPL file path
+            **kwargs: 
+                - xpara: 
+                - binmin: 
+                - binmax: 
+                - binnum: 
+                - binscale: 
+        
+        Returns:
+            CinemaXY instance with statistical data and coordinates
+        """
+        try:
+            from mcpl import MCPLFile
+        except ImportError:
+            raise ImportError("module `mcpl` not found.")
+        
+        available_mcpl_stat = ['time', 'ekin', 'x', 'y', 'z', 'ux', 'uy', 'uz']
+        xpara = kwargs.get('xpara')
+        if xpara not in available_mcpl_stat:
+            raise ValueError(f"xpara '{xpara}' not available in MCPL file. Available options: {available_mcpl_stat}")
+
+        def set_default_warn(p, default):
+            pv = kwargs.get(p)
+            if pv is None:
+                print(f"Warning: with {p} not specified, default to '{default}'")
+                kwargs[p] = default
+        
+        def read_particle_paraminmax(fn, xpara):
+            file = MCPLFile(fn)
+            _first = True
+            for pb in file.particle_blocks:
+                quantphy = getattr(pb, xpara)
+                if _first:
+                    pmin = quantphy.min()
+                    pmax = quantphy.max()
+                else:
+                    pmin = quantphy.min() if quantphy.min() < pmin else pmin
+                    pmax = quantphy.max() if quantphy.max() > pmax else pmax
+                _first = False
+            
+            return pmin, pmax
+
+        file = MCPLFile(fn)
+        result = []
+
+        set_default_warn('xpara', 'time')
+        xpara = kwargs.get('xpara')
+        pmin, pmax = read_particle_paraminmax(fn, xpara)
+        set_default_warn('binmin', pmin)
+        set_default_warn('binmax', pmax)
+        set_default_warn('binnum', 100)
+        set_default_warn('binscale', 1.)
+        
+        binmin = kwargs.get('binmin')
+        binmax = kwargs.get('binmax')
+        binnum = kwargs.get('binnum')
+        binscale = kwargs.get('binscale', 1.)
+        
+        bins_array = np.linspace(float(binmin), float(binmax), int(binnum) + 1) * float(binscale)  # +1 for bin edges
+        
+        for pb in file.particle_blocks:
+            weight = getattr(pb, 'weight')
+            quantphy = getattr(pb, xpara) * float(binscale)
+            
+            h, bins = np.histogram(quantphy, bins=bins_array, weights=weight)
+
+            if result:
+                result[0] += h
+            else:
+                result = [h, bins]
+
+        qphy, scores = result[1], result[0]
+        x, y = qphy, scores
+        return cls.from_counts(y, x=x[:-1])
 
 
 from scipy.interpolate import RegularGridInterpolator
