@@ -348,7 +348,7 @@ class MCPL_Analyzer_1D(Hist1D):
             
         Raises:
             ValueError: If parameter and incident parameters don't match
-        """
+"""
         if self.para.is_calculated():
             # Special case: WAVELENGTH and VELOCITY don't require incident parameters
             # as they only depend on outgoing energy
@@ -511,6 +511,275 @@ class MCPL_Analyzer_1D(Hist1D):
                 )
 
 
-# Keep the existing MCPL_Analyzer_2D class for now (will be updated later)
 class MCPL_Analyzer_2D(Hist2D):
-    pass
+    """
+    Enhanced 2D MCPL analyzer with support for calculated parameters.
+    """
+    
+    def __init__(self, 
+                 x_para: Union[ParticleParameter, str] = ParticleParameter.TIME,
+                 y_para: Union[ParticleParameter, str] = ParticleParameter.KINETIC_ENERGY,
+                 x_incident_params: IncidentParameters = None,
+                 y_incident_params: IncidentParameters = None,
+                 x_binmin=0.0, x_binmax=10.0, x_binnum=100,
+                 y_binmin=0.0, y_binmax=10.0, y_binnum=100,
+                 auto_range_file: str = ''):
+        """
+        Initialize the 2D analyzer.
+        
+        Args:
+            x_para: X-axis particle parameter to analyze
+            y_para: Y-axis particle parameter to analyze
+            x_incident_params: Incident parameters for x-axis calculated parameters
+            y_incident_params: Incident parameters for y-axis calculated parameters
+            x_binmin: Minimum x bin value
+            x_binmax: Maximum x bin value  
+            x_binnum: Number of x bins
+            y_binmin: Minimum y bin value
+            y_binmax: Maximum y bin value  
+            y_binnum: Number of y bins
+            auto_range_file: File to use for automatic range detection
+            
+        Raises:
+            ValueError: If parameters and incident parameters don't match
+        """
+        # Convert parameters to enum if they're strings
+        if isinstance(x_para, str):
+            self.x_para = ParticleParameter(x_para)
+        elif isinstance(x_para, ParticleParameter):
+            self.x_para = x_para
+        else:
+            raise ValueError(f"Invalid x parameter type: {type(x_para)}")
+            
+        if isinstance(y_para, str):
+            self.y_para = ParticleParameter(y_para)
+        elif isinstance(y_para, ParticleParameter):
+            self.y_para = y_para
+        else:
+            raise ValueError(f"Invalid y parameter type: {type(y_para)}")
+        
+        # Validate parameters and incident parameters compatibility
+        self._validate_parameter_compatibility(self.x_para, x_incident_params, "x")
+        self._validate_parameter_compatibility(self.y_para, y_incident_params, "y")
+        
+        self.x_incident_params = x_incident_params
+        self.y_incident_params = y_incident_params
+        
+        # Auto-range detection if specified
+        if auto_range_file:
+            x_min, x_max = self.get_x_range(auto_range_file)
+            y_min, y_max = self.get_y_range(auto_range_file)
+            
+            # Apply small margins to the ranges
+            x_min = x_min * 0.9 if x_min > 0 else x_min * 1.1
+            x_max = x_max * 1.1 if x_max > 0 else x_max * 0.9
+            y_min = y_min * 0.9 if y_min > 0 else y_min * 1.1
+            y_max = y_max * 1.1 if y_max > 0 else y_max * 0.9
+            
+            # Call Hist2D constructor with correct parameters (no linear arguments)
+            super().__init__(x_min, x_max, x_binnum, y_min, y_max, y_binnum)
+        else:
+            # Call Hist2D constructor with correct parameters (no linear arguments)
+            super().__init__(x_binmin, x_binmax, x_binnum, y_binmin, y_binmax, y_binnum)
+    
+    def _validate_parameter_compatibility(self, para: ParticleParameter, 
+                                         incident_params: IncidentParameters, 
+                                         axis: str) -> None:
+        """
+        Validate that the parameter and incident parameters are compatible.
+        
+        Args:
+            para: Particle parameter to validate
+            incident_params: Incident parameters to validate
+            axis: Axis identifier ('x' or 'y')
+            
+        Raises:
+            ValueError: If parameter and incident parameters don't match
+        """
+        if para.is_calculated():
+            # Special case: WAVELENGTH and VELOCITY don't require incident parameters
+            # as they only depend on outgoing energy
+            if para in {ParticleParameter.WAVELENGTH, ParticleParameter.VELOCITY}:
+                # These parameters can work without incident parameters
+                # If incident_params is provided, we'll ignore it for these parameters
+                pass
+            else:
+                # For other calculated parameters, incident parameters are required
+                if incident_params is None:
+                    raise ValueError(f"Calculated {axis}-axis parameter {para} requires incident parameters")
+                
+                required_class = para.get_required_incident_class()
+                if not isinstance(incident_params, required_class):
+                    raise ValueError(
+                        f"{axis}-axis parameter {para} requires {required_class.__name__}, "
+                        f"but got {type(incident_params).__name__}"
+                    )
+        else:
+            if incident_params is not None:
+                raise ValueError(
+                    f"Direct {axis}-axis parameter {para} does not require incident parameters"
+                )
+    
+    def get_x_range(self, filename) -> Tuple[float, float]:
+        """
+        Get the range of x-axis parameter values in the MCPL file.
+        """
+        if self.x_para.is_calculated():
+            return self._get_calculated_range(filename, self.x_para, self.x_incident_params)
+        else:
+            return self._get_direct_range(filename, self.x_para)
+    
+    def get_y_range(self, filename) -> Tuple[float, float]:
+        """
+        Get the range of y-axis parameter values in the MCPL file.
+        """
+        if self.y_para.is_calculated():
+            return self._get_calculated_range(filename, self.y_para, self.y_incident_params)
+        else:
+            return self._get_direct_range(filename, self.y_para)
+    
+    def _get_direct_range(self, filename, para: ParticleParameter) -> Tuple[float, float]:
+        """Get range for direct MCPL parameters."""
+        file = MCPLFile(filename)
+        
+        min_val = float('inf')
+        max_val = float('-inf')
+        has_data = False
+        
+        for pb in file.particle_blocks:
+            param_values = getattr(pb, para.value)
+            
+            if len(param_values) > 0:
+                has_data = True
+                min_val = min(min_val, np.min(param_values))
+                max_val = max(max_val, np.max(param_values))
+        
+        if not has_data:
+            raise ValueError(f"No particle data found in file: {filename}")
+        
+        return min_val, max_val
+    
+    def _get_calculated_range(self, filename, para: ParticleParameter, 
+                            incident_params: IncidentParameters) -> Tuple[float, float]:
+        """Get range for calculated parameters."""
+        # Calculate values for all particles to determine range
+        values = self._calculate_parameter_values(filename, para, incident_params)
+        
+        if len(values) == 0:
+            raise ValueError(f"No particle data found in file: {filename}")
+        
+        return np.min(values), np.max(values)
+    
+    def _calculate_parameter_values(self, filename, para: ParticleParameter, 
+                                 incident_params: IncidentParameters) -> np.ndarray:
+        """
+        Calculate parameter values for all particles in the file.
+        """
+        file = MCPLFile(filename)
+        
+        all_values = []
+        for pb in file.particle_blocks:
+            if len(pb.ekin) == 0:
+                continue
+            
+            # Prepare particle data for calculation - use existing attributes
+            particle_data = {
+                'position': np.array(pb.position),  
+                'direction': np.array(pb.direction), 
+                'ekin': np.array(pb.ekin),
+                'weight': np.array(pb.weight)
+            }
+            
+            # Calculate parameter values based on parameter type
+            if para == ParticleParameter.WAVELENGTH:
+                # Wavelength calculation: convert energy to wavelength
+                ekin_out_eV = MeV2eV(particle_data['ekin'])
+                values = ekin2wl(ekin_out_eV)
+            elif para == ParticleParameter.VELOCITY:
+                # Velocity calculation: convert energy to velocity
+                ekin_out_eV = MeV2eV(particle_data['ekin'])
+                values = ekin2v(ekin_out_eV)
+            else:
+                # For other calculated parameters, use incident parameters
+                if incident_params is None:
+                    raise ValueError(f"Incident parameters required for {para}")
+                values = incident_params.calc(particle_data)
+            
+            all_values.extend(values)
+        
+        return np.array(all_values)
+    
+    def analyze(self, filename):
+        """
+        Analyze the MCPL file and fill the 2D histogram.
+        """
+        file = MCPLFile(filename)
+        
+        for pb in file.particle_blocks:
+            if len(pb.ekin) == 0:
+                continue
+            
+            # Get x values
+            if self.x_para.is_calculated():
+                x_values = self._get_values_for_block(pb, self.x_para, self.x_incident_params)
+            else:
+                x_values = getattr(pb, self.x_para.value)
+            
+            # Get y values
+            if self.y_para.is_calculated():
+                y_values = self._get_values_for_block(pb, self.y_para, self.y_incident_params)
+            else:
+                y_values = getattr(pb, self.y_para.value)
+            
+            # Fill histogram with valid pairs
+            if len(x_values) > 0 and len(y_values) > 0 and len(x_values) == len(y_values):
+                self.fillmany(
+                    np.asarray(x_values, dtype=np.float64),
+                    np.asarray(y_values, dtype=np.float64),
+                    np.asarray(pb.weight, dtype=np.float64)
+                )
+    
+    def _get_values_for_block(self, pb, para: ParticleParameter, 
+                            incident_params: IncidentParameters) -> np.ndarray:
+        """
+        Get parameter values for a particle block.
+        """
+        if len(pb.ekin) == 0:
+            return np.array([])
+        
+        # Prepare particle data for calculation - use existing attributes
+        particle_data = {
+            'position': np.array(pb.position),  
+            'direction': np.array(pb.direction), 
+            'ekin': np.array(pb.ekin),
+            'weight': np.array(pb.weight)
+        }
+        
+        # Calculate parameter values based on parameter type
+        if para == ParticleParameter.WAVELENGTH:
+            # Wavelength calculation: convert energy to wavelength
+            ekin_out_eV = MeV2eV(particle_data['ekin'])
+            values = ekin2wl(ekin_out_eV)
+        elif para == ParticleParameter.VELOCITY:
+            # Velocity calculation: convert energy to velocity
+            ekin_out_eV = MeV2eV(particle_data['ekin'])
+            values = ekin2v(ekin_out_eV)
+        else:
+            # For other calculated parameters, use incident parameters
+            if incident_params is None:
+                raise ValueError(f"Incident parameters required for {para}")
+            values = incident_params.calc(particle_data)
+        
+        return values
+    
+    def plot(self, show=False, title=None, log=True, logx=False, dynrange=1e-3, ax=None):
+        """
+        Plot the 2D histogram with enhanced labeling.
+        """
+        # Create default title if not provided
+        if title is None:
+            title = f"{self.x_para.get_label()} vs {self.y_para.get_label()}"
+        
+        # Call parent plot method with enhanced title
+        return super().plot(show=show, title=title, log=log, logx=logx, 
+                          dynrange=dynrange, ax=ax)
