@@ -7,6 +7,10 @@ from mcpl import MCPLFile
 from .Prompt.histogram.Hist import Hist1D, Hist2D
 from .convertor import angleCosine2Q, wl2ekin, ekin2wl, ekin2v, v2ekin, MeV2eV, eV2MeV, meV2eV, eV2MeV
 
+try:
+    from mcpl import MCPLFile
+except ImportError:
+    raise ImportError("Fail to import MCPLFile from module `mcpl`.")
 
 class ParticleParameter(Enum):
     """
