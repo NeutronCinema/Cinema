@@ -2,9 +2,12 @@ import numpy as np
 from enum import Enum
 from typing import Union, Tuple
 
-from mcpl import MCPLFile
 from .Prompt.histogram.Hist import Hist1D
 
+try:
+    from mcpl import MCPLFile
+except ImportError:
+    raise ImportError("Fail to import MCPLFile from module `mcpl`.")
 
 class ParticleParameter(Enum):
     """
