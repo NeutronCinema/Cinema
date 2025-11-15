@@ -49,7 +49,8 @@ class MCPLDataCfgStr:
 
         # Split by separator
         parts = file_config_string.split(";")
-        parts.remove('')
+        if '' in parts:
+            parts.remove('')
 
         filename = parts[0]
 
@@ -489,7 +490,7 @@ Examples:
                        help='Input HDF5 file paths, glob patterns, or combined groups using "+" notation')
     parser.add_argument('-o', '--output', help='Output directory for saving plots (optional)')
     parser.add_argument('--no-show', action='store_true', help='Do not display plot windows')
-    
+    parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     args = parser.parse_args()
     
     # Run main function
@@ -502,6 +503,8 @@ Examples:
         )
     except Exception as e:
         print(f"\nError message: {e}")
+        if args.debug:
+            raise e
     
     if success:
         print("\n✅ Processing completed successfully!")
