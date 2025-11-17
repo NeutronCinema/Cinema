@@ -51,13 +51,19 @@ _pt_ResourceManager_cfgVolPhysics = importFunc('pt_ResourceManager_cfgVolPhysics
 
 
 class Transformation3D:
-    def __init__(self, x=0., y=0., z=0., rot_z=0., rot_new_x=0., rot_new_z=0., degrees = True):
-        # rotate is in ZXZ in the vecgeom 
-        self.cobj = _pt_Transformation3D_newfromdata(x, y, z, rot_z, rot_new_x, rot_new_z, 1, 1, 1)
+        # Rotation follows ZXZ convention in vecgeom backend
+        self.__cobj = _pt_Transformation3D_newfromdata(x, y, z, rot_z, rot_new_x, rot_new_z, 1, 1, 1)
         self.__sciRot = scipyRot.from_euler('ZXZ', [rot_z, rot_new_x, rot_new_z], degrees)
         self.__translation = np.array([x, y, z])
-        # self.update_cpp_rot()
 
+    @property
+    def cobj(self):
+        """Get C++ transformation object pointer.
+        
+        Returns:
+            void*: Pointer to C++ transformation object
+        """
+        return self.__cobj
 
     @classmethod 
     def from_euler_xyz(cls, x=0., y=0., z=0., rx=0., ry=0., rz=0., degrees = True):
