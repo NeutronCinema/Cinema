@@ -397,7 +397,7 @@ class Transformation3D:
         return self.__sciRot.inv().apply(input)+ self.__sciRot.inv().apply(self.__translation)
         
 class Volume:
-    scorerDict = {}
+    scorer_dict = {}
     volume_list = []
 
     def __init__(self, volname, solid, matCfg=None, surfaceCfg=None):
@@ -437,7 +437,7 @@ class Volume:
 
     def addScorer(self, scorer : Union[Scorer, str], cppScorer=ctypes.c_voidp()):
         if isinstance(cppScorer, int):
-            self.__class__.scorerDict[scorer.name] = scorer.name
+            self.__class__.scorer_dict[scorer.name] = scorer.name
             _pt_ResourceManager_addScorer(self.volid, scorer.name.encode('utf-8'), cppScorer) 
         else:
             import re
@@ -446,11 +446,11 @@ class Volume:
                 name = [n for n in nameList if 'name' in n][0]
                 name = re.search(r'=.*', name)
                 name = re.sub(r'=', '', name.group()).strip()
-                self.__class__.scorerDict[name] = scorer
+                self.__class__.scorer_dict[name] = scorer
                 _pt_ResourceManager_addScorer(self.volid, scorer.encode('utf-8'), cppScorer) 
             else:
                 cfg = scorer.cfg
-                self.__class__.scorerDict[scorer.cfg_name] = cfg
+                self.__class__.scorer_dict[scorer.cfg_name] = cfg
                 _pt_ResourceManager_addScorer(self.volid, cfg.encode('utf-8'), cppScorer) 
 
     def setSurface(self, cfg : str):

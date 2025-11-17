@@ -253,7 +253,7 @@ class Prompt:
     @property
     def scorer(self):
         """Get the dictionary of all current scorers (read-only property)."""
-        return Volume.scorerDict
+        return Volume.scorer_dict
 
     def makeWorld(self):
         """
@@ -287,7 +287,7 @@ class Prompt:
         """
         _pt_ResourceManager_clear()
         self.l.worldExist = False
-        Volume.scorerDict = {}
+        Volume.scorer_dict = {}
     
     def setWorld(self, world):
         """
