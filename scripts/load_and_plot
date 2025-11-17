@@ -36,10 +36,11 @@ class MCPLDataCfgStr:
     """
 
     filename: str
-    x: Optional[str] = "time"
-    bmin: Optional[Union[Literal["auto"], float]] = "auto"  
-    bmax: Optional[Union[Literal["auto"], float]] = "auto"
-    bnum: Optional[int] = 100
+    para: Optional[str] = "time"
+    unit: Optional[str] = None
+    binmin: Optional[Union[Literal["auto"], float]] = "auto"  
+    binmax: Optional[Union[Literal["auto"], float]] = "auto"
+    binnum: Optional[int] = 100
 
     @classmethod
     def from_filestring(cls, file_config_string):
@@ -84,7 +85,7 @@ class MCPLDataCfgStr:
     def __post_init__(self):
 
         def _validate(v, typeconvert : type, exceptions=[], exception_only = False):
-            errmsg = f"ERROR: invalid value: '{v}'\nValid values are: '{', '.join(exceptions)}' or {type.__name__}"
+            errmsg = f"ERROR: invalid value: '{v}'\nValid values are: '{', '.join(exceptions)}' or type {typeconvert.__name__}"
             if v in exceptions:
                 return v
             if exception_only:
@@ -96,12 +97,12 @@ class MCPLDataCfgStr:
             except ValueError:
                 raise ValueError(errmsg)
             
-        self.x = _validate(self.x, str, 
+        self.para = _validate(self.para, str, 
                            [v.value for k,v in ParticleParameter.__members__.items()], 
                            exception_only=True)
-        self.bmin = _validate(self.bmin, float, ["auto"])
-        self.bmax = _validate(self.bmax, float, ["auto"])
-        self.bnum = _validate(self.bnum, int, [])
+        self.binmin = _validate(self.binmin, float, ["auto"])
+        self.binmax = _validate(self.binmax, float, ["auto"])
+        self.binnum = _validate(self.binnum, int, [])
 
     def to_dict(self):
         """Return dictionary representation of the config"""
@@ -146,6 +147,7 @@ def load_single_h5_file(h5_filepath):
 
 
 def load_single_mcpl_file(mcplfilepath, **kwargs):
+    from Cinema.analysis import MCPL_Analyzer_1D
 
     try:
         # Check if file exists
@@ -154,10 +156,13 @@ def load_single_mcpl_file(mcplfilepath, **kwargs):
             return None, None
         
         print(f"\nLoading MCPL file: {mcplfilepath}")
-        
-        # Use the from_mcpl method you implemented
-        cinema_data = CinemaXY.from_mcpl(mcplfilepath, **kwargs)
-        
+        if kwargs.get('binmin') == 'auto'or kwargs.get('binmax') == 'auto':
+            analyser = MCPL_Analyzer_1D(**kwargs, auto_range_file=mcplfilepath)
+        else:
+            analyser = MCPL_Analyzer_1D(**kwargs)
+        analyser.analyze(mcplfilepath)
+
+        cinema_data = analyser.toArrayXY()
         file_basename = os.path.basename(mcplfilepath)
         print(f"Successfully created CinemaXY object for {file_basename}")
         print(f"Data shape: {cinema_data.shape}")
@@ -166,7 +171,7 @@ def load_single_mcpl_file(mcplfilepath, **kwargs):
         print(f"Standard deviation range: [{cinema_data.sdev.min():.3f}, {cinema_data.sdev.max():.3f}]")
         print(f"Parameters: {kwargs}")
         
-        return cinema_data, file_basename
+        return analyser, file_basename
         
     except Exception as e:
         print(f"Error processing MCPL file {mcplfilepath}: {e}")
@@ -198,7 +203,7 @@ def format_integral_value(integral):
     else:
         return f"{integral:.4f}"
 
-def create_combined_plot(cinema_data_list, file_basenames, output_image=None):
+def create_combined_plot(cinema_data_list : list[CinemaXY], file_basenames, converter_list : list[callable], output_image=None):
     """
     Create a combined plot for multiple CinemaXY objects
     
@@ -218,7 +223,9 @@ def create_combined_plot(cinema_data_list, file_basenames, output_image=None):
     colors = ['b', 'r', 'g', 'c', 'm', 'y', 'k']
     markers = ['o', 's', '^', 'D', 'v', '<', '>']
     
-    for i, (cinema_data, basename) in enumerate(zip(cinema_data_list, file_basenames)):
+    for i, (cinema_data, basename, converter) in enumerate(zip(cinema_data_list, file_basenames, converter_list)):
+        if converter is not None:
+            cinema_data.x = converter(cinema_data.x)
         color = colors[i % len(colors)]
         marker = markers[i % len(markers)]
         
@@ -247,7 +254,7 @@ def create_combined_plot(cinema_data_list, file_basenames, output_image=None):
     
     return fig
 
-def create_individual_plot(cinema_data, file_basename, output_image=None):
+def create_individual_plot(cinema_data : CinemaXY, file_basename, converter=None, output_image=None):
     """
     Create an individual plot for a single CinemaXY object
     
@@ -262,13 +269,15 @@ def create_individual_plot(cinema_data, file_basename, output_image=None):
     # Remove internal import, use global plt
     # Create a figure for this file
     fig, ax = plt.subplots(figsize=(10, 6))
-    
     # Calculate integral
     integral = calculate_integral(cinema_data)
     
     # Format integral value display using the new function
     integral_str = format_integral_value(integral)
-    
+
+    if converter is not None:
+        cinema_data.x = converter(cinema_data.x)
+
     # Use CinemaXY's built-in plot method
     cinema_data.plot(ax=ax, fmt='b-', marker='o', markersize=4, 
                    label=f'Weight ± Standard Deviation, integral {integral_str}', capsize=3, elinewidth=1)
@@ -397,6 +406,7 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
         # Load all files in this group
         cinema_data_list = []
         file_basenames = []
+        bs_list = []
         
         for file_dict in file_group:
             filepath = file_dict.get('filename', None)
@@ -404,9 +414,12 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
             
             if filepath.endswith('.h5'):
                 cinema_data, file_basename = load_single_h5_file(filepath)
+                bs = lambda x: x
             elif filepath.endswith('.mcpl') or filepath.endswith('.mcpl.gz'):
                 # Pass parameters to load_single_mcpl_file
-                cinema_data, file_basename = load_single_mcpl_file(filepath, **kwargs)
+                analyser, file_basename = load_single_mcpl_file(filepath, **kwargs)
+                cinema_data = analyser.toArrayXY()
+                bs = analyser.get_unit_converter()
             
             if cinema_data is None:
                 print(f"Failed to process file: {filepath}")
@@ -414,7 +427,8 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
             
             cinema_data_list.append(cinema_data)
             file_basenames.append(file_basename)
-        
+            bs_list.append(bs)
+
         if not cinema_data_list:
             print(f"No valid data loaded for group {i}")
             continue
@@ -425,7 +439,8 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
             fig = create_individual_plot(
                 cinema_data_list[0], 
                 file_basenames[0],
-                output_image=output_dir
+                output_image=output_dir,
+                converter = bs_list[0]
             )
             all_figures.append(fig)
             
@@ -451,6 +466,7 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
                 cinema_data_list,
                 file_basenames,
                 output_image=output_path,
+                converter_list=bs_list
             )
             all_figures.append(fig)
             

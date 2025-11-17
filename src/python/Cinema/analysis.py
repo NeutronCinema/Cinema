@@ -1,6 +1,6 @@
 import numpy as np
 from enum import Enum
-from typing import Union, Tuple, Type, List
+from typing import Union, Tuple, Type, List, Optional, Callable
 from abc import ABC, abstractmethod
 
 from mcpl import MCPLFile
@@ -12,6 +12,298 @@ try:
 except ImportError:
     raise ImportError("Fail to import MCPLFile from module `mcpl`.")
 
+class UNITEnum(Enum):
+    @classmethod
+    def _missing_(self, value):
+        availables = [u.value for u in self]
+        raise ValueError(f"Invalid unit '{value}' for {self.__name__}, availables: {availables}")
+
+    @classmethod
+    def get_default(cls) -> 'UNITEnum':
+        raise NotImplementedError("Default unit not implemented.")
+
+    @property
+    def conversion_factor(self) -> float:
+        """
+        Get the conversion factor to convert time to this unit.
+        
+        Returns:
+            float: The conversion factor
+        """
+        raise NotImplementedError("Conversion factor not implemented.")
+    
+    @classmethod
+    def from_str(cls, value: str):
+        """
+        Create a UNITEnum instance from a string value.
+        
+        Args:
+            value (str): The string value to create the instance from.
+        
+        Returns:
+            UNITEnum: The created instance.
+        """
+        return cls(value)
+    
+    def _convert_to_by_multiplication(self, value: Union[float, np.ndarray], target_unit: 'UNITEnum') -> Union[float, np.ndarray]:
+        return value * target_unit.conversion_factor / self.conversion_factor
+    
+    def convert_to(self):
+        raise NotImplementedError("Unit conversion not implemented.")
+    
+class NotImplementedUnit(UNITEnum):
+    """
+    Placeholder for unit not implemented.
+    """
+    @classmethod
+    def from_str(cls, value):
+        raise NotImplementedError(f"Unit '{value}' not implemented.")
+    
+    @classmethod
+    def get_default(cls) -> 'NotImplementedUnit':
+        raise NotImplementedError("Unit not implemented.")
+
+    @property
+    def conversion_factor(self) -> float:
+        raise NotImplementedError("Unit not implemented.")
+    
+class TimeUnit(UNITEnum):
+    """
+    Enumeration of available time units.
+    """
+    SECOND = 's'
+    MILLISECOND = 'ms'
+    MICROSECOND = 'us'
+    NANOSECOND = 'ns'
+
+    @property
+    def conversion_factor(self) -> float:
+        """
+        Get the conversion factor to convert time to this unit.
+        
+        Returns:
+            float: The conversion factor
+        """
+        factors = {
+            TimeUnit.SECOND: 1e-3,
+            TimeUnit.MILLISECOND: 1,
+            TimeUnit.MICROSECOND: 1e3,
+            TimeUnit.NANOSECOND: 1e6,
+        }
+        return factors[self]
+
+    @classmethod
+    def get_default(cls) -> 'TimeUnit':
+        return cls.MILLISECOND
+
+    def convert_to(self, value: Union[float, np.ndarray], target_unit: 'TimeUnit') -> Union[float, np.ndarray]:
+        return self._convert_to_by_multiplication(value, target_unit)
+
+class EnergyUnit(UNITEnum):
+    """
+    Enumeration of available energy units.
+    """
+    MEGAEV = 'MeV'
+    KILOEV = 'keV'
+    EV = 'eV'
+    MILLIEV = 'meV'
+    NANOEV = 'neV'
+
+    @property
+    def conversion_factor(self) -> float:
+        """
+        Get the conversion factor to convert energy to this unit.
+        
+        Returns:
+            float: The conversion factor
+        """
+        factors = {
+            EnergyUnit.MEGAEV: 1,
+            EnergyUnit.KILOEV: 1e3,
+            EnergyUnit.EV: 1e6,
+            EnergyUnit.MILLIEV: 1e9,
+            EnergyUnit.NANOEV: 1e12,
+        }
+        return factors[self]
+
+    @classmethod
+    def get_default(cls) -> 'EnergyUnit':
+        return cls.MEGAEV
+    
+    def convert_to(self, value: Union[float, np.ndarray], target_unit: 'EnergyUnit') -> Union[float, np.ndarray]:
+        return self._convert_to_by_multiplication(value, target_unit)
+
+class LengthUnit(UNITEnum):
+    """
+    Enumeration of available length units.
+    """
+    METER = 'm'
+    CENTIMETER = 'cm'
+    MILLIMETER = 'mm'
+    MICROMETER = 'μm'
+
+    @property
+    def conversion_factor(self) -> float:
+        """
+        Get the conversion factor to convert length to this unit.
+        
+        Returns:
+            float: The conversion factor
+        """
+        factors = {
+            LengthUnit.METER: 0.01,
+            LengthUnit.CENTIMETER: 1,
+            LengthUnit.MILLIMETER: 10,
+            LengthUnit.MICROMETER: 10000,
+        }
+        return factors[self]
+
+    @classmethod
+    def get_default(cls) -> 'LengthUnit':
+        return cls.CENTIMETER
+    
+    def convert_to(self, value: Union[float, np.ndarray], target_unit: 'LengthUnit') -> Union[float, np.ndarray]:
+        return self._convert_to_by_multiplication(value, target_unit)
+    
+class AngleUnit(UNITEnum):
+    """
+    Enumeration of available direction cosine representations.
+    
+    Direction cosines are unitless, but can be represented in different formats.
+    """
+    COSINE = ''  # Standard cosine value between -1 and 1
+    DEGREES = 'deg'  # Converted to degrees (arccos)
+    RADIANS = 'rad'  # Converted to radians (arccos)
+
+    @property
+    def conversion_factor(self) -> float:
+        """
+        Get the conversion factor to convert direction cosine to this representation.
+        
+        Returns:
+            float: The conversion factor
+        """
+        factors = {
+            AngleUnit.COSINE: 1, 
+            AngleUnit.DEGREES: np.arccos(1),  # Convert to degrees
+            AngleUnit.RADIANS: 1,  # Convert to radians (same as standard for arccos)
+        }
+        return factors[self]
+    
+    @classmethod
+    def get_default(cls) -> 'AngleUnit':
+        return cls.COSINE
+
+    def convert_to(self, value: Union[float, np.ndarray], target_unit: 'AngleUnit') -> Union[float, np.ndarray]:
+        if self == target_unit:
+            return value
+        
+        if self == AngleUnit.COSINE:
+            if target_unit == AngleUnit.DEGREES:
+                return np.arccos(value) * 180 / np.pi
+            elif target_unit == AngleUnit.RADIANS:
+                return np.arccos(value)
+            
+        elif self == AngleUnit.DEGREES:
+            if target_unit == AngleUnit.COSINE:
+                return np.cos(value * np.pi / 180)
+            elif target_unit == AngleUnit.RADIANS:
+                return value * np.pi / 180
+            
+        elif self == AngleUnit.RADIANS:
+            if target_unit == AngleUnit.COSINE:
+                return np.cos(value)
+            elif target_unit == AngleUnit.DEGREES:
+                return value * 180 / np.pi
+
+class MomentumTransferUnit(UNITEnum):
+    """
+    Enumeration of available momentum transfer units.
+    """
+    ANGSTROM_INVERSE = 'Å⁻¹'
+    NANOMETER_INVERSE = 'nm⁻¹'
+
+    @property
+    def conversion_factor(self) -> float:
+        """
+        Get the conversion factor to convert momentum transfer to this unit.
+        
+        Returns:
+            float: The conversion factor
+        """
+        factors = {
+            MomentumTransferUnit.ANGSTROM_INVERSE: 1,
+            MomentumTransferUnit.NANOMETER_INVERSE: 10,
+        }
+        return factors[self]
+
+    @classmethod
+    def get_default(cls) -> 'MomentumTransferUnit':
+        return cls.ANGSTROM_INVERSE
+    
+    def convert_to(self, value: Union[float, np.ndarray], target_unit: 'MomentumTransferUnit') -> Union[float, np.ndarray]:
+        return self._convert_to_by_multiplication(value, target_unit)
+
+class WavelengthUnit(UNITEnum):
+    """
+    Enumeration of available wavelength units.
+    """
+    ANGSTROM = 'Å'
+    NANOMETER = 'nm'
+    MICROMETER = 'μm'
+
+    @property
+    def conversion_factor(self) -> float:
+        """
+        Get the conversion factor to convert wavelength to this unit.
+        
+        Returns:
+            float: The conversion factor
+        """
+        factors = {
+            WavelengthUnit.ANGSTROM: 1,
+            WavelengthUnit.NANOMETER: 0.1,
+            WavelengthUnit.MICROMETER: 0.0001,
+        }
+        return factors[self]
+
+    @classmethod
+    def get_default(cls) -> 'WavelengthUnit':
+        return cls.ANGSTROM
+    
+    def convert_to(self, value: Union[float, np.ndarray], target_unit: 'WavelengthUnit') -> Union[float, np.ndarray]:
+        return self._convert_to_by_multiplication(value, target_unit)
+
+class VelocityUnit(UNITEnum):
+    """
+    Enumeration of available velocity units.
+    """
+    METER_PER_SECOND = 'm/s'
+    CENTIMETER_PER_SECOND = 'cm/s'
+    MILLIMETER_PER_SECOND = 'mm/s'
+
+    @property
+    def conversion_factor(self) -> float:
+        """
+        Get the conversion factor to convert velocity to this unit.
+        
+        Returns:
+            float: The conversion factor
+        """
+        factors = {
+            VelocityUnit.METER_PER_SECOND: 0.001,
+            VelocityUnit.CENTIMETER_PER_SECOND: 0.01,
+            VelocityUnit.MILLIMETER_PER_SECOND: 1,
+        }
+        return factors[self]
+
+    @classmethod
+    def get_default(cls) -> 'VelocityUnit':
+        return cls.MILLIMETER_PER_SECOND
+
+    def convert_to(self, value: Union[float, np.ndarray], target_unit: 'VelocityUnit') -> Union[float, np.ndarray]:
+        return self._convert_to_by_multiplication(value, target_unit)
+        
 class ParticleParameter(Enum):
     """
     Enumeration of available MCPL particle parameters and calculated parameters.
@@ -42,6 +334,61 @@ class ParticleParameter(Enum):
     WAVELENGTH = 'wavelength'
     VELOCITY = 'velocity'
     
+    @property
+    def unit(self) -> Union[UNITEnum, str]:
+        """
+        Get the unit for this particle parameter.
+        
+        Returns:
+            str: The unit string for this parameter
+        """
+        units = {
+            # Direct MCPL parameters
+            ParticleParameter.TIME: TimeUnit,  # Time of Flight in milliseconds
+            ParticleParameter.KINETIC_ENERGY: EnergyUnit,
+            ParticleParameter.X_POSITION: LengthUnit,
+            ParticleParameter.Y_POSITION: LengthUnit,
+            ParticleParameter.Z_POSITION: LengthUnit,
+            ParticleParameter.X_DIRECTION: AngleUnit,  
+            ParticleParameter.Y_DIRECTION: AngleUnit,  
+            ParticleParameter.Z_DIRECTION: AngleUnit,  
+            ParticleParameter.X_POLARIZATION: NotImplementedUnit,
+            ParticleParameter.Y_POLARIZATION: NotImplementedUnit,
+            ParticleParameter.Z_POLARIZATION: NotImplementedUnit,
+            ParticleParameter.PDG_CODE: NotImplementedUnit,
+            ParticleParameter.WEIGHT: NotImplementedUnit,
+            ParticleParameter.EVENT_ID: NotImplementedUnit,
+            ParticleParameter.POSITION_VECTOR: NotImplementedUnit, # 'cm'
+            ParticleParameter.POLARIZATION_VECTOR: NotImplementedUnit,
+            ParticleParameter.DIRECTION_VECTOR: NotImplementedUnit,
+            
+            # Calculated parameters
+            ParticleParameter.MOMENTUM_TRANSFER_Q: MomentumTransferUnit,
+            ParticleParameter.ENERGY_TRANSFER_OMEGA: EnergyUnit,
+            ParticleParameter.SCATTERING_ANGLE: AngleUnit,
+            ParticleParameter.WAVELENGTH: WavelengthUnit,
+            ParticleParameter.VELOCITY: VelocityUnit,
+        }
+        
+        return units.get(self, '')
+    
+    def get_conversion_factor(self, u: Union[str, UNITEnum]) -> float:
+        """
+        Get the conversion factor to convert this parameter to the given unit.
+        
+        Args:
+            unit (UNITEnum): The unit to convert to
+            
+        Returns:
+            float: The conversion factor
+        """
+        if not isinstance(u, UNITEnum) and not isinstance(u, str):
+            raise ValueError(f"Invalid unit '{u}' for {self.__name__}, must be UNITEnum instance or string.")
+        if isinstance(u, str):
+            u = self.unit.from_str(u)
+            
+        return u.conversion_factor
+
     def get_label(self) -> str:
         """
         Get appropriate axis label for this particle parameter.
@@ -306,14 +653,15 @@ class MCPL_Analyzer_1D(Hist1D):
     """
     
     def __init__(self, para: Union[ParticleParameter, str] = ParticleParameter.TIME, 
+                 unit: Optional[str] = None,
                  incident_params: IncidentParameters = None,
                  binmin=0.0, binmax=10.0, binnum=100, linear=True, 
                  auto_range_file: str = ''):
         """
         Initialize the 1D analyzer.
-        
         Args:
             para: Particle parameter to analyze
+            unit: Unit for the parameter
             incident_params: Incident parameters for calculated parameters
             binmin: Minimum bin value
             binmax: Maximum bin value  
@@ -332,17 +680,41 @@ class MCPL_Analyzer_1D(Hist1D):
         else:
             raise ValueError(f"Invalid parameter type: {type(para)}")
         
+        self.default_unit = self.para.unit.get_default()
         # Validate parameter and incident parameters compatibility
         self._validate_parameter_compatibility(incident_params)
         self.incident_params = incident_params
         
+        # demanded unit
+        if unit is None:
+            self.demanded_unit = self.default_unit
+        else:
+            self.demanded_unit = self.para.unit.from_str(unit)
+
         # Auto-range detection if specified
         if auto_range_file:
+            # In MCPL default unit
             min_val, max_val = self.getRange(auto_range_file)
             super().__init__(min_val*0.9, max_val*1.1, binnum, linear=linear)
         else:
+        # filling at default unit of MCPL, but input unit != default unit
+        # need to convert binmin, binmax back to default unit, then init
+            recover = self._get_unit_revoverer()
+            binmax = recover(binmax)
+            binmin = recover(binmin)
+
             super().__init__(binmin, binmax, binnum, linear=linear)
+
+    def get_unit_converter(self) -> Callable[[Union[float, np.ndarray]], Union[float, np.ndarray]]:
+        def convert(values: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+            return self.default_unit.convert_to(values, self.demanded_unit)
+        return convert
     
+    def _get_unit_revoverer(self) -> Callable[[Union[float, np.ndarray]], Union[float, np.ndarray]]:
+        def recover(values: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+            return self.demanded_unit.convert_to(values, self.default_unit)
+        return recover
+
     def _validate_parameter_compatibility(self, incident_params: IncidentParameters) -> None:
         """
         Validate that the parameter and incident parameters are compatible.
