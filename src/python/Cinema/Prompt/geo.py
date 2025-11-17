@@ -461,19 +461,27 @@ class Volume:
         _pt_Volume_placeChild(self.cobj, name.encode('utf-8'), logVolume.cobj, transf.cobj, scorerGroup)
         return self
     
-    def placeArray(self, array, transf = None, marker = '', count = 0):
-        if transf == None:
-            transf = array.refFrame
-        marker = f'{marker}{count}'
-        for i_mem in array.members:
-            if isinstance(array.element, Volume):
-                transf_t = transf * i_mem.refFrame 
-                # transf_t.sciRot = deepcopy(transf.sciRot)
-                # transf_t.applyTrans(i_mem.refFrame.sciRotMatrix)
-                self.placeChild(f'phyvol_{marker}_{array.element.volname}', array.element, transf_t)
-            else:
-                count = count + 1
-                self.placeArray(array.element, transf * i_mem.refFrame, i_mem.marker, count = count)
+    # TODO: need review, to place a collection of Volume
+    # def placeArray(self, array, transf=None, marker='', count=0):
+    #     """
+    #     Place an array of volumes recursively.
+        
+    #     Args:
+    #         array: Array structure containing volumes
+    #         transf (Transformation3D, optional): Base transformation. Default: None
+    #         marker (str, optional): Naming marker. Default: ''
+    #         count (int, optional): Recursion counter. Default: 0
+    #     """
+    #     if transf == None:
+    #         transf = array.refFrame
+    #     marker = f'{marker}{count}'
+    #     for i_mem in array.members:
+    #         if isinstance(array.element, Volume):
+    #             transf_t = transf * i_mem.refFrame 
+    #             self.placeChild(f'phyvol_{marker}_{array.element.volname}', array.element, transf_t)
+    #         else:
+    #             count = count + 1
+    #             self.placeArray(array.element, transf * i_mem.refFrame, i_mem.marker, count=count)
 
     def getCapacity(self):
         """Get the capacity (or the volume of a solid, in other words) of the current Volume.
