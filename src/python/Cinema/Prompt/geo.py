@@ -397,15 +397,31 @@ class Transformation3D:
         return self.__sciRot.inv().apply(input)+ self.__sciRot.inv().apply(self.__translation)
         
 class Volume:
+    """
+    A Volume consists of a solid shape, material, surface physics and scorers.
+    
+    Class Attributes:
+        scorer_dict (dict): Dictionary mapping scorer names to configurations
+        volume_list (list): List of all created Volume instances
+    """
     scorer_dict = {}
     volume_list = []
 
     def __init__(self, volname, solid, matCfg=None, surfaceCfg=None):
+        """
+        Initialize a volume with name, solid shape, and optional configurations.
+        
+        Args:
+            volname (str): Name identifier for the volume
+            solid: Solid shape object (vecgeom::VUnplacedVolume type)
+            matCfg (str, optional): Material configuration string. Default: None
+            surfaceCfg (str, optional): Surface configuration string. Default: None
+        """
         self.volname = volname
-        # the type of self.solid is vecgeom::VUnplacedVolume 
+        # self.solid is of type vecgeom::VUnplacedVolume 
         self.solid = solid
-        self.child = []
-        # the type of self.cobj is vecgeom::LogicalVolume
+        self.child = []  # List of child volumes
+        # self.cobj is of type vecgeom::LogicalVolume
         self.cobj = _pt_Volume_new(volname.encode('utf-8'), solid.cobj)
         self.volid = self.getLogicalID(self.cobj)
         self.matCfg = matCfg
@@ -414,12 +430,12 @@ class Volume:
         _pt_ResourceManager_addNewVolume(self.volid)
         
         if matCfg is None:
-            self.setMaterial('freegas::H1/1e-26kgm3/H_is_1_H1') # set as the universe
+            self.setMaterial('freegas::H1/1e-26kgm3/H_is_1_H1')  # Set as universe (vacuum)
         else:
             if isinstance(matCfg, str):
-                self.setMaterial(matCfg) 
+                self.setMaterial(matCfg)
             else:
-                self.setMaterial(matCfg.cfg) 
+                self.setMaterial(matCfg.cfg)
 
         if surfaceCfg is not None:
             self.setSurface(surfaceCfg) 
@@ -432,10 +448,23 @@ class Volume:
         # _pt_Volume_delete(self.cobj)
         pass
 
-    def setMaterial(self, cfg : str):
-        _pt_ResourceManager_cfgVolPhysics(self.volid, cfg.encode('utf-8')) # set as the universe
+    def setMaterial(self, cfg: str):
+        """
+        Set bulk material for a volume.
+        
+        Args:
+            cfg (str): Material configuration string
+        """
+        _pt_ResourceManager_cfgVolPhysics(self.volid, cfg.encode('utf-8'))
 
-    def addScorer(self, scorer : Union[Scorer, str], cppScorer=ctypes.c_voidp()):
+    def addScorer(self, scorer: Union[Scorer, str], cppScorer=ctypes.c_voidp()):
+        """
+        Add a scorer to the volume.
+        
+        Args:
+            scorer (Union[Scorer, str]): Scorer object or configuration string
+            cppScorer (ctypes.c_voidp, optional): C++ scorer object pointer. Default: empty
+        """
         if isinstance(cppScorer, int):
             self.__class__.scorer_dict[scorer.name] = scorer.name
             _pt_ResourceManager_addScorer(self.volid, scorer.name.encode('utf-8'), cppScorer) 
@@ -453,10 +482,28 @@ class Volume:
                 self.__class__.scorer_dict[scorer.cfg_name] = cfg
                 _pt_ResourceManager_addScorer(self.volid, cfg.encode('utf-8'), cppScorer) 
 
-    def setSurface(self, cfg : str):
+    def setSurface(self, cfg: str):
+        """
+        Set surface physics for the volume.
+        
+        Args:
+            cfg (str): Surface physics configuration string
+        """
         _pt_ResourceManager_addSurface(self.volid, cfg.encode('utf-8')) 
 
     def placeChild(self, name, logVolume, transf=Transformation3D(0,0,0), scorerGroup=0):
+        """
+        Place a child volume inside the current volume.
+        
+        Args:
+            name (str): Name for the placed volume
+            logVolume (Volume): Child volume to place
+            transf (Transformation3D, optional): Transformation for placement. Default: identity
+            scorerGroup (int, optional): Scorer group identifier. Default: 0
+            
+        Returns:
+            Volume: Self 
+        """
         self.child.append(logVolume)
         _pt_Volume_placeChild(self.cobj, name.encode('utf-8'), logVolume.cobj, transf.cobj, scorerGroup)
         return self
@@ -484,17 +531,23 @@ class Volume:
     #             self.placeArray(array.element, transf * i_mem.refFrame, i_mem.marker, count=count)
 
     def getCapacity(self):
-        """Get the capacity (or the volume of a solid, in other words) of the current Volume.
-
+        """Get the volumic capacity in mm^3 of the solid.
+        
         Returns:
-            capacity of volume(double)
+            float: Volume capacity in mm^3
         """
         return _pt_Volume_capacity(self.cobj)
 
     def getLogicalID(self, cobj=None):
-        if cobj is None: # reutrn the ID of this volume
+        """Get logical volume ID.
+        
+        Args:
+            cobj (void*, optional): C++ volume object. Default: None (use self.cobj)
+            
+        Returns:
+            int: Logical volume identifier
+        """
+        if cobj is None:  # Return the ID of this volume
             return _pt_Volume_id(self.cobj)
         else:
             return _pt_Volume_id(cobj)
-
-
