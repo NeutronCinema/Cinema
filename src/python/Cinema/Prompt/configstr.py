@@ -1,4 +1,3 @@
-
 ################################################################################
 ##                                                                            ##
 ##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
@@ -21,11 +20,35 @@
 
 
 class ConfigString(dict):
+    """
+    A dictionary subclass that provides attribute-style access to configuration items.
+        
+    Examples:
+        >>> config = ConfigString()
+        >>> config.cfg_name = 'quantity'
+        >>> config.cfg_value = 100
+        >>> print(config.cfg)  # Output: 'name=quantity;value=100;'
+        >>> print(config.cfg_name)  # Output: 'quantity'
+    """
+    
+    # Enable attribute-style access to dictionary items
     __getattr__ = dict.__getitem__
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
 
     def makeCfg(self):     
+        """
+        Generate a configuration string from items with 'cfg_' prefix.
+        
+        Returns:
+            str: A semicolon-separated configuration string
+            
+        Examples:
+            >>> config = ConfigString()
+            >>> config.cfg_name = 'quantity'
+            >>> config.cfg_value = 100
+            >>> config.makeCfg()  # Returns: 'name=quantity;value=100;'
+        """
         cfg = ''
         for k, v in self.items():
             if k.__contains__('cfg_'):
@@ -39,4 +62,10 @@ class ConfigString(dict):
     
     @property
     def cfg(self) -> str: 
+        """
+        Property that returns the configuration string.
+
+        Examples:
+            >>> 'name=quantity;value=100;'
+        """
         return self.makeCfg()
