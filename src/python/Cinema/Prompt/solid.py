@@ -17,6 +17,13 @@
 ##  limitations under the License.                                            ##
 ##                                                                            ##
 ################################################################################
+"""
+A Solid is a 3D geometry with shape and size.
+
+Implemented via Vecgeom.
+
+"""
+
 import numpy as np
 from ..Interface import *
 from typing import Union
@@ -54,7 +61,7 @@ class Solid:
     def __init__(self) -> None:
         pass
 
-    def sanityCheckPositive(self, *args: Union[float, int, np.ndarray]):
+    def _sanityCheckPositive(self, *args: Union[float, int, np.ndarray]):
         for p in args:
             if isinstance(p, np.ndarray):
                 if any(p < 0):
@@ -63,11 +70,11 @@ class Solid:
             elif p < 0:
                 raise ValueError(f"Invalid input! {p} should be positive value or zero!")
             
-    def sanityCheckRelation(self, min, max):
+    def _sanityCheckRelation(self, min, max):
         if min > max:
             raise ValueError(f"Invalid inputs! rmin ({min}) should less than or equal rmax ({max}))!")
 
-    def arrayCheck(self, p):
+    def _arrayCheck(self, p):
         """
         If a pointer points to an array, its elements can be read and written using standard subscript and slice accesses
         Ref: https://docs.python.org/3/library/ctypes.html#ctypes._Pointer
@@ -96,7 +103,7 @@ class SolidSubtraction(Solid):
 
 class Box(Solid):
     def __init__(self, hx, hy, hz):
-        self.sanityCheckPositive(hx, hy, hz)
+        self._sanityCheckPositive(hx, hy, hz)
         self.cobj = _pt_Box_new(hx, hy, hz)
         self.hx = hx
         self.hy = hy
@@ -110,23 +117,23 @@ class Box(Solid):
 
 class Tube(Solid):
     def __init__(self, rmin, rmax, z, startphi = 0, deltaphi = 360):
-        self.sanityCheckPositive(rmin, rmax, z, deltaphi)
+        self._sanityCheckPositive(rmin, rmax, z, deltaphi)
         self.cobj = _pt_Tube_new(rmin, rmax, z, np.deg2rad(startphi), np.deg2rad(deltaphi))
 
 class Sphere(Solid):
     def __init__(self, rmin, rmax, startphi=0., deltaphi=2*np.pi, starttheta=0., deltatheta=np.pi):
-        self.sanityCheckPositive(rmin, rmax, deltaphi, deltatheta)
+        self._sanityCheckPositive(rmin, rmax, deltaphi, deltatheta)
         self.cobj = _pt_Sphere_new(rmin, rmax, startphi, deltaphi, starttheta, deltatheta)
 
 class Trapezoid(Solid):
     def __init__(self, x1, x2, y1, y2, z) -> None:
-        self.sanityCheckPositive(x1, x2, y1, y2, z)
+        self._sanityCheckPositive(x1, x2, y1, y2, z)
         self.cobj = _pt_Trapezoid_new(x1, x2, y1, y2, z)
 
 class Polyhedron(Solid):
     def __init__(self, zPlanes, rMin, rMax, sideCount=6,
                  phiStart_deg=0, phiDelta_deg=360) -> None:
-        self.sanityCheckPositive(zPlanes, rMin, rMax, sideCount,phiDelta_deg)
+        self._sanityCheckPositive(zPlanes, rMin, rMax, sideCount,phiDelta_deg)
         zp, rmin, rmax = np.array(zPlanes), np.array(rMin), np.array(rMax)
         if zp.size!=rmin.size or rmin.size!=rmax.size:
             raise RuntimeError('the sizes of zPlanes, rMin and rMax are not equal')    
@@ -154,23 +161,23 @@ class Tessellated(Solid): #this one is not working
 class ArbTrapezoid(Solid):
     def __init__(self, xy1 : np.ndarray, xy2 : np.ndarray, xy3 : np.ndarray, xy4 : np.ndarray,
                  xy5 : np.ndarray, xy6 : np.ndarray, xy7 : np.ndarray, xy8 : np.ndarray, halfz) -> None:
-        self.sanityCheckPositive(halfz)
+        self._sanityCheckPositive(halfz)
         # if not xy1.flags['C_CONTIGUOUS']:         TODO: solid or not when ndarray is not contiguous?
             # xy1 = np.ascontiguousarray(xy1, dtype=xy1.dtype)
         # xy1 = ctypes.cast(xy1.ctypes.data, type_dblp)
         vectors = (xy1, xy2, xy3, xy4, xy5, xy6, xy7, xy8)
         p_vecs = []
         for vec in vectors:
-            p_vecs.append(self.arrayCheck(vec))
+            p_vecs.append(self._arrayCheck(vec))
         self.cobj = _pt_ArbTrapezoid_new(p_vecs[0], p_vecs[1], p_vecs[2], p_vecs[3], p_vecs[4], p_vecs[5], p_vecs[6], p_vecs[7], halfz)
 
         # self.cobj = _pt_ArbTrapezoid_new( xy1, xy2, xy3, xy4, xy5, xy6, xy7, xy8, halfz)
 
 class Cone(Solid):
     def __init__(self, rmaxBot, rmaxTop, z, rminBot = 0, rminTop = 0, startPhi = 0, deltaPhi = 360) -> None:
-        self.sanityCheckPositive(rmaxBot, rmaxTop, z, rminBot, rminTop, deltaPhi)
-        self.sanityCheckRelation(rminBot, rmaxBot)
-        self.sanityCheckRelation(rminTop, rmaxTop)
+        self._sanityCheckPositive(rmaxBot, rmaxTop, z, rminBot, rminTop, deltaPhi)
+        self._sanityCheckRelation(rminBot, rmaxBot)
+        self._sanityCheckRelation(rminTop, rmaxTop)
         self.cobj = _pt_Cone_new(rminBot, rmaxBot, rminTop, rmaxTop, z, np.deg2rad(startPhi), np.deg2rad(deltaPhi))
        
 
@@ -179,17 +186,17 @@ class CutTube(Solid):
         raise NotImplementedError("CutTube got problems, See issue!")
         # TODO:fix tracing point location problem
         # super().__init__()
-        # self.sanityCheckPositive(rmin, rmax, halfHeight, dphi)
-        # botN = self.arrayCheck(botNormal)
-        # topN = self.arrayCheck(topNormal)
+        # self._sanityCheckPositive(rmin, rmax, halfHeight, dphi)
+        # botN = self._arrayCheck(botNormal)
+        # topN = self._arrayCheck(topNormal)
         # self.sanityCheck(rmin, rmax)
         # self.cobj = _pt_CutTube_new(rmin, rmax, halfHeight, np.deg2rad(sphi), np.deg2rad(dphi), botN, topN)
         
 class HypebolicTube(Solid):
     def __init__(self, rmax, inst, outst, halfHeight, rmin = 0) -> None:
         super().__init__()
-        self.sanityCheckPositive(rmin, rmax, inst, outst, halfHeight)
-        self.sanityCheckRelation(rmin, rmax)
+        self._sanityCheckPositive(rmin, rmax, inst, outst, halfHeight)
+        self._sanityCheckRelation(rmin, rmax)
         self.stereoAngleCheck(inst, outst)
         self.cobj = _pt_HypeTube_new(rmin, rmax, inst, outst, halfHeight)
 
@@ -202,28 +209,28 @@ class HypebolicTube(Solid):
 class Orb(Solid):
     def __init__(self, r) -> None:
         super().__init__()
-        self.sanityCheckPositive(r)
+        self._sanityCheckPositive(r)
         self.cobj = _pt_Orb_new(r)
 
 
 class Paraboloid(Solid):
     def __init__(self, rbot, rtop, halfHeight) -> None:
         super().__init__()
-        self.sanityCheckPositive(rbot, rtop, halfHeight)
+        self._sanityCheckPositive(rbot, rtop, halfHeight)
         self.cobj = _pt_Paraboloid_new(rbot, rtop, halfHeight)
 
 
 class PolyCone(Solid):
     def __init__(self, vec_z : np.ndarray, vec_rmin : np.ndarray, vec_rmax : np.ndarray, sphi = 0, dphi = 360) -> None:
         super().__init__()
-        self.sanityCheckPositive(sphi, dphi, vec_rmin, vec_rmax)
+        self._sanityCheckPositive(sphi, dphi, vec_rmin, vec_rmax)
         self.sizeConsistencyCheck(vec_z, vec_rmin, vec_rmax)
-        self.sanityCheckRelation(vec_rmin, vec_rmax)
+        self._sanityCheckRelation(vec_rmin, vec_rmax)
         self.monotonicCheck(vec_z)
         planeNum = len(vec_z)
-        pot_z = self.arrayCheck(vec_z)
-        pot_rmin = self.arrayCheck(vec_rmin)
-        pot_rmax = self.arrayCheck(vec_rmax)
+        pot_z = self._arrayCheck(vec_z)
+        pot_rmin = self._arrayCheck(vec_rmin)
+        pot_rmax = self._arrayCheck(vec_rmax)
         self.cobj = _pt_Polycone_new(np.deg2rad(sphi), np.deg2rad(dphi), planeNum, pot_z, pot_rmin, pot_rmax)
 
     def sizeConsistencyCheck(self, *arg):
@@ -231,9 +238,9 @@ class PolyCone(Solid):
         if any([len(p) != vec_size for p in arg]):
             raise ValueError("Input vector size for planes not consistent!")
         
-    def sanityCheckRelation(self, min : np.ndarray, max : np.ndarray):
+    def _sanityCheckRelation(self, min : np.ndarray, max : np.ndarray):
         for mmin, mmax in zip(min, max):
-            super().sanityCheckRelation(mmin, mmax)
+            super()._sanityCheckRelation(mmin, mmax)
 
     def monotonicCheck(self, *arg : np.ndarray):
         for p in arg:
@@ -244,24 +251,24 @@ class PolyCone(Solid):
 class Tetrahedron(Solid):
     def __init__(self, p1, p2, p3, p4) -> None:
         super().__init__()
-        ps = self.arrayCheck(p1, p2, p3, p4)
+        ps = self._arrayCheck(p1, p2, p3, p4)
         self.cobj = _pt_Tet_new(ps[0], ps[1], ps[2], ps[3])
     
-    def arrayCheck(self, *args):
+    def _arrayCheck(self, *args):
         ps = []
         for p in args:
-            ps.append(super().arrayCheck(p))
+            ps.append(super()._arrayCheck(p))
         return ps
 
 
 class GenTrapezoid(Solid):
     def __init__(self, dz, theta, phi, dy1, dx1, dx2, Alpha1, dy2, dx3, dx4, Alpha2) -> None:
         super().__init__()
-        self.sanityCheckPositive(dz, theta, phi, dy1, dx1, dx2, Alpha1, dy2, dx3, dx4, Alpha2)
-        self.sanityCheckRelation(theta, 90)
-        self.sanityCheckRelation(phi, 90)
-        self.sanityCheckRelation(Alpha1, 90)
-        self.sanityCheckRelation(Alpha2, 90)
+        self._sanityCheckPositive(dz, theta, phi, dy1, dx1, dx2, Alpha1, dy2, dx3, dx4, Alpha2)
+        self._sanityCheckRelation(theta, 90)
+        self._sanityCheckRelation(phi, 90)
+        self._sanityCheckRelation(Alpha1, 90)
+        self._sanityCheckRelation(Alpha2, 90)
         self.cobj = _pt_GenTrapezoid_new(dz, np.deg2rad(theta), np.deg2rad(phi), dy1, dx1, dx2, np.deg2rad(Alpha1), dy2, dx3, dx4, np.deg2rad(Alpha2))
 
 class Ellipsoid(Solid):
