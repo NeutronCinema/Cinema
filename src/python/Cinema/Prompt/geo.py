@@ -29,7 +29,7 @@ from .scorer import Scorer
 __all__ = ['Volume', 'Transformation3D']
 
 
-#Volume
+# C function imports for Volume class
 _pt_Volume_new = importFunc('pt_Volume_new', type_voidp, [type_cstr, type_voidp])
 _pt_Volume_delete = importFunc('pt_Volume_delete', None, [type_voidp] )
 _pt_Volume_placeChild = importFunc('pt_Volume_placeChild', None, [type_voidp, type_cstr, type_voidp, type_voidp, type_int])
@@ -37,13 +37,14 @@ _pt_Volume_placeChild = importFunc('pt_Volume_placeChild', None, [type_voidp, ty
 _pt_Volume_id = importFunc('pt_Volume_id', type_uint, [type_voidp])
 _pt_Volume_capacity = importFunc('pt_Volume_capacity', type_dbl, [type_voidp])
 
+# C function imports for Transformation3D class
 _pt_Transformation3D_newfromdata = importFunc('pt_Transformation3D_newfromdata', type_voidp, [type_dbl, type_dbl, type_dbl, type_dbl, type_dbl, type_dbl, type_dbl, type_dbl, type_dbl])
 _pt_Transformation3D_delete = importFunc('pt_Transformation3D_delete', None, [type_voidp] )
 _pt_Transformlation3D_setRotation  = importFunc('pt_Transformlation3D_setRotation', None, [type_voidp, type_dbl, type_dbl, type_dbl, type_dbl, type_dbl, type_dbl, type_dbl, type_dbl, type_dbl] )
 _pt_Transformlation3D_setTranslation  = importFunc('pt_Transformlation3D_setTranslation', None, [type_voidp, type_dbl, type_dbl, type_dbl] )
 
 
-#resource manager 
+# Resource manager C function imports
 _pt_ResourceManager_addNewVolume = importFunc('pt_ResourceManager_addNewVolume', None, [type_uint])
 _pt_ResourceManager_addScorer = importFunc('pt_ResourceManager_addScorer', None, [type_uint, type_cstr, type_voidp])
 _pt_ResourceManager_addSurface = importFunc('pt_ResourceManager_addSurface', None, [type_uint, type_cstr])
@@ -51,8 +52,33 @@ _pt_ResourceManager_cfgVolPhysics = importFunc('pt_ResourceManager_cfgVolPhysics
 
 
 class Transformation3D:
-    def __init__(self, x=0., y=0., z=0., rot_z=0., rot_new_x=0., rot_new_z=0., degrees = True):
-        # rotate is in ZXZ in the vecgeom 
+    """
+    Transformation in 3d-space of Volume, manipulating on Volume translation and rotation.
+    Provided with methods for intrinsic (local coordinate) and extrinsic (global coordinate) rotation.
+    
+    Attributes:
+        cobj (void*): Pointer to C++ transformation object
+        __sciRot (scipyRot): Scipy rotation object for Python-side operations
+        __translation (ndarray): Translation vector [x, y, z]
+    """
+    def __init__(self, 
+                 x:float=0., y:float=0., z:float=0., 
+                 rot_z:float=0., rot_new_x:float=0., rot_new_z:float=0., 
+                 degrees=True):
+        """
+        Initialize transformation with translation and ZXZ Euler angles.
+        Intrinsic rotation follows ZXZ convention.
+        
+        Args:
+            x (float, optional): X translation. Default: 0.0
+            y (float, optional): Y translation. Default: 0.0
+            z (float, optional): Z translation. Default: 0.0
+            rot_z (float, optional): First Z rotation angle. Default: 0.0
+            rot_new_x (float, optional): X rotation angle. Default: 0.0
+            rot_new_z (float, optional): Second Z rotation angle. Default: 0.0
+            degrees (bool, optional): Whether angles are in degrees. Default: True
+        """
+        # Rotation follows ZXZ convention in vecgeom backend
         self.cobj = _pt_Transformation3D_newfromdata(x, y, z, rot_z, rot_new_x, rot_new_z, 1, 1, 1)
         self.__sciRot = scipyRot.from_euler('ZXZ', [rot_z, rot_new_x, rot_new_z], degrees)
         self.__translation = np.array([x, y, z])
@@ -60,14 +86,46 @@ class Transformation3D:
 
 
     @classmethod 
-    def from_euler_xyz(cls, x=0., y=0., z=0., rx=0., ry=0., rz=0., degrees = True):
+    def from_euler_xyz(cls, x=0., y=0., z=0., rx=0., ry=0., rz=0., degrees=True):
+        """
+        Create transformation from xyz Euler angles.
+        Extrinsic rotation follows xyz convention.
+        
+        Args:
+            x (float, optional): X translation. Default: 0.0
+            y (float, optional): Y translation. Default: 0.0
+            z (float, optional): Z translation. Default: 0.0
+            rx (float, optional): X rotation angle. Default: 0.0
+            ry (float, optional): Y rotation angle. Default: 0.0
+            rz (float, optional): Z rotation angle. Default: 0.0
+            degrees (bool, optional): Whether angles are in degrees. Default: True
+            
+        Returns:
+            Transformation3D: New transformation object
+        """
         obj = cls(x,y,z)
         sciRot = scipyRot.from_euler('xyz', [rx, ry, rz], degrees)
         obj.setSciRot(sciRot)
         return obj
 
     @classmethod
-    def from_alignement(cls, x=0., y=0., z=0., rotated=None, original=None) :  # rotated, original are with shape (N, 3)
+    def from_alignement(cls, x=0., y=0., z=0., rotated:np.ndarray=None, original:np.ndarray=None):
+        """
+        Create transformation by aligning vectors.
+        
+        Args:
+            x (float, optional): X translation. Default: 0.0
+            y (float, optional): Y translation. Default: 0.0
+            z (float, optional): Z translation. Default: 0.0
+            rotated (ndarray): Target vectors after rotation
+            original (ndarray): Original vectors before rotation
+            
+        Returns:
+            Transformation3D: New transformation object
+            
+        Raises:
+            RuntimeError: If rotated or original vectors are not provided
+        """
         if rotated or original is None:
             raise RuntimeError('Rotated and original should be provided')
         obj = cls(x,y,z)
@@ -76,9 +134,22 @@ class Transformation3D:
 
     @property
     def euler_xyz(self):
+        """Get XYZ Euler angles extrinsic representation of rotation.
+        
+        Returns:
+            ndarray: XYZ Euler angles in degrees
+        """
         return self.__sciRot.as_euler('xyz', True)
 
     def __deepcopy__(self, memo):
+        """Create a deep copy of the transformation.
+        
+        Args:
+            memo: Memo dictionary for deepcopy
+            
+        Returns:
+            Transformation3D: Deep copy of current object
+        """
         copy = type(self)()
         memo[id(self)] = copy
         copy.cobj = _pt_Transformation3D_newfromdata(self.__translation[0], self.__translation[1], self.__translation[2], 
@@ -90,6 +161,7 @@ class Transformation3D:
         return copy
 
     def __del__(self):
+        """Clean up C++ transformation object."""
         _pt_Transformation3D_delete(self.cobj)
     
     # TODO: review the transformation operations
@@ -120,13 +192,24 @@ class Transformation3D:
     #     return inversion
 
     def update_cpp_rot(self):
+        """Push Python side roation to C++ side."""
         mat = self.__sciRot.as_matrix()
-        # print(mat)
         _pt_Transformlation3D_setRotation(self.cobj, mat[0,0], mat[0,1], mat[0,2],
                                           mat[1,0], mat[1,1], mat[1,2],
                                           mat[2,0], mat[2,1], mat[2,2])
         
     def applyRotAxis(self, angle, axis, degrees=True):
+        """
+        Apply rotation around arbitrary axis.
+        
+        Args:
+            angle (float): Rotation angle
+            axis (array-like): Rotation axis vector
+            degrees (bool, optional): Whether angle is in degrees. Default: True
+            
+        Returns:
+            Transformation3D: Self for method chaining
+        """
         axis = np.array(axis)
         rot = scipyRot.from_rotvec(angle * axis/np.linalg.norm(axis), degrees=degrees)
         self.__sciRot *= rot
@@ -134,24 +217,66 @@ class Transformation3D:
         return self
     
     def applyRotX(self, angle, degrees=True):
+        """
+        Apply rotation around X axis.
+        
+        Args:
+            angle (float): Rotation angle
+            degrees (bool, optional): Whether angle is in degrees. Default: True
+            
+        Returns:
+            Transformation3D: Self for method chaining
+        """
         rot = scipyRot.from_rotvec(angle * np.array([1,0,0.]), degrees=degrees)
         self.__sciRot *= rot
         self.update_cpp_rot()
         return self
     
     def applyRotY(self, angle, degrees=True):
+        """
+        Apply rotation around Y axis.
+        
+        Args:
+            angle (float): Rotation angle
+            degrees (bool, optional): Whether angle is in degrees. Default: True
+            
+        Returns:
+            Transformation3D: Self for method chaining
+        """
         rot = scipyRot.from_rotvec(angle * np.array([0,1,0.]), degrees=degrees)
         self.__sciRot *= rot
         self.update_cpp_rot()
         return self
     
     def applyRotZ(self, angle, degrees=True):
+        """
+        Apply rotation around Z axis.
+        
+        Args:
+            angle (float): Rotation angle
+            degrees (bool, optional): Whether angle is in degrees. Default: True
+            
+        Returns:
+            Transformation3D: Self for method chaining
+        """
         rot = scipyRot.from_rotvec(angle * np.array([0,0,1.]), degrees=degrees)
         self.__sciRot *= rot
         self.update_cpp_rot()
         return self
     
     def applyRotxyz(self, rotx, roty, rotz, degrees=True):
+        """
+        Apply extrinsic rotation using xyz Euler angles.
+        
+        Args:
+            rotx (float): X rotation angle
+            roty (float): Y rotation angle
+            rotz (float): Z rotation angle
+            degrees (bool, optional): Whether angles are in degrees. Default: True
+            
+        Returns:
+            Transformation3D: Self for method chaining
+        """
         rot = scipyRot.from_euler('xyz', [rotx, roty, rotz], degrees=degrees)
         self.__sciRot *= rot
         self.update_cpp_rot()
@@ -170,7 +295,20 @@ class Transformation3D:
                                           mat[1,0], mat[1,1], mat[1,2],
                                           mat[2,0], mat[2,1], mat[2,2])
 
-    def setRotByAlignement(self, rotated, original) :  # rotated, original are with shape (N, 3)
+    def setRotByAlignement(self, rotated, original):
+        """
+        Set rotation by aligning original vectors to rotated vectors.
+        
+        Args:
+            rotated (ndarray): Target vectors after rotation (shape: Nx3)
+            original (ndarray): Original vectors before rotation (shape: Nx3)
+            
+        Returns:
+            Transformation3D: Self for method chaining
+            
+        Raises:
+            RuntimeError: If vectors don't contain exactly 2 vectors
+        """
         if len(original)!= len(rotated) or len(original)!=2:
             raise RuntimeError('rotated and original should be contain 2 vectors')
         self.__sciRot, rssd = scipyRot.align_vectors(original, rotated)
@@ -178,14 +316,33 @@ class Transformation3D:
         return self
 
     def setSciRot(self, sciRot):
+        """
+        Set rotation from scipy rotation object.
+        
+        Args:
+            sciRot (scipyRot): Scipy rotation object
+            
+        Returns:
+            Transformation3D: Self for method chaining
+        """
         self.__sciRot = deepcopy(sciRot)
         self.update_cpp_rot()
         return self
     
     def getRotMatrix(self):
+        """Get 3x3 rotation matrix.
+        
+        Returns:
+            ndarray: 3x3 rotation matrix
+        """
         return self.__sciRot.as_matrix()
         
     def getTranslation(self):
+        """Get translation vector.
+        
+        Returns:
+            ndarray: Translation vector [x, y, z]
+        """
         return self.__translation
 
     # TODO: review transformation operation
@@ -200,15 +357,43 @@ class Transformation3D:
     #     """
     #     return self.inv() * other
 
+    def set_euler_ZXZ(self, rot_z=0., rot_new_x=0., rot_new_z=0., degrees=True):
+        """
+        Set rotation using intrinsic ZXZ Euler angles.
+        
+        Args:
+            rot_z (float, optional): First Z rotation angle. Default: 0.0
+            rot_new_x (float, optional): X rotation angle. Default: 0.0
+            rot_new_z (float, optional): Second Z rotation angle. Default: 0.0
+            degrees (bool, optional): Whether angles are in degrees. Default: True
+        """
         self.__sciRot = scipyRot.from_euler('ZXZ', [rot_z, rot_new_x, rot_new_z], degrees)
         self.update_cpp_rot()
 
     def transform(self, input):
+        """
+        Transform input points using C++ backend.
+        
+        Args:
+            input (ndarray): Input points (shape: Nx3)
+            
+        Returns:
+            ndarray: Transformed points (shape: Nx3)
+        """
         output = np.zeros_like(input)
         _pt_Transformation3D_transform(self.cobj, input.shape[0], input, output)
         return output
     
     def transform_py(self, input):
+        """
+        Transform input points using Python implementation.
+        
+        Args:
+            input (ndarray): Input points (shape: Nx3)
+            
+        Returns:
+            ndarray: Transformed points (shape: Nx3)
+        """
         return self.__sciRot.inv().apply(input)+ self.__sciRot.inv().apply(self.__translation)
         
 class Volume:
