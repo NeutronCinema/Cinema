@@ -157,7 +157,13 @@ class Transformation3D:
         self.update_cpp_rot()
         return self
 
-    def applyTrans(self, refMatrix):
+    def applyRotbyMatrix(self, refMatrix):
+        """
+        Apply rotation by multiplying with reference matrix.
+        
+        Args:
+            refMatrix (ndarray): 3x3 reference rotation matrix
+        """
         mat = self.__sciRot.as_matrix().dot(refMatrix)
         self.__sciRot = scipyRot.from_matrix(self.__sciRot.as_matrix())
         _pt_Transformlation3D_setRotation(self.cobj, mat[0,0], mat[0,1], mat[0,2],
