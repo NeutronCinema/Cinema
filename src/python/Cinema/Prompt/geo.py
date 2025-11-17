@@ -188,11 +188,18 @@ class Transformation3D:
     def getTranslation(self):
         return self.__translation
 
-    def getTransformationTo(self, other):
-        return self.inv() * other
+    # TODO: review transformation operation
+    # def getTransformationTo(self, other):
+    #     """Get transformation from self to other transformation.
+        
+    #     Args:
+    #         other (Transformation3D): Target transformation
+            
+    #     Returns:
+    #         Transformation3D: Transformation from self to other
+    #     """
+    #     return self.inv() * other
 
-    #  a wrapper of scipy.spatial.transform.Rotation    
-    def set_euler_ZXZ(self, rot_z=0., rot_new_x=0., rot_new_z=0., degrees = True):
         self.__sciRot = scipyRot.from_euler('ZXZ', [rot_z, rot_new_x, rot_new_z], degrees)
         self.update_cpp_rot()
 
