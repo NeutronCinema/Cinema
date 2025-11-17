@@ -91,7 +91,8 @@ class Transformation3D:
 
     def __del__(self):
         _pt_Transformation3D_delete(self.cobj)
-        
+    
+    # TODO: review the transformation operations
     # def __mul__(self, other):
     #     '''
     #     Transformation following another parent transformation.
@@ -104,19 +105,19 @@ class Transformation3D:
     #     transf.applyTrans(rot)
     #     return transf
 
-    def __mul__(self, other):
-        rot = self.getRotMatrix().dot(other.getRotMatrix())
-        transl = self.__translation + self.getRotMatrix().dot(other.getTranslation())
-        transf = Transformation3D(transl[0], transl[1], transl[2])
-        transf._Transformation3D__sciRot = self.__sciRot * other.sciRot
-        transf.applyTrans(rot)
-        return transf
+    # def __mul__(self, other):
+    #     rot = self.getRotMatrix().dot(other.getRotMatrix())
+    #     transl = self.__translation + self.getRotMatrix().dot(other.getTranslation())
+    #     transf = Transformation3D(transl[0], transl[1], transl[2])
+    #     transf._Transformation3D__sciRot = self.__sciRot * other.sciRot
+    #     transf.applyTrans(rot)
+    #     return transf
 
-    def inv(self):
-        inversion = type(self)(-self.__translation[0], -self.__translation[1], -self.__translation[2])
-        inversion._Transformation3D__sciRot = self.__sciRot.inv()
-        inversion.update_cpp_rot()
-        return inversion
+    # def inv(self):
+    #     inversion = type(self)(-self.__translation[0], -self.__translation[1], -self.__translation[2])
+    #     inversion._Transformation3D__sciRot = self.__sciRot.inv()
+    #     inversion.update_cpp_rot()
+    #     return inversion
 
     def update_cpp_rot(self):
         mat = self.__sciRot.as_matrix()
