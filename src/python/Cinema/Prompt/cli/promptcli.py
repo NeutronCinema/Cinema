@@ -115,26 +115,18 @@ def parser_factory():
 
     args, unknown = parser.parse_known_args()
 
-    try:
-        if len(sys.argv) <= 1:
-            raise ValueError("Not enough arguments!")
-        elif args.geo == '':
-            parser = PromptBaseParser()
-            raise ValueError("Prompt simulation can not run without a geometry file!")
-        elif args.geo.endswith('.py'):
-            parser = PromptPyScriptParser(add_help = False, parents = [parser])
-        elif args.geo.endswith('.gdml'):
-            parser = PromptGdmlParser(add_help = False, parents = [parser])
-        else:
-            raise ValueError("Command line input is NOT correct, simulation not run.")
-    except Exception as e:
-        parser.print_help()
-        print()
-        print(f'PromptCLI Error: {e}')
-        if args.debug:
-            import traceback
-            traceback.print_exc()
-            exit(1)
+    if len(sys.argv) <= 1:
+        raise ValueError("Not enough arguments!")
+    elif args.geo == '':
+        parser = PromptBaseParser()
+        raise ValueError("Prompt simulation can not run without a geometry file!")
+    elif args.geo.endswith('.py'):
+        parser = PromptPyScriptParser(add_help = False, parents = [parser])
+    elif args.geo.endswith('.gdml'):
+        parser = PromptGdmlParser(add_help = False, parents = [parser])
+    else:
+        raise ValueError("Command line input is NOT correct, simulation not run.")
+
     # add help here so as to parse parameters in `.py` scripts
     # cannot move because it is intended to parse all arguments before print help message
     parser.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS,
