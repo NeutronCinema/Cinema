@@ -10,8 +10,8 @@ import numpy as np
 from Cinema.Prompt import Prompt
 from Cinema.Prompt.geo import Volume
 
-expectWl = [360., 371., 378., 373., 361., 370., 360., 314., 299., 288., 263.,
-       249., 230., 206., 213., 161., 165., 144., 142., 113.]
+expectWl = [385., 385., 397., 374., 404., 384., 323., 384., 359., 321., 262.,
+       248., 238., 227., 187., 152., 163., 151., 159., 129.]
 
 class MySim(Prompt):
     def __init__(self, seed) -> None:
@@ -21,12 +21,12 @@ class MySim(Prompt):
         world = Volume('world', Box(50, 50, 200))
         rmin=0
         rmax=10
-        inst=0.5
-        outst=0.9
+        inst=40
+        outst=45
         halfHeight=10
 
         sample = Volume('sample', HypebolicTube(rmax, inst, outst, halfHeight, rmin), 'Al_sg225.ncmat')
-        world.placeChild('entity', sample, Transformation3D(0,-5,0))
+        world.placeChild('entity', sample, Transformation3D(0,-5,0).applyRotX(90))
 
         dtt = Volume('detector', Box(10, 10, 1))
         scorerWl = WlSpectrum()

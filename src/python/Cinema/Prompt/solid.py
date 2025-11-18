@@ -278,6 +278,7 @@ class HypebolicTube(Solid):
         super().__init__()
         self._sanityCheckPositive(rmin, rmax, inst, outst, halfHeight)
         self._sanityCheckRelation(rmin, rmax)
+        inst, outst = np.deg2rad(inst), np.deg2rad(outst)
         self.stereoAngleCheck(inst, outst)
         self.cobj = _pt_HypeTube_new(rmin, rmax, inst, outst, halfHeight)
 
