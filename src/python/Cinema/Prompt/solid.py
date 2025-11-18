@@ -83,7 +83,7 @@ class Solid:
     all specific geometric shapes
     
     """
-    
+
     def _sanityCheckPositive(self, *args: Union[float, int, np.ndarray]):
         """
         Validate that all input parameters are positive numbers or zero.
@@ -183,6 +183,18 @@ class SolidSubtraction(Solid):
         self.cobj = _pt_solid_subtraction(left.cobj, right.cobj, right_transf3d.cobj)
 
 class Box(Solid):
+    """
+    Rectangular parallelepiped (box) solid.
+    
+    Args:
+        hx: Half-length in x-direction. In unit mm.
+        hy: Half-length in y-direction. In unit mm.
+        hz: Half-length in z-direction. In unit mm.
+                
+    Example:
+        >>> box = Box(5.0, 3.0, 2.0)  # 10x6x4 mm box
+    """
+    
     def __init__(self, hx, hy, hz):
         self._sanityCheckPositive(hx, hy, hz)
         self.cobj = _pt_Box_new(hx, hy, hz)
@@ -197,33 +209,128 @@ class Box(Solid):
         pass
 
 class Tube(Solid):
+    """
+    Cylindrical tube.
+    
+    Creates a tube with inner and outer radius, height, and angular limits.
+    
+    Args:
+        rmin: Inner radius. In unit mm.
+        rmax: Outer radius. In unit mm.
+        z: Half-height. In unit mm.
+        startphi: Starting angle in deg (default: 0)
+        deltaphi: Angular extent in deg (default: 360)
+        
+    Example:
+        >>> tube = Tube(1.0, 2.0, 5.0)  # Full tube
+        >>> tube_segment = Tube(1.0, 2.0, 5.0, 0, np.deg2rad(90))  # Quarter tube
+    """
+    
     def __init__(self, rmin, rmax, z, startphi = 0, deltaphi = 360):
-        self._sanityCheckPositive(rmin, rmax, z, deltaphi)
+        self._sanityCheckPositive(rmin, rmax, z)
+        self._sanityCheckRelation(rmin, rmax)
+        if abs(deltaphi) > 360:
+            raise ValueError(f"deltaphi ({deltaphi}) > 360. ill-defined angular extent")
         self.cobj = _pt_Tube_new(rmin, rmax, z, np.deg2rad(startphi), np.deg2rad(deltaphi))
 
 class Sphere(Solid):
-    def __init__(self, rmin, rmax, startphi=0., deltaphi=2*np.pi, starttheta=0., deltatheta=np.pi):
-        self._sanityCheckPositive(rmin, rmax, deltaphi, deltatheta)
-        self.cobj = _pt_Sphere_new(rmin, rmax, startphi, deltaphi, starttheta, deltatheta)
+    """
+    Spherical shell.
+    
+    Creates a spherical shell with inner and outer radii and angular limits.
+    
+    Args:
+        rmin: Inner radius. In unit mm.
+        rmax: Outer radius. In unit mm.
+        startphi: Starting azimuthal angle in deg (default: 0)
+        deltaphi: Azimuthal extent in deg (default: 360)
+        starttheta: Starting polar angle in deg (default: 0)
+        deltatheta: Polar extent in deg (default: 180)
+        
+    Example:
+        >>> sphere = Sphere(1.0, 2.0)  # Full sphere
+        >>> sphere_segment = Sphere(1.0, 2.0, 0, 90, 0, 45)
+    """
+    
+    def __init__(self, rmin, rmax, startphi = 0, deltaphi = 360, starttheta = 0, deltatheta = 180):
+        self._sanityCheckPositive(rmin, rmax)
+        self._sanityCheckRelation(rmin, rmax)
+        if abs(deltaphi) > 360:
+            raise ValueError(f"deltaphi ({deltaphi}) > 360. ill-defined angular extent")
+        if abs(deltatheta) > 180:
+            raise ValueError(f"deltatheta ({deltatheta}) > 180. ill-defined angular extent")
+        self.cobj = _pt_Sphere_new(rmin, rmax, np.deg2rad(startphi), np.deg2rad(deltaphi), np.deg2rad(starttheta), np.deg2rad(deltatheta))
 
 class Trapezoid(Solid):
-    def __init__(self, x1, x2, y1, y2, z) -> None:
+    """
+    Trapezoidal prism solid.
+    
+    Creates a trapezoidal shape with specified dimensions.
+    In unit mm.
+        
+    Args:
+        x1: First x-dimension
+        x2: Second x-dimension
+        y1: First y-dimension  
+        y2: Second y-dimension
+        z: Half-height
+        
+    Example:
+        >>> trapezoid = Trapezoid(2.0, 4.0, 3.0, 6.0, 5.0)
+    """
+    
+    def __init__(self, x1, x2, y1, y2, z):
         self._sanityCheckPositive(x1, x2, y1, y2, z)
         self.cobj = _pt_Trapezoid_new(x1, x2, y1, y2, z)
 
 class Polyhedron(Solid):
-    def __init__(self, zPlanes, rMin, rMax, sideCount=6,
-                 phiStart_deg=0, phiDelta_deg=360) -> None:
-        self._sanityCheckPositive(zPlanes, rMin, rMax, sideCount,phiDelta_deg)
-        zp, rmin, rmax = np.array(zPlanes), np.array(rMin), np.array(rMax)
-        if zp.size!=rmin.size or rmin.size!=rmax.size:
-            raise RuntimeError('the sizes of zPlanes, rMin and rMax are not equal')    
+    """
+    Polyhedral solid defined by multiple z-planes.
+    
+    Creates a polyhedron from cross-sectional definitions at different z-positions.
+    In unit mm.
         
-        self.cobj = _pt_Polyhedron_new(np.deg2rad(phiStart_deg), np.deg2rad(phiDelta_deg), int(sideCount), int(zp.size), 
-                 zp, rmin, rmax)
+    Args:
+        zPlanes: Array of z-positions for cross-sections
+        rMin: Array of minimum radii at each z-plane
+        rMax: Array of maximum radii at each z-plane  
+        sideCount: Number of sides (default: 6 for hexagonal prism)
+        phiStart_deg: Starting angle in deg (default: 0)
+        phiDelta_deg: Angular extent in deg (default: 360)
+        
+    Example:
+        >>> z = [0, 5, 10]
+        >>> rmin = [1, 2, 1]
+        >>> rmax = [3, 4, 3]
+        >>> poly = Polyhedron(z, rmin, rmax)
+    """
+    
+    def __init__(self, zPlanes, rMin, rMax, sideCount = 6, phiStart_deg = 0, phiDelta_deg = 360):
+        if len(zPlanes) != len(rMin) or len(zPlanes) != len(rMax):
+            raise RuntimeError("zPlanes, rMin, rMax must have same length")
+        
+        self._sanityCheckPositive(sideCount)
+        for i in np.arange(len(zPlanes)):
+            self._sanityCheckPositive(rMin[i], rMax[i])
+            self._sanityCheckRelation(rMin[i], rMax[i])
+        if abs(phiDelta_deg) > 360:
+            raise ValueError(f"phiDelta_deg ({phiDelta_deg}) > 360. ill-defined angular extent")
+        self.cobj = _pt_Polyhedron_new(np.deg2rad(phiStart_deg), np.deg2rad(phiDelta_deg), int(sideCount), int(len(zPlanes)), 
+                 zPlanes, rMin, rMax)
 
-class Tessellated(Solid): #this one is not working
-    def __init__(self, polydata, tranMat=None) -> None:
+class Tessellated(Solid):
+    """
+    Solid defined by polygonal mesh data.
+    
+    Creates a solid from pyvista PolyData mesh. Requires pyvista library.
+    
+    Args:
+        polydata: pyvista PolyData object containing mesh
+        tranMat: Optional transformation matrix
+
+    """
+    
+    def __init__(self, polydata, tranMat = None):
         try:
             import pyvista
         except:
@@ -240,25 +347,53 @@ class Tessellated(Solid): #this one is not working
         self.cobj = _pt_Tessellated_new(faces.shape[0], faces, points)
 
 class ArbTrapezoid(Solid):
-    def __init__(self, xy1 : np.ndarray, xy2 : np.ndarray, xy3 : np.ndarray, xy4 : np.ndarray,
-                 xy5 : np.ndarray, xy6 : np.ndarray, xy7 : np.ndarray, xy8 : np.ndarray, halfz) -> None:
+    """
+    Arbitrary trapezoid defined by 8 corner points.
+    
+    Creates a complex trapezoidal shape from 8 corner coordinates.
+    
+    Args:
+        xy1 to xy8: 8 corner points as numpy arrays
+        halfz: Half-height of the trapezoid
+        
+    Example:
+        >>> corners = [np.array([x, y]) for x,y in [...]]
+        >>> arb_trap = ArbTrapezoid(*corners, 5.0)
+    """
+    
+    def __init__(self, xy1, xy2, xy3, xy4, xy5, xy6, xy7, xy8, halfz):
+        vec = [xy1, xy2, xy3, xy4, xy5, xy6, xy7, xy8]
+        v = self._arrayCheck(vec)
         self._sanityCheckPositive(halfz)
-        # if not xy1.flags['C_CONTIGUOUS']:         TODO: solid or not when ndarray is not contiguous?
-            # xy1 = np.ascontiguousarray(xy1, dtype=xy1.dtype)
-        # xy1 = ctypes.cast(xy1.ctypes.data, type_dblp)
-        vectors = (xy1, xy2, xy3, xy4, xy5, xy6, xy7, xy8)
-        p_vecs = []
-        for vec in vectors:
-            p_vecs.append(self._arrayCheck(vec))
-        self.cobj = _pt_ArbTrapezoid_new(p_vecs[0], p_vecs[1], p_vecs[2], p_vecs[3], p_vecs[4], p_vecs[5], p_vecs[6], p_vecs[7], halfz)
-
-        # self.cobj = _pt_ArbTrapezoid_new( xy1, xy2, xy3, xy4, xy5, xy6, xy7, xy8, halfz)
+        
+        self.cobj = _pt_ArbTrapezoid_new(*v, halfz)
 
 class Cone(Solid):
+    """
+    Conical frustum.
+    
+    Creates a conical shape with bottom and top radii and optional hollow sections.
+    
+    Args:
+        rmaxBot: Maximum radius at bottom
+        rmaxTop: Maximum radius at top  
+        z: Height
+        rminBot: Minimum radius at bottom (default: 0)
+        rminTop: Minimum radius at top (default: 0)
+        startPhi: Starting angle in degrees (default: 0)
+        deltaPhi: Angular extent in degrees (default: 360)
+        
+    Example:
+        >>> cone = Cone(3.0, 1.0, 10.0)  # Solid cone
+        >>> hollow_cone = Cone(3.0, 1.0, 10.0, 1.0, 0.5)  # Hollow cone
+    """
+    
     def __init__(self, rmaxBot, rmaxTop, z, rminBot = 0, rminTop = 0, startPhi = 0, deltaPhi = 360) -> None:
-        self._sanityCheckPositive(rmaxBot, rmaxTop, z, rminBot, rminTop, deltaPhi)
+        self._sanityCheckPositive(rmaxBot, rmaxTop, z, rminBot, rminTop)
         self._sanityCheckRelation(rminBot, rmaxBot)
         self._sanityCheckRelation(rminTop, rmaxTop)
+        if deltaPhi > 360:
+            raise ValueError(f"deltaPhi ({deltaPhi}) > 360. ill-defined angular extent")
         self.cobj = _pt_Cone_new(rminBot, rmaxBot, rminTop, rmaxTop, z, np.deg2rad(startPhi), np.deg2rad(deltaPhi))
        
 
@@ -274,8 +409,26 @@ class CutTube(Solid):
         # self.cobj = _pt_CutTube_new(rmin, rmax, halfHeight, np.deg2rad(sphi), np.deg2rad(dphi), botN, topN)
         
 class HypebolicTube(Solid):
-    def __init__(self, rmax, inst, outst, halfHeight, rmin = 0) -> None:
-        super().__init__()
+    """
+    Hyperbolic tube with stereo angles.
+    
+    Creates a hyperbolic tube shape with specified stereo angles.
+
+    Args:
+        rmax: Outer radius. In unit mm.
+        inst: Inner stereo angle. In unit deg.
+        outst: Outer stereo angle. In unit deg.
+        halfHeight: Half-height. In unit mm.
+        rmin: Inner radius. In unit mm. (default: 0)
+        
+    Methods:
+        stereoAngleCheck: Validates stereo angles < π/2
+        
+    Example:
+        >>> hype_tube = HypebolicTube(5.0, 0.1, 0.2, 10.0)
+    """
+    
+    def __init__(self, rmax, inst, outst, halfHeight, rmin = 0):
         self._sanityCheckPositive(rmin, rmax, inst, outst, halfHeight)
         self._sanityCheckRelation(rmin, rmax)
         inst, outst = np.deg2rad(inst), np.deg2rad(outst)
@@ -286,26 +439,68 @@ class HypebolicTube(Solid):
         for p in args:
             if p > np.pi / 2:
                 raise ValueError(f"Too strong stereo angle {p}! Please check! Must be in unit rad. Less than pi/2 suggested!")
-            
 
 class Orb(Solid):
-    def __init__(self, r) -> None:
-        super().__init__()
+    """
+    Perfect sphere solid.
+    
+    Creates a simple sphere with uniform radius.
+    
+    Args:
+        r: Radius of the sphere. In unit mm.
+        
+    Example:
+        >>> sphere = Orb(5.0)  # Sphere with radius 5
+    """
+    
+    def __init__(self, r):
         self._sanityCheckPositive(r)
         self.cobj = _pt_Orb_new(r)
 
-
 class Paraboloid(Solid):
-    def __init__(self, rbot, rtop, halfHeight) -> None:
-        super().__init__()
+    """
+    Parabolic solid.
+    
+    Creates a paraboloid shape.
+    
+    Args:
+        rbot: Radius at bottom. In unit mm.
+        rtop: Radius at top. In unit mm.
+        halfHeight: Half-height. In unit mm.
+        
+    Example:
+        >>> paraboloid = Paraboloid(3.0, 1.0, 5.0)
+    """
+    
+    def __init__(self, rbot, rtop, halfHeight):
         self._sanityCheckPositive(rbot, rtop, halfHeight)
         self.cobj = _pt_Paraboloid_new(rbot, rtop, halfHeight)
 
-
 class PolyCone(Solid):
-    def __init__(self, vec_z : np.ndarray, vec_rmin : np.ndarray, vec_rmax : np.ndarray, sphi = 0, dphi = 360) -> None:
-        super().__init__()
-        self._sanityCheckPositive(sphi, dphi, vec_rmin, vec_rmax)
+    """
+    Polyconical solid defined by multiple z-planes.
+    
+    Creates a complex conical shape with multiple cross-sectional definitions.
+    
+    Args:
+        vec_z: Array of z-positions. In unit mm.
+        vec_rmin: Array of minimum radii. In unit mm.
+        vec_rmax: Array of maximum radii. In unit mm.  
+        sphi: Starting angle in degrees (default: 0)
+        dphi: Angular extent in degrees (default: 360)
+        
+    Methods:
+        sizeConsistencyCheck: Validates array sizes match
+        monotonicCheck: Ensures z-positions are monotonic
+        
+    Example:
+        >>> z = [0, 2, 4, 6]
+        >>> rmin = [1, 1.5, 2, 1.5]
+        >>> rmax = [3, 3.5, 4, 3.5]
+        >>> polycone = PolyCone(z, rmin, rmax)
+    """
+    
+    def __init__(self, vec_z, vec_rmin, vec_rmax, sphi = 0, dphi = 360):
         self.sizeConsistencyCheck(vec_z, vec_rmin, vec_rmax)
         self._sanityCheckRelation(vec_rmin, vec_rmax)
         self.monotonicCheck(vec_z)
@@ -344,8 +539,22 @@ class Tetrahedron(Solid):
 
 
 class GenTrapezoid(Solid):
-    def __init__(self, dz, theta, phi, dy1, dx1, dx2, Alpha1, dy2, dx3, dx4, Alpha2) -> None:
-        super().__init__()
+    """
+    Generalized trapezoid with complex parameters.
+    
+    Creates a trapezoid with multiple dimensional and angular parameters.
+    
+    Args:
+        dz: Half-height
+        theta, phi: Angular parameters
+        dy1, dx1, dx2, Alpha1: First set of dimensions and angles
+        dy2, dx3, dx4, Alpha2: Second set of dimensions and angles
+        
+    Example:
+        >>> gen_trap = GenTrapezoid(5.0, 0.1, 0.2, 3.0, 4.0, 5.0, 0.3, 3.5, 4.5, 6.0, 0.4)
+    """
+    
+    def __init__(self, dz, theta, phi, dy1, dx1, dx2, Alpha1, dy2, dx3, dx4, Alpha2):
         self._sanityCheckPositive(dz, theta, phi, dy1, dx1, dx2, Alpha1, dy2, dx3, dx4, Alpha2)
         self._sanityCheckRelation(theta, 90)
         self._sanityCheckRelation(phi, 90)
@@ -354,8 +563,28 @@ class GenTrapezoid(Solid):
         self.cobj = _pt_GenTrapezoid_new(dz, np.deg2rad(theta), np.deg2rad(phi), dy1, dx1, dx2, np.deg2rad(Alpha1), dy2, dx3, dx4, np.deg2rad(Alpha2))
 
 class Ellipsoid(Solid):
-    def __init__(self, dx, dy, dz, zBottomCut = 0, zTopCut = 0) -> None:
-        super().__init__()
+    """
+    Ellipsoidal solid with optional cuts.
+    
+    Creates an ellipsoid with specified semi-axes and optional cut planes.
+    
+    Args:
+        dx: Semi-axis in x-direction
+        dy: Semi-axis in y-direction  
+        dz: Semi-axis in z-direction
+        zBottomCut: Bottom cut plane (default: 0)
+        zTopCut: Top cut plane (default: 0)
+        
+    Methods:
+        checkParamaters: Validates cut plane positions
+        
+    Example:
+        >>> ellipsoid = Ellipsoid(3.0, 2.0, 4.0)  # Full ellipsoid
+        >>> cut_ellipsoid = Ellipsoid(3.0, 2.0, 4.0, -2.0, 2.0)  # Cut ellipsoid
+    """
+    
+    def __init__(self, dx, dy, dz, zBottomCut = 0, zTopCut = 0):
+        self._sanityCheckPositive(dx, dy, dz)
         self.dx = dx
         self.dy = dy
         self.dz = dz
