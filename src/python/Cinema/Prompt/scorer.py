@@ -17,6 +17,18 @@
 ##  limitations under the License.                                            ##
 ##                                                                            ##
 ################################################################################
+"""
+A Scorer defines how the neutron interactions are counted/scored.
+
+This module provides classes and utilities for particle scoring and detection in the
+Cinema particle tracing framework. It includes:
+1. ParticleTracingState: denotes the particle tracing states, defines
+   the interaction type of a particle-Volume system, acts as the trigger
+   for the Scorer to count.
+2. Scorer Helper classes: Utility classes for creating and managing scorers
+
+"""
+
 from .solid import Box # why box here alone??? X.
 from .configstr import ConfigString
 from .launcher import Launcher
