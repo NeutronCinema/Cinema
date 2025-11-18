@@ -398,9 +398,13 @@ class Transformation3D:
         
 class Volume:
     """
-    A Volume consists of a solid shape, material, surface physics and scorers.
-    
-    Class Attributes:
+    A Volume consists of a geometry, material, surface physics and scorers.
+    A geometry defines the shape and size.
+    A material defines the bulk physics and potential variance reduction techniques.
+    A surface physics defines the neutron optics model.
+    The scorers defines how the neutron interactions are counted/scored.
+        
+        Class Attributes:
         scorer_dict (dict): Dictionary mapping scorer names to configurations
         volume_list (list): List of all created Volume instances
     """
