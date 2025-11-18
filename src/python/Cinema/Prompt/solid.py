@@ -20,15 +20,36 @@
 """
 A Solid is a 3D geometry with shape and size.
 
-Implemented via Vecgeom.
+This module provides a comprehensive set of geometric solid classes that wrap
+C++ geometric primitives from the VecGeom library for Monte Carlo simulations.
 
+Classes:
+    Solid - Base class for all geometric solids
+    SolidIntersection - Boolean intersection of two solids
+    SolidUnion - Boolean union of two solids  
+    SolidSubtraction - Boolean subtraction of two solids
+    Box - Rectangular parallelepiped
+    Tube - Cylindrical tube
+    Sphere - Spherical shell
+    Trapezoid - Trapezoidal prism
+    Polyhedron - Polyhedral solid defined by z-planes
+    Tessellated - Solid from polygonal mesh data
+    ArbTrapezoid - Arbitrary trapezoid from 8 corner points
+    Cone - Conical frustum with optional inner radii
+    HypebolicTube - Hyperbolic tube with stereo angles
+    Orb - Perfect sphere
+    Paraboloid - Parabolic solid
+    PolyCone - Polyconical solid defined by z-planes
+    Tetrahedron - Tetrahedral solid from 4 vertices
+    GenTrapezoid - Generalized trapezoid with complex parameters
+    Ellipsoid - Ellipsoidal solid with optional cuts
 """
 
 import numpy as np
 from ..Interface import *
 from typing import Union
 
-#box
+# C extension function imports for all solid types
 _pt_Box_new = importFunc('pt_Box_new', type_voidp, [type_dbl, type_dbl, type_dbl])
 _pt_Box_delete = importFunc('pt_Box_delete', None, [type_voidp] )
 _pt_Tube_new = importFunc('pt_Tube_new', type_voidp, [type_dbl, type_dbl, type_dbl, type_dbl, type_dbl] )
@@ -46,60 +67,120 @@ _pt_Polycone_new = importFunc('pt_Polycone_new', type_voidp, [type_dbl, type_dbl
 _pt_Tet_new = importFunc('pt_Tet_new', type_voidp, [type_npdbl1d, type_npdbl1d, type_npdbl1d, type_npdbl1d])
 _pt_Ellipsoid_new = importFunc('pt_Ellipsoid_new', type_voidp, [type_dbl, type_dbl, type_dbl, type_dbl, type_dbl])
 
-
-#Tessellated
+# Tessellated solid function
 _pt_Tessellated_new = importFunc('pt_Tessellated_new', type_voidp, [type_sizet, type_npint641d, type_npdbl2d] )
 
-#boolean operation
+# Boolean operation functions
 _pt_solid_intersection = importFunc('pt_solid_intersection', type_voidp, [type_voidp, type_voidp, type_voidp])
 _pt_solid_union = importFunc('pt_solid_union', type_voidp, [type_voidp, type_voidp, type_voidp])
 _pt_solid_subtraction = importFunc('pt_solid_subtraction', type_voidp, [type_voidp, type_voidp, type_voidp])
 
-
-
 class Solid:
-    def __init__(self) -> None:
-        pass
-
+    """
+    Base class for all geometric solids.
+    
+    Provides common validation methods and serves as the foundation for
+    all specific geometric shapes
+    
+    """
+    
     def _sanityCheckPositive(self, *args: Union[float, int, np.ndarray]):
-        for p in args:
-            if isinstance(p, np.ndarray):
-                if any(p < 0):
-                    raise ValueError(
-                        f"Invalid input! Each element of {p} should be positive value or zero!")
-            elif p < 0:
-                raise ValueError(f"Invalid input! {p} should be positive value or zero!")
+        """
+        Validate that all input parameters are positive numbers or zero.
+        
+        Args:
+            *args: Variable number of numeric values or numpy arrays
             
+        Raises:
+            ValueError: If any parameter is negative
+        """
+        for arg in args:
+            if isinstance(arg, np.ndarray):
+                if np.any(arg < 0):
+                    raise ValueError("Negative value found in array")
+            else:
+                if arg < 0:
+                    raise ValueError(f"Negative value: {arg}")
+        
     def _sanityCheckRelation(self, min, max):
+        """
+        Ensure min <= max relationship for geometric parameters.
+        
+        Args:
+            min: Minimum value
+            max: Maximum value
+            
+        Raises:
+            ValueError: If min > max
+        """
         if min > max:
-            raise ValueError(f"Invalid inputs! rmin ({min}) should less than or equal rmax ({max}))!")
-
+            raise ValueError(f"min ({min}) > max ({max})")
+        
     def _arrayCheck(self, p):
         """
-        If a pointer points to an array, its elements can be read and written using standard subscript and slice accesses
-        Ref: https://docs.python.org/3/library/ctypes.html#ctypes._Pointer
+        Convert input arrays to C-compatible numpy arrays.
+        
+        Args:
+            p: List or numpy array to convert
+            
+        Returns:
+            C-contiguous numpy array of type double
         """
-        if isinstance(p, list):
-            p = np.array(p)
-        p_c = p.astype(np.double)
-        return p_c
+        return np.ascontiguousarray(p, dtype=np.double)
 
 class SolidIntersection(Solid):
-    def __init__(self, left : Solid, right: Solid, right_transf3d):
-       self.cobj =  _pt_solid_intersection(left.cobj, right.cobj, right_transf3d.cobj)
+    """
+    Boolean intersection of two solids.
+    
+    Creates the geometric intersection (logical AND) of two solids.
+    
+    Args:
+        left: First solid object
+        right: Second solid object  
+        right_transf3d: Transformation for the second solid
+        
+    Example:
+        >>> intersection = SolidIntersection(box1, sphere1, transform)
+    """
+    
+    def __init__(self, left, right, right_transf3d):
+        self.cobj = _pt_solid_intersection(left.cobj, right.cobj, right_transf3d.cobj)
 
 class SolidUnion(Solid):
-    def __init__(self, left : Solid, right: Solid, right_transf3d):
-       self.cobj =  _pt_solid_union(left.cobj, right.cobj, right_transf3d.cobj)
+    """
+    Boolean union of two solids.
+    
+    Creates the geometric union (logical OR) of two solids.
+    
+    Args:
+        left: First solid object
+        right: Second solid object  
+        right_transf3d: Transformation for the second solid
+        
+    Example:
+        >>> union = SolidUnion(cylinder1, box1, transform)
+    """
+    
+    def __init__(self, left, right, right_transf3d):
+        self.cobj = _pt_solid_union(left.cobj, right.cobj, right_transf3d.cobj)
 
 class SolidSubtraction(Solid):
-    def __init__(self, left : Solid, right: Solid, right_transf3d):
-       self.cobj =  _pt_solid_subtraction(left.cobj, right.cobj, right_transf3d.cobj)
-
-
-# _pt_solid_union = importFunc('pt_solid_union', type_voidp, [type_voidp, type_voidp, type_voidp])
-# _pt_solid_subtraction = importFunc('pt_solid_subtraction', type_voidp, [type_voidp, type_voidp, type_voidp])
-
+    """
+    Boolean subtraction of two solids.
+    
+    Subtracts the second solid from the first solid.
+    
+    Args:
+        left: First solid object
+        right: Second solid object  
+        right_transf3d: Transformation for the second solid
+        
+    Example:
+        >>> subtraction = SolidSubtraction(sphere1, box1, transform)
+    """
+    
+    def __init__(self, left, right, right_transf3d):
+        self.cobj = _pt_solid_subtraction(left.cobj, right.cobj, right_transf3d.cobj)
 
 class Box(Solid):
     def __init__(self, hx, hy, hz):
