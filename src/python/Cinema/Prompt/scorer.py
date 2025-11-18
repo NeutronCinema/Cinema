@@ -778,3 +778,257 @@ class MCPLOutHelper(MultiScatMixin1D):
                                         )
         vol.addScorer(self, cobj)
         self.cobj = cobj
+
+
+# TODO:
+# Legacy Scorer class, to be reviewed and potentially deprecated
+class Scorer(ConfigString):
+    """
+    Base class for all scorers using string-based configuration.
+    
+    This class provides the foundation for scorers that use configuration strings
+    for setup. Derived classes should implement specific scoring functionality.
+    """
+    pass
+
+class PSD(ConfigString):
+    """
+    Position Sensitive Detector scorer for 2D position measurements.
+    
+    Measures particle positions in a 2D grid, typically used for imaging applications.
+    
+    Attributes:
+        cfg_Scorer (str): Scorer type identifier ('PSD')
+        cfg_name (str): Scorer instance name
+        cfg_xmin (float): Minimum X coordinate
+        cfg_xmax (float): Maximum X coordinate
+        cfg_numbin_x (int): Number of bins in X direction
+        cfg_ymin (float): Minimum Y coordinate
+        cfg_ymax (float): Maximum Y coordinate
+        cfg_numbin_y (int): Number of bins in Y direction
+        cfg_ptstate (str): Particle tracing state ('ENTRY')
+        cfg_type (str): Detector orientation type ('XZ')
+    """
+    def __init__(self) -> None:
+        super().__init__()
+        self.cfg_Scorer='PSD'
+        self.cfg_name = 'PSD'
+        self.cfg_xmin = -1.
+        self.cfg_xmax = 1.
+        self.cfg_numbin_x = 10 
+        self.cfg_ymin = -1.
+        self.cfg_ymax = 1.
+        self.cfg_numbin_y = 10 
+        self.cfg_ptstate = 'ENTRY' 
+        self.cfg_type = 'XZ'
+
+class WlSpectrum(ConfigString):
+    """
+    Wavelength spectrum scorer for measuring particle wavelength distributions.
+    
+    Records the wavelength distribution of particles interacting with the detector.
+    
+    Attributes:
+        cfg_Scorer (str): Scorer type identifier ('WlSpectrum')
+        cfg_name (str): Scorer instance name
+        cfg_min (float): Minimum wavelength (default: 0.0)
+        cfg_max (float): Maximum wavelength (default: 5.0)
+        cfg_numbin (int): Number of wavelength bins (default: 100)
+        cfg_ptstate (str): Particle tracing state ('ENTRY')
+    """
+    def __init__(self) -> None:
+        super().__init__()
+        self.cfg_Scorer='WlSpectrum'
+        self.cfg_name = 'WlSpectrum'
+        self.cfg_min = 0.0
+        self.cfg_max = 5
+        self.cfg_numbin = 100
+        self.cfg_ptstate = 'ENTRY'
+
+class ESpectrum(ConfigString):
+    """
+    Energy spectrum scorer for measuring particle energy distributions.
+    
+    Records the energy distribution of particles, with optional energy transfer scoring.
+    
+    Attributes:
+        cfg_Scorer (str): Scorer type identifier ('ESpectrum')
+        cfg_name (str): Scorer instance name
+        cfg_scoreTransfer (int): Flag for energy transfer scoring (0=off, 1=on)
+        cfg_min (float): Minimum energy (default: 1e-5)
+        cfg_max (float): Maximum energy (default: 0.25)
+        cfg_numbin (int): Number of energy bins (default: 100)
+        cfg_ptstate (str): Particle tracing state ('ENTRY')
+    """
+    def __init__(self) -> None:
+        super().__init__()
+        self.cfg_Scorer='ESpectrum'
+        self.cfg_name = 'ESpectrum'
+        self.cfg_scoreTransfer = 0
+        self.cfg_min = 1e-5
+        self.cfg_max = 0.25
+        self.cfg_numbin = 100
+        self.cfg_ptstate = 'ENTRY'
+
+class TOF(ConfigString):
+    """
+    Time-of-Flight scorer for measuring particle arrival times.
+    
+    Records the time distribution of particles reaching the detector.
+    
+    Attributes:
+        cfg_Scorer (str): Scorer type identifier ('TOF')
+        cfg_name (str): Scorer instance name
+        cfg_min (float): Minimum time (default: 0.0025)
+        cfg_max (float): Maximum time (default: 0.008)
+        cfg_numbin (int): Number of time bins (default: 100)
+        cfg_ptstate (str): Particle tracing state ('ENTRY')
+    """
+    def __init__(self) -> None:
+        super().__init__()
+        self.cfg_Scorer='TOF'
+        self.cfg_name = 'TOF'
+        self.cfg_min = 0.0025
+        self.cfg_max = 0.008
+        self.cfg_numbin = 100
+        self.cfg_ptstate = 'ENTRY'
+
+class VolFluence(ConfigString):
+    """
+    Volume fluence scorer for measuring particle flux through volumes.
+    
+    Calculates the particle fluence (particles per unit area) within a volume.
+    
+    Attributes:
+        cfg_Scorer (str): Scorer type identifier ('VolFluence')
+        cfg_name (str): Scorer instance name
+        cfg_min (float): Minimum value (default: 0)
+        cfg_max (float): Maximum value (default: 1)
+        cfg_numbin (int): Number of bins (default: 100)
+        cfg_ptstate (str): Particle tracing state ('ENTRY')
+        cfg_linear (str): Linear binning flag ('yes'/'no')
+    """
+    def __init__(self) -> None:
+        super().__init__()
+        self.cfg_Scorer='VolFluence'
+        self.cfg_name = 'VolFluence'
+        self.cfg_min = 0
+        self.cfg_max = 1
+        self.cfg_numbin = 100
+        self.cfg_ptstate = 'ENTRY'
+        self.cfg_linear = 'yes'
+
+# FIXME: scorer object construction moves from strings to ctype
+# the following class name move to *V1
+class ScorerHelperV1:
+    """
+    Legacy helper class for string-based scorer configuration (Version 1).
+    
+    This class provides a helper interface for creating scorers using string-based
+    configuration. It's being phased out in favor of direct C++ object creation.
+    
+    Args:
+        name (str): Unique identifier for the scorer
+        min (float): Minimum value of scoring range
+        max (float): Maximum value of scoring range
+        numbin (int): Number of bins in the scoring range
+        ptstate (str or ParticleTracingState): Particle tracing state
+    
+    Methods:
+        make: Adds the scorer to a volume
+    """
+    def __init__(self, name, min, max, numbin, ptstate) -> None:
+        self.name = name
+        self.min = min
+        self.max = max
+        self.numbin = numbin
+        if isinstance(ptstate, ParticleTracingState):
+            self.ptstate = ptstate.to_string()
+        elif isinstance(ptstate, str):
+            self.ptstate = ptstate
+        else:
+            raise TypeError(f"ptstate must be a string or ParticleTracingState enum, got {type(ptstate)}")
+
+    def __realinit(self):
+        self.score.cfg_name = self.name
+        self.score.cfg_min = self.min
+        self.score.cfg_max = self.max
+        self.score.cfg_numbin = self.numbin
+        self.score.cfg_ptstate = self.ptstate
+        
+    def make(self, vol):
+        vol.addScorer(self.score.cfg)
+
+class ESpectrumHelperV1(ScorerHelperV1): 
+    """
+    Legacy helper for energy spectrum scorers (Version 1).
+    
+    Args:
+        name (str): Scorer name
+        min (float): Minimum energy (default: 1e-5)
+        max (float): Maximum energy (default: 1.0)
+        numbin (int): Number of bins (default: 100)
+        ptstate (str): Particle tracing state (default: 'ENTRY')
+        energyTransfer (bool): Enable energy transfer scoring (default: False)
+    """
+    def __init__(self, name, min=1e-5, max=1, numbin = 100, ptstate: str = 'ENTRY', energyTransfer=False) -> None:
+        super().__init__(name, min, max, numbin, ptstate)
+        self.score = ESpectrum()
+        if energyTransfer:
+            self.score.cfg_scoreTransfer = 1
+        else:
+            self.score.cfg_scoreTransfer = 0
+        self._ScorerHelperV1__realinit()
+    
+class WlSpectrumHelperV1(ScorerHelperV1): 
+    """
+    Legacy helper for wavelength spectrum scorers (Version 1).
+    
+    Args:
+        name (str): Scorer name
+        min (float): Minimum wavelength (default: 0.1)
+        max (float): Maximum wavelength (default: 10.0)
+        numbin (int): Number of bins (default: 100)
+        ptstate (str): Particle tracing state (default: 'ENTRY')
+    """
+    def __init__(self, name, min=0.1, max=10, numbin = 100, ptstate: str = 'ENTRY') -> None:
+        super().__init__(name, min, max, numbin, ptstate)
+        self.score = WlSpectrum()
+        self._ScorerHelperV1__realinit()
+    
+class TOFHelperV1(ScorerHelperV1): 
+    """
+    Legacy helper for time-of-flight scorers (Version 1).
+    
+    Args:
+        name (str): Scorer name
+        min (float): Minimum time (default: 0.0)
+        max (float): Maximum time (default: 40e-3)
+        numbin (int): Number of bins (default: 100)
+        ptstate (str): Particle tracing state (default: 'ENTRY')
+    """
+    def __init__(self, name, min=0, max=40e-3, numbin = 100, ptstate: str = 'ENTRY') -> None:
+        super().__init__(name, min, max, numbin, ptstate)
+        self.score = TOF()
+        self._ScorerHelperV1__realinit()
+
+class VolFluenceHelperV1(ScorerHelperV1): 
+    """
+    Legacy helper for volume fluence scorers (Version 1).
+    
+    Args:
+        name (str): Scorer name
+        min (float): Minimum value (default: 1e-6)
+        max (float): Maximum value (default: 10.0)
+        numbin (int): Number of bins (default: 100)
+        ptstate (str): Particle tracing state (default: 'PEA_PRE')
+        linear (bool): Use linear binning (default: False)
+    """
+    def __init__(self, name, min=1e-6, max=10, numbin = 100, ptstate: str = 'PEA_PRE', linear = False) -> None:
+        super().__init__(name, min, max, numbin, ptstate)
+        self.score = VolFluence()
+        if linear:
+            self.score.cfg_linear = 'yes'
+        else: 
+            self.score.cfg_linear = 'no'
+        self._ScorerHelperV1__realinit()
