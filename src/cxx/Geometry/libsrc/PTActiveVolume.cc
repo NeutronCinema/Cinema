@@ -332,6 +332,14 @@ bool Prompt::ActiveVolume::proprogateInAVolume(Particle &particle)
   // Here is the state just before interaction
   scorePropagatePre(particle);
 
+  #ifdef DEBUG_PTS
+    std::cout << "Propagating in volume " << getVolumeName()
+    << " at " << particle.getPosition() 
+    << " with energy " << particle.getEKin() << ";"
+    << " weight " << particle.getWeight() << ";"
+    << std::endl;
+  #endif
+  
   m_matphysscor->bulkMaterialProcess->sampleFinalState(particle, step, !sameVolume);
   // #ifdef DEBUG_PTS
   //   std::cout << "Propagating in volume " << getVolumeName() << std::endl;
