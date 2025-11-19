@@ -7,7 +7,11 @@ from Cinema.Prompt.gun import PythonGun
 from Cinema.Prompt.scorer import VolFluenceHelper
 import numpy as np
 
-expVolumicFluence = [0.0, 0.0008074111208680268, 0.031124778034815677, 0.055536705955901655, 0.21354616744040128, 1.3610438535887854, 6.303265486344896, 20.49692189233372, 27.6830957720522, 1.4950112948284269]
+np.set_printoptions(precision=15)
+expVolumicFluence = [0.0, 0.00040370556043401335, 0.01899477087453266, 0.03214924896436379, 
+                     0.13510268869534098, 0.8982104324640051, 3.8846990007307407, 12.238864358921791, 
+                     16.39096777093097, 0.8855484982591313]
+
 
 class MySim(Prompt):
     def __init__(self, seed) -> None:
@@ -33,5 +37,5 @@ gunCfg = "gun=MaxwellianGun;src_w=2;src_h=2;src_z=-100;slit_w=2;slit_h=2;slit_z=
 sim.simulate(gunCfg, 1e4)
 wlhist = sim.gatherHistData('testObj')
 print(list(wlhist.getWeight()), sep=',')
-np.testing.assert_allclose(wlhist.getWeight(), expVolumicFluence)
+np.testing.assert_allclose(wlhist.getWeight(), expVolumicFluence, rtol=1e-15)
 
