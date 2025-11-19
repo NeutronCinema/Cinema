@@ -35,8 +35,28 @@ from .launcher import Launcher
 
 from enum import Enum, auto
 
-# Particle tracing status enumeration
 class ParticleTracingState(Enum):
+    """
+    Enumeration of particle tracing states.
+    Particle tracing states define the interaction type of a particle-Volume system.
+        
+    Attributes:
+        SURFACE (0): particle state when an interaction happens at the suface of a Volume,
+                      e.g. surface transmission, or optics physics (mirror, chopper).
+        ENTRY (1): particle state when it enters a Volume
+        PROPAGATE_PRE (2): particle state before propagation (scattering with bulk material) in a Volume
+        PROPAGATE_POST (3): particle state after propagation (scattering with bulk material) in a Volume
+                            energy and momentum are updated after scattering.
+        EXIT (4): Particle state at exiting a Volume
+        PEA_PRE (5): particle state of propagate_pre, exit or absorb, both of these 3 trigger the counting action
+        PEA_POST (6): particle state of propagate_post, exit or absorb, both of these 3 trigger the counting action
+        ABSORB (7): particle state at absorption
+    
+    Methods:
+        value_num: Returns numerical representation of the particle tracing state
+        from_string: Creates enum instance from string
+        to_string: Converts enum instance to string representation
+    """
     """Particle tracing status enumeration"""
     SURFACE = auto()
     ENTRY = auto()
