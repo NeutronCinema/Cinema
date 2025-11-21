@@ -330,11 +330,14 @@ bool Prompt::ActiveVolume::proprogateInAVolume(Particle &particle)
   particle.moveForward(sameVolume ? step : (step + resolution) );
 
   #ifdef DEBUG_PTS
-  std::cout << "Propagating in volume " << getVolumeName()
+  if(sameVolume)
+  {
+    std::cout << "Propagating in volume " << getVolume()->GetName()
   << " at " << particle.getPosition() 
   << " with energy " << particle.getEKin() << ";"
   << " weight " << particle.getWeight() << ";"
   << std::endl;
+  }
   #endif
   
   // Here is the state just before interaction
