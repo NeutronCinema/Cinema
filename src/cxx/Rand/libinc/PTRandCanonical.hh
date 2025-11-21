@@ -42,6 +42,7 @@ namespace Prompt {
     void setSeed(uint64_t seed);
     T*  getGenerator() { return m_generator.get(); }
     uint64_t getSeed() { return m_seed; };
+    void resetSeed();
 
   private:
     std::shared_ptr<T> m_generator;
