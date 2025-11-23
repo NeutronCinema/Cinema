@@ -38,8 +38,9 @@ namespace Prompt {
     // remove the one counted by EXIT particle state that also count as PROPAGATE_POST
     // meaning the particle not entering the volume of interest returns -1
     int getScatNumber() const {return m_p_counter-1;} 
+    unsigned long long getCurrentEventID() const {return m_currenteventid;}
   private:
-    unsigned long long m_lasteventid;
+    unsigned long long m_currenteventid;
     int m_p_counter;
     double m_p_weight;
   };

@@ -29,6 +29,7 @@
 #include <VecGeom/management/GeoManager.h>
 #include "PTGeoLoader.hh"
 #include "PTGeoTranslator.hh"
+#include "PTScorer.hh"
 
 namespace Prompt {
 
@@ -67,7 +68,7 @@ namespace Prompt {
 
     // calculate the normal on the surface of the current vol;ume
     void getNormal(const Vector& pos, Vector &normal) const;
-
+    const Scorer::ScorerType getCurrentTracingState(){return m_currentTracingState;}
     // return the number of subvolumes in the current physical volume
     size_t numSubVolume() const;
 
@@ -79,12 +80,14 @@ namespace Prompt {
     ActiveVolume();
     ~ActiveVolume();
 
+    void setCurrentTracingState(Scorer::ScorerType state);
     vecgeom::GeoManager &m_geo;
     std::shared_ptr<VolumePhysicsScorer> m_matphysscor;
     // NavigationState is NavStateIndex when VECGEOM_USE_NAVINDEX is enabled
     // It is NavStatePath otherwise
     vecgeom::NavigationState *m_currState, *m_nextState;
     GeoTranslator m_translator;
+    Scorer::ScorerType m_currentTracingState;
   };
 
 }
