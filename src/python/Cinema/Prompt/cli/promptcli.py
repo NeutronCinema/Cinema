@@ -345,7 +345,7 @@ def main():
         parser.print_help()
         print()
         print(f'PromptCLI Error: {e}')
-        if parser.debug:
+        if hasattr(parser, 'debug') and parser.debug:
             import traceback
             traceback.print_exc()
             exit(1)
