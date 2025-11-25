@@ -258,7 +258,7 @@ def test_scatter_with_absorption():
     gun.setWlMean(4.)
     gun.setWlRange(1e-6)
 
-    partnum_ = 1e7
+    partnum_ = 1e5
     if 0:
         partnum = 100
         sim.show(gun, partnum,byMat=True,addLegend=True)
