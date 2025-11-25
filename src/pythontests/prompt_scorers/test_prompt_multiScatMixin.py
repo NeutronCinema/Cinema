@@ -300,7 +300,7 @@ def test_scatter_with_absorption():
 
 
 if __name__ == '__main__':
-    # test_scatter()
-    # test_gun_missing_sample()
-    # test_gun_patial_missing_sample()
+    test_scatter()
+    test_gun_missing_sample()
+    test_gun_patial_missing_sample()
     test_scatter_with_absorption()
