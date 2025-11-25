@@ -46,3 +46,9 @@ inline void PT::RandCanonical<T>::setSeed(uint64_t seed)
   m_generator.get()->seed(seed);
   m_seedIsSet=true;
 }
+
+template <class T>
+inline void PT::RandCanonical<T>::resetSeed()
+{
+  m_seedIsSet = false;
+}

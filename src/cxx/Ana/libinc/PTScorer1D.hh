@@ -34,7 +34,7 @@ namespace Prompt {
     virtual ~Scorer1D() {  }
     void save_mcpl() override { m_hist->save(m_name); }
     const HistBase* getHist() const override  { return dynamic_cast<const HistBase*>(m_hist.get()); }
-    virtual bool rightScorer(const Particle &particle) const override { return Scorer::rightScorer(particle) && rightScatterNumber(); };
+    virtual bool rightScorer(const Particle &particle) const override { return Scorer::rightScorer(particle) && rightScatterNumber(particle); };
 
   protected:
     std::unique_ptr<Hist1D> m_hist;

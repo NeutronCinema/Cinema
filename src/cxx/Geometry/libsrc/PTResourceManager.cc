@@ -1,6 +1,7 @@
 #include "PTResourceManager.hh"
 #include "PTScorerFactory.hh"
 #include "PTPhysicsFactory.hh"
+#include "PTRandCanonical.hh"
 
 #include <VecGeom/management/GeoManager.h>
 
@@ -247,6 +248,7 @@ void Prompt::ResourceManager::clear()
   m_globelScorers.clear();
   m_globelSurface.clear();
   vecgeom::GeoManager::Instance().Clear();
+  Singleton<SingletonPTRand>::getInstance().resetSeed();
 }
 
 void Prompt::ResourceManager::writeScorer2Disk() const

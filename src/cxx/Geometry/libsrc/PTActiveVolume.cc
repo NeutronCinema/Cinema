@@ -150,6 +150,7 @@ void Prompt::ActiveVolume::scoreEntry(Prompt::Particle &particle)
 {
   if(m_matphysscor->entry_scorers.size())
   {
+    setCurrentTracingState(Scorer::ScorerType::ENTRY);
     for(auto &v:m_matphysscor->entry_scorers)
     {
       v->score(particle);
@@ -162,6 +163,7 @@ void Prompt::ActiveVolume::scoreSurface(Prompt::Particle &particle)
   auto localposition = particle.getPosition();   
   if(m_matphysscor->surface_scorers.size())
   {
+    setCurrentTracingState(Scorer::ScorerType::SURFACE);
     for(auto &v:m_matphysscor->surface_scorers)
     {
       v->score(particle);
@@ -173,6 +175,7 @@ void Prompt::ActiveVolume::scoreAbsorb(Prompt::Particle &particle)
 {
   if(m_matphysscor->absorb_scorers.size())
   {
+    setCurrentTracingState(Scorer::ScorerType::ABSORB);
     for(auto &v:m_matphysscor->absorb_scorers)
     {
       v->score(particle);
@@ -184,6 +187,7 @@ void Prompt::ActiveVolume::scorePropagatePre(Prompt::Particle &particle)
 {
   if(m_matphysscor->propagate_pre_scorers.size())
   {
+    setCurrentTracingState(Scorer::ScorerType::PROPAGATE_PRE);
     for(auto &v:m_matphysscor->propagate_pre_scorers)
     {
       v->score(particle);
@@ -195,6 +199,7 @@ void Prompt::ActiveVolume::scorePropagatePost(Prompt::Particle &particle)
 {
   if(m_matphysscor->propagate_post_scorers.size())
   {
+    setCurrentTracingState(Scorer::ScorerType::PROPAGATE_POST);
     for(auto &v:m_matphysscor->propagate_post_scorers)
     {
       v->score(particle);
@@ -206,6 +211,7 @@ void Prompt::ActiveVolume::scoreExit(Prompt::Particle &particle)
 {
   if(m_matphysscor->exit_scorers.size())
   {
+    setCurrentTracingState(Scorer::ScorerType::EXIT);
     for(auto &v:m_matphysscor->exit_scorers)
     {
       // to act along with the Prompt::ScorerRotatingObj::score method,
@@ -330,11 +336,14 @@ bool Prompt::ActiveVolume::proprogateInAVolume(Particle &particle)
   particle.moveForward(sameVolume ? step : (step + resolution) );
 
   #ifdef DEBUG_PTS
-  std::cout << "Propagating in volume " << getVolumeName()
+  if(sameVolume)
+  {
+    std::cout << "Propagating in volume " << getVolume()->GetName()
   << " at " << particle.getPosition() 
   << " with energy " << particle.getEKin() << ";"
   << " weight " << particle.getWeight() << ";"
   << std::endl;
+  }
   #endif
   
   // Here is the state just before interaction
@@ -366,4 +375,9 @@ bool Prompt::ActiveVolume::proprogateInAVolume(Particle &particle)
   //sample the interaction at the location
   return sameVolume;
 
+}
+
+void Prompt::ActiveVolume::setCurrentTracingState(Scorer::ScorerType state)
+{
+  m_currentTracingState = state;
 }

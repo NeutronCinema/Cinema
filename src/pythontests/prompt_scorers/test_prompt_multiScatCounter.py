@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-from Cinema.Prompt import Prompt
+from Cinema.Prompt import PromptMPI
 from Cinema.Prompt.geo import Volume, Transformation3D
-from Cinema.Prompt.solid import Box, Tube
+from Cinema.Prompt.solid import Box, Tube, Sphere
 from Cinema.Prompt.scorer import ESpectrumHelper, MultiScatCounter
 from Cinema.Prompt.physics import Material
 from Cinema.Prompt.gun import SimpleThermalGun
@@ -13,68 +13,144 @@ cdata=GidiSetting()
 cdata.setEnableGidi(False)
 cdata.setGammaTransport(False)
 
-g_scatNum = 10
+def test_direct_exit():
+    class MySim(PromptMPI):
+        def __init__(self, seed=4096) -> None:
+            super().__init__(seed)   
 
-class MySim(Prompt):
-    def __init__(self, seed=4096) -> None:
-        super().__init__(seed)   
+        def makeWorld(self):
+            length = 1e6
+            world = Volume('world', Box(50, 50, length * 2 + 100))
 
-    def makeEspScatNum(self, vol, scatterCounter, interNum):
-        esp0 = ESpectrumHelper(f'Scatter{interNum}', 1e-6, 20e6, 100)
-        esp0.make(vol)
-        esp0.addScatterCounter(scatterCounter, interNum)
-        
-    def makeWorld(self):
+            sample_mat = "void.ncmat"
 
-        world = Volume("world", Box(400, 400, 400))
+            pensil = Volume('pensil', Tube(0,1e-9,length,), sample_mat)
+            scatterCounter = MultiScatCounter()
+            scatterCounter.make(pensil)
+            
+            world.placeChild('physicalSample', pensil, Transformation3D(z=length))
 
-        lw = Material('freegas::H2O/1gcm3/H_is_H1/O_is_O16') 
+            self.setWorld(world)
 
-        lw.setBiasScat(1.)
-        lw.setBiasAbsp(1.)
-        sample = Volume("sample", Box(1,1,1), matCfg=lw)
-        ms_counter = MultiScatCounter()
-        ms_counter.make(sample)
-        world.placeChild('sphere', sample)
+    sim = MySim(seed=1010)
+    sim.makeWorld()
 
-        detector = Volume("DttLV", Box(100,100,1))
-        for i in range(g_scatNum):
-            self.makeEspScatNum(detector, ms_counter, i)
+    gun = SimpleThermalGun()
+    gun.setEnergy(0.05)
+    gun.setPosition([0,0,-150])
 
 
-        world.placeChild('Dtt1', detector, Transformation3D(0,-200*1/np.sqrt(2),200*1/np.sqrt(2)).applyRotX(45), scorerGroup=0)
-        world.placeChild('Dtt2', detector, Transformation3D(0,200*1/np.sqrt(2),200*1/np.sqrt(2)).applyRotX(-45), scorerGroup=0)
-        self.setWorld(world)
+    if 0:
+        partnum = 100
+        sim.show(gun, partnum)
+    else:
+        partnum = 100
+        sim.simulate(gun, partnum)
+
+    dtt0 = sim.gatherHistData("ScatterCounter")
+    score = dtt0.getWeight()
+    print(score)
+    np.testing.assert_allclose(score[2], 100.)
+    sim.clear()
+
+
+def test_scatter_once():
+    """Use a pensil model, all particle scatter once and exit"""
+    g_scatNum = 1
+
+    class MySim(PromptMPI):
+        def __init__(self, seed=4096) -> None:
+            super().__init__(seed)   
+
+        def makeWorld(self):
+            length = 1e6
+            world = Volume('world', Box(50, 50, length * 2 + 100))
+
+            sample_mat = 'physics=idealElaScat;xs_barn=1;density_per_aa3=0.01;energy_transfer_eV=0.01'
+
+            pensil = Volume('pensil', Tube(0,1e-9,length,), sample_mat)
+            scatterCounter = MultiScatCounter()
+            scatterCounter.make(pensil)
+            
+            world.placeChild('physicalSample', pensil, Transformation3D(z=length))
+
+            self.setWorld(world)
+
+    sim = MySim(seed=1010)
+    sim.makeWorld()
+
+    gun = SimpleThermalGun()
+    gun.setEnergy(0.05)
+    gun.setPosition([0,0,-150])
+
+
+    if 0:
+        partnum = 100
+        sim.show(gun, partnum)
+    else:
+        partnum = 100
+        sim.simulate(gun, partnum)
+
+    dtt0 = sim.gatherHistData("ScatterCounter")
+    score = dtt0.getWeight()
+    print(score)
+    np.testing.assert_allclose(score[3], 100.)
+    sim.clear()
+
+def test_scatter_twice():
+    """Use a perfect scatter and a reflector model, all particle must scatter twice to exit"""
+    g_scatNum = 1
+    class MySim(PromptMPI):
+        def __init__(self, seed=4096) -> None:
+            super().__init__(seed)   
+
+        def makeWorld(self):
+            length = 20000
+            world = Volume('world', Box(10000, 10000, length * 2 + 10000))
+
+            sample_mat = 'physics=idealElaScat;xs_barn=100000;density_per_aa3=10000;energy_transfer_eV=0.01'
+            surf_cfg = "physics=EnergyReflector;ekin=0.031;islessthan=0" # reflect particles whose energy > 0.031
+
+            sample = Volume('samplebox', Tube(1000,1000,1000), sample_mat)
+            reflector = Volume('reflector', Sphere(2000,2000+1e-6,0, 360, 0, 180-0.001), "void.ncmat", surf_cfg)
+            reflector2 = Volume('reflector2', Box(1,1,1e-3), "void.ncmat", surf_cfg)
+
+            scatterCounter = MultiScatCounter()
+            scatterCounter.make(sample)
+            
+            world.placeChild('sample', sample)
+            world.placeChild('reflector', reflector, Transformation3D(z=0))
+            world.placeChild('reflector2', reflector2, Transformation3D(z=1800).applyRotX(45))
+            
+            self.setWorld(world)
+
+    sim = MySim(seed=1010)
+    sim.makeWorld()
+
+    gun = SimpleThermalGun()
+    gun.setEnergy(0.05)
+    gun.setPosition([0,0,-150])
+
+
+    if 0:
+        partnum = 1
+        sim.show(gun, partnum)
+    else:
+        partnum = 10
+        sim.simulate(gun, partnum)
+
+    dtt0 = sim.gatherHistData("ScatterCounter")
+    score = dtt0.getWeight()
+    print(score)
+
+    # must scatter twice
+    np.testing.assert_allclose(score[4], 10.)
+    # when a particle scatter twice, it must scatter once before
+    np.testing.assert_allclose(score[3], 10.)
 
 
 
-sim = MySim(seed=1010)
-sim.makeWorld()
-
-gun = SimpleThermalGun()
-gun.setEnergy(1)
-gun.setPosition([0,0,-150])
-
-
-if 0:
-    partnum = 100
-    sim.show(gun, partnum)
-else:
-    partnum = 1e6
-    sim.simulate(gun, partnum)
-
-scores = []
-for j in range(g_scatNum):
-    dtt0 = sim.gatherHistData(f'Scatter{j}')
-    score = dtt0.getHit().sum()
-    print(f'Scatter {j}: ', score)
-    scores.append(score)
-sc = np.array(scores)[1:]
-np.testing.assert_allclose(sc.sum(), 78840.0)
-np.testing.assert_allclose(scores[0], 0)
-
-# from unittest import TestCase
-# t = TestCase()
-# t.assertTrue(scores[0]==sc.sum())
-# spct.plot(show=True, log=True)
-
+if __name__ == '__main__':
+    test_direct_exit()
+    test_scatter_once()
+    test_scatter_twice()
