@@ -28,7 +28,7 @@ m_p_counter(0),
 m_p_weight(0)
 {
   if(stype!=Scorer::ScorerType::PEA_POST)
-    PROMPT_THROW(BadInput, "ScorerType must be PROPAGATE_POST for ScorerMultiScat");
+    PROMPT_THROW(BadInput, "ScorerType must be PEA_POST for ScorerMultiScat");
 }
 
 Prompt::ScorerMultiScat::~ScorerMultiScat() 
