@@ -136,7 +136,7 @@ def test_scatter_twice():
         partnum = 1
         sim.show(gun, partnum)
     else:
-        partnum = 10
+        partnum = 10 # keep it small to avoid long simulation
         sim.simulate(gun, partnum)
 
     dtt0 = sim.gatherHistData("ScatterCounter")
