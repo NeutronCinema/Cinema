@@ -230,7 +230,7 @@ def format_integral_value(integral):
     else:
         return f"{integral:.4f}"
 
-def create_combined_plot(cinema_data_list : list[CinemaXY], file_basenames, converter_list : list[callable], output_image=None):
+def create_combined_plot(cinema_data_list : list[CinemaXY], file_basenames, output_image=None):
     """
     Create a combined plot for multiple CinemaXY objects
     
@@ -250,9 +250,8 @@ def create_combined_plot(cinema_data_list : list[CinemaXY], file_basenames, conv
     colors = ['b', 'r', 'g', 'c', 'm', 'y', 'k']
     markers = ['o', 's', '^', 'D', 'v', '<', '>']
     
-    for i, (cinema_data, basename, converter) in enumerate(zip(cinema_data_list, file_basenames, converter_list)):
-        if converter is not None:
-            cinema_data.x = converter(cinema_data.x)
+    for i, (cinema_data, basename) in enumerate(zip(cinema_data_list, file_basenames)):
+
         color = colors[i % len(colors)]
         marker = markers[i % len(markers)]
         
@@ -263,7 +262,8 @@ def create_combined_plot(cinema_data_list : list[CinemaXY], file_basenames, conv
         integral_str = format_integral_value(integral)
         
         # Use CinemaXY's built-in plot method with different styles
-        cinema_data.plot(ax=ax, fmt=f'{color}-', marker=marker, markersize=4, 
+        alpha = 0.4 if i == 0 else 1.0
+        cinema_data.plot(ax=ax, fmt=f'{color}-', marker=marker, markersize=3, alpha=alpha,
                        label=f'{basename} ± Std Dev, integral {integral_str}', capsize=3, elinewidth=1)
     
     ax.set_xlabel('X Coordinate')
@@ -281,7 +281,7 @@ def create_combined_plot(cinema_data_list : list[CinemaXY], file_basenames, conv
     
     return fig
 
-def create_individual_plot(cinema_data : CinemaXY, file_basename, converter=None, output_image=None):
+def create_individual_plot(cinema_data : CinemaXY, file_basename, output_image=None):
     """
     Create an individual plot for a single CinemaXY object
     
@@ -301,9 +301,6 @@ def create_individual_plot(cinema_data : CinemaXY, file_basename, converter=None
     
     # Format integral value display using the new function
     integral_str = format_integral_value(integral)
-
-    if converter is not None:
-        cinema_data.x = converter(cinema_data.x)
 
     # Use CinemaXY's built-in plot method
     cinema_data.plot(ax=ax, fmt='b-', marker='o', markersize=4, 
@@ -433,7 +430,6 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
         # Load all files in this group
         cinema_data_list = []
         file_basenames = []
-        bs_list = []
         
         for file_dict in file_group:
             filepath = file_dict.get('filename', None)
@@ -446,7 +442,6 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
                 # Pass parameters to load_single_mcpl_file
                 analyser, file_basename = load_single_mcpl_file(filepath, **kwargs)
                 cinema_data = analyser.toArrayXY()
-                bs = analyser.get_unit_converter()
             
             if cinema_data is None:
                 print(f"Failed to process file: {filepath}")
@@ -454,7 +449,6 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
             
             cinema_data_list.append(cinema_data)
             file_basenames.append(file_basename)
-            bs_list.append(bs)
 
         if not cinema_data_list:
             print(f"No valid data loaded for group {i}")
@@ -467,7 +461,6 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
                 cinema_data_list[0], 
                 file_basenames[0],
                 output_image=output_dir,
-                converter = bs_list[0]
             )
             all_figures.append(fig)
             
@@ -493,7 +486,6 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
                 cinema_data_list,
                 file_basenames,
                 output_image=output_path,
-                converter_list=bs_list
             )
             all_figures.append(fig)
             
