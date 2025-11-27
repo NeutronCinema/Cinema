@@ -666,8 +666,8 @@ class ScatteringAngleParameters(IncidentParameters):
         incident_dir = np.array(self.incident_direction)
         angle_cos = np.sum(directions * incident_dir, axis=1)
         
-        # Calculate angle in radians
-        angle_values = np.arccos(np.clip(angle_cos, -1.0, 1.0))
+        # Calculate angle in cosine
+        angle_values = np.clip(angle_cos, -1.0, 1.0)
         
         return angle_values
 
@@ -679,7 +679,7 @@ class MCPL_Analyzer_1D(Hist1D):
     
     def __init__(self, para: Union[ParticleParameter, str] = ParticleParameter.TIME, 
                  unit: Optional[str] = None,
-                 incident_params: IncidentParameters = None,
+                 incident_params: Optional[Union[IncidentParameters, str]] = None,
                  binmin=0.0, binmax=10.0, binnum=100, linear=True, 
                  auto_range_file: str = ''):
         """
@@ -725,15 +725,14 @@ class MCPL_Analyzer_1D(Hist1D):
             min_val, max_val = self.getRange(auto_range_file)
             super().__init__(min_val*0.9, max_val*1.1, binnum, linear=linear)
         else:
-        # filling at default unit of MCPL, but input unit != default unit
-        # need to convert binmin, binmax back to default unit, then init
-            recover = self._get_unit_recoverer()
-            binmax = recover(binmax)
-            binmin = recover(binmin)
 
             super().__init__(binmin, binmax, binnum, linear=linear)
 
-    def get_unit_converter(self) -> Callable[[Union[float, np.ndarray]], Union[float, np.ndarray]]:
+    @property
+    def unit_converter(self) -> Callable[[Union[float, np.ndarray]], Union[float, np.ndarray]]:
+        return self._get_unit_converter()
+
+    def _get_unit_converter(self) -> Callable[[Union[float, np.ndarray]], Union[float, np.ndarray]]:
         def convert(values: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
             return self.default_unit.convert_to(values, self.demanded_unit)
         return convert
@@ -796,6 +795,8 @@ class MCPL_Analyzer_1D(Hist1D):
         
         for pb in file.particle_blocks:
             param_values = getattr(pb, self.para.value)
+            # Convert parameter values to demanded unit
+            param_values = self.unit_converter(param_values)
             
             if len(param_values) > 0:
                 has_data = True
@@ -811,6 +812,8 @@ class MCPL_Analyzer_1D(Hist1D):
         """Get range for calculated parameters."""
         # Calculate values for all particles to determine range
         values = self._calculate_parameter_values(filename)
+        # Convert values to demanded unit
+        values = self.unit_converter(values)
         
         if len(values) == 0:
             raise ValueError(f"No particle data found in file: {filename}")
@@ -870,6 +873,7 @@ class MCPL_Analyzer_1D(Hist1D):
         
         for pb in file.particle_blocks:
             param_values = getattr(pb, self.para.value)
+            param_values = self.unit_converter(param_values)
             if len(param_values) > 0:
                 self.fillmany(
                     np.asarray(param_values, dtype=np.float64), 
@@ -906,7 +910,7 @@ class MCPL_Analyzer_1D(Hist1D):
                 if self.incident_params is None:
                     raise ValueError(f"Incident parameters required for {self.para}")
                 values = self.incident_params.calc(particle_data)
-            
+            values = self.unit_converter(values)
             # Fill histogram with calculated values
             if len(values) > 0:
                 self.fillmany(
