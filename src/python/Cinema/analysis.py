@@ -470,10 +470,10 @@ class IncidentParameters(ABC):
     """
     
     def __init__(self, 
-incident_energy_eV: float = None,
-                 incident_wavelength_A: float = None,
-                 incident_direction: Tuple[float, float, float] = (0.0, 0.0, 1.0),
-                 sample_position: Tuple[float, float, float] = (0.0, 0.0, 0.0)):
+                incident_energy_eV: float = None,
+                incident_wavelength_A: float = None,
+                incident_direction: Tuple[float, float, float] = (0.0, 0.0, 1.0),
+                sample_position: Tuple[float, float, float] = (0.0, 0.0, 0.0)):
         """
         Initialize incident parameters.
         
@@ -531,6 +531,31 @@ incident_energy_eV: float = None,
         """
         pass
     
+    @classmethod
+    def from_string(cls, params_str: str) -> 'IncidentParameters':
+        """
+        Create IncidentParameters instance from string.
+        
+        Args:
+            params_str: String in format "inc_ekin=123.45;inc_wl=1.234;inc_dir=(0.1,0.2,0.3);inc_sample=(0.0,0.0,0.0)"
+        
+        Returns:
+            IncidentParameters: Instance with parsed parameters
+        """
+        # Parse the string
+        params = {}
+        for param in params_str.split(';'):
+            key, value = param.split('=')
+            key = key.strip()
+            value = value.strip()
+            
+            if key == 'incident_energy_eV' or key == 'incident_wavelength_A':
+                params[key] = float(value)
+            elif key == 'incident_direction' or key == 'sample_position':
+                params[key] = tuple(float(x.strip()) for x in value.strip('()').split(','))
+        
+        return cls(**params)
+
     def __str__(self) -> str:
         return f"{self.__class__.__name__}(energy={self.incident_energy_eV:.3f}eV, wavelength={self.incident_wavelength_A:.3f}Å)"
 
@@ -682,6 +707,9 @@ class MCPL_Analyzer_1D(Hist1D):
         
         self.default_unit = self.para.unit.get_default()
         # Validate parameter and incident parameters compatibility
+        if isinstance(incident_params, str):
+            incident_params = self.para.get_required_incident_class().from_string(incident_params)
+            
         self._validate_parameter_compatibility(incident_params)
         self.incident_params = incident_params
         
