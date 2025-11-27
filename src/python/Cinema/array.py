@@ -227,38 +227,7 @@ class CinemaXY(ArrayCoordinateMixin, ArrayPlotMixin, CinemaArray):
             x = f['center'][:]
             edges = f['edge'][:]
             return cls.from_sdev(mean=w, sdev =sdev, x=x, edges=edges, **kwargs) 
-        
-    @classmethod
-    def from_mcpl(cls, fn : str = '', x : str = 'time', 
-                  bmin : Union[str, float] = 'auto', bmax : Union[str, float] = 'auto', 
-                  bnum : int = 100, **kwargs):
-        """Initialize from a MCPL file.
-        
-        Args:
-            fn: MCPL file path
-            **kwargs: 
-                - x: parameter to bin
-                - bmin: minimum bin value
-                - bmax: maximum bin value
-                - bnum: number of bins
-        
-        Returns:
-            CinemaXY instance
-        """
-        try:
-            from .analysis import MCPL_Analyzer_1D
-        except ImportError:
-            raise ImportError("MCPL_Analyzer_1D not found.")
-
-        if bmin == 'auto' or bmax == 'auto':
-            hist = MCPL_Analyzer_1D(x, binnum=int(bnum), auto_range_file=fn)
-        else:
-            hist = MCPL_Analyzer_1D(x, binmin=float(bmin), binmax=float(bmax), binnum=int(bnum))
-        hist.analyze(fn)
-
-        return cls.from_hist1d(hist)
-
-
+            
 from scipy.interpolate import RegularGridInterpolator
 
 class Array2DCoordinateMixin:
