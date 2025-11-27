@@ -372,22 +372,6 @@ class ParticleParameter(Enum):
         
         return units.get(self, '')
     
-    def get_conversion_factor(self, u: Union[str, UNITEnum]) -> float:
-        """
-        Get the conversion factor to convert this parameter to the given unit.
-        
-        Args:
-            unit (UNITEnum): The unit to convert to
-            
-        Returns:
-            float: The conversion factor
-        """
-        if not isinstance(u, UNITEnum) and not isinstance(u, str):
-            raise ValueError(f"Invalid unit '{u}' for {self.__name__}, must be UNITEnum instance or string.")
-        if isinstance(u, str):
-            u = self.unit.from_str(u)
-            
-        return u.conversion_factor
 
     def get_label(self) -> str:
         """
