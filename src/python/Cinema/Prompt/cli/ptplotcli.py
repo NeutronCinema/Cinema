@@ -31,8 +31,7 @@ class _ParticleParameterCfgStr:
     """
 
     @classmethod
-    def from_filestring(cls, file_config_string):
-        """Create MCPLDataCfgStr from string format"""
+    def from_string(cls, file_config_string):
         if not isinstance(file_config_string, str):
             raise TypeError("Must be a string")
 
@@ -41,16 +40,10 @@ class _ParticleParameterCfgStr:
         if '' in parts:
             parts.remove('')
 
-        filename = parts[0]
-
-        if filename.endswith('.h5'):
-            raise ValueError(f"ERROR: .h5 files with ; mechanism is not implemented. Got: {file_config_string}")
-        
         para_dict = {}
-        para_dict['filename'] = filename
 
         # Parse parameters from the remaining parts
-        for item in parts[1:]:
+        for item in parts[0:]:
             if '=' not in item:
                 raise ValueError(f"ERROR: wrong format in parameter: {item}, use 'key=value' instead")
             else:
@@ -61,7 +54,6 @@ class _ParticleParameterCfgStr:
         valid_fields = {field.name for field in fields(cls)}
         for param_name in para_dict.keys():
             if param_name not in valid_fields:
-                valid_fields.remove('filename') # filename is not a parameter
                 valid_params_str = ", ".join(valid_fields)
                 raise ValueError(
                     f"ERROR: unknown parameter: '{param_name}'\n"
@@ -69,6 +61,7 @@ class _ParticleParameterCfgStr:
                 )
         
         return cls(**para_dict)
+    
 
     def _validate(self, v, typeconvert : type, exceptions=[], exception_only = False):
         errmsg = f"ERROR: invalid value: '{v}'\nValid values are: '{', '.join(exceptions)}' or type {typeconvert.__name__}"
@@ -110,18 +103,101 @@ class MCPLDataCfgStr(_ParticleParameterCfgStr):
     Config String Parser for loading MCPL data
     
     This class parses configuration strings in the format:
-    "filename.mcpl;x=time;bmin=0;bmax=10;bnum=50"
+    "filename.mcpl;x=time;bmin=0;bmax=10;bnum=50;
+    incident_params=[incident_energy_eV=123.45;incident_wavelength_A=1.234;incident_direction=(0.1,0.2,0.3);sample_position=(0.0,0.0,0.0)]"
     
     """
 
     filename: str
     para: Optional[str] = "time"
-    incident_params: Optional[str] = None
     unit: Optional[str] = None
     binmin: Optional[Union[Literal["auto"], float]] = "auto"  
     binmax: Optional[Union[Literal["auto"], float]] = "auto"
     binnum: Optional[int] = 100
+    incident_params: Optional[str] = None
 
+    @staticmethod
+    def extract_incident_params(config_string):
+        if not isinstance(config_string, str):
+            raise TypeError("Config string must be a string type")
+        
+        start_keyword = "incident_params=["
+        start_idx = config_string.find(start_keyword)
+        
+        if start_idx == -1:
+            return None
+        
+        start_idx += len(start_keyword) - 1 
+        
+        bracket_count = 0
+        end_idx = -1
+        
+        for i in range(start_idx, len(config_string)):
+            char = config_string[i]
+            if char == '[':
+                bracket_count += 1
+            elif char == ']':
+                bracket_count -= 1
+                if bracket_count == 0:
+                    end_idx = i
+                    break
+        
+        if end_idx == -1:
+            raise ValueError("incident_params: unmatched square brackets")
+        
+        incident_params = config_string[start_idx:end_idx + 1]
+        
+        return incident_params
+
+    @classmethod
+    def from_filestring(cls, file_config_string):
+        """Create MCPLDataCfgStr from string format"""
+        if not isinstance(file_config_string, str):
+            raise TypeError("Must be a string")
+        
+        para_dict = {}
+
+        # Extract incident_params first
+        incident_params_str = cls.extract_incident_params(file_config_string)
+        if incident_params_str:
+            # Remove incident_params from the main string
+            file_config_string = file_config_string.replace(incident_params_str, '')
+            file_config_string = file_config_string.replace("incident_params=", "")
+            para_dict['incident_params'] = incident_params_str[1:-1] # remove the square brackets
+
+
+        # Split by separator
+        parts = file_config_string.split(";")
+        if '' in parts:
+            parts.remove('')
+
+        filename = parts[0]
+
+        if filename.endswith('.h5'):
+            raise ValueError(f"ERROR: .h5 files with ; mechanism is not implemented. Got: {file_config_string}")
+        
+        para_dict['filename'] = filename
+        
+        # Parse parameters from the remaining parts
+        for item in parts[1:]:
+            if '=' not in item:
+                raise ValueError(f"ERROR: wrong format in parameter: {item}, use 'key=value' instead")
+            else:
+                key, value = item.split('=', 1)
+                para_dict[key.strip()] = value.strip()
+
+        # Check for unknown parameters
+        valid_fields = {field.name for field in fields(cls)}
+        for param_name in para_dict.keys():
+            if param_name not in valid_fields:
+                valid_fields.remove('filename') # filename is not a parameter
+                valid_params_str = ", ".join(valid_fields)
+                raise ValueError(
+                    f"ERROR: unknown parameter: '{param_name}'\n"
+                    f"Valid parameters are: {valid_params_str}"
+                )
+        
+        return cls(**para_dict)
     
 
     def __post_init__(self):
