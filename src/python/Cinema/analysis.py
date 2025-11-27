@@ -699,7 +699,7 @@ class MCPL_Analyzer_1D(Hist1D):
         else:
         # filling at default unit of MCPL, but input unit != default unit
         # need to convert binmin, binmax back to default unit, then init
-            recover = self._get_unit_revoverer()
+            recover = self._get_unit_recoverer()
             binmax = recover(binmax)
             binmin = recover(binmin)
 
@@ -710,7 +710,7 @@ class MCPL_Analyzer_1D(Hist1D):
             return self.default_unit.convert_to(values, self.demanded_unit)
         return convert
     
-    def _get_unit_revoverer(self) -> Callable[[Union[float, np.ndarray]], Union[float, np.ndarray]]:
+    def _get_unit_recoverer(self) -> Callable[[Union[float, np.ndarray]], Union[float, np.ndarray]]:
         def recover(values: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
             return self.demanded_unit.convert_to(values, self.default_unit)
         return recover
