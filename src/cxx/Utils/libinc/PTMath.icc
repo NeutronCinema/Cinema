@@ -44,7 +44,7 @@ inline constexpr double Prompt::neutronAngleCosine2Q(double angle_cos, double en
   double ratio = enin_eV == enout_eV ? 1 : enout_eV/enin_eV;
   double k0=neutronEKin2k(enin_eV);
   double scale = sqrt(1.+ ratio - 2*angle_cos *sqrt(ratio) );
-  return k0*scale;
+  return k0*scale; //in unit Aa-1
 }
 
 inline constexpr double Prompt::neutronEkin2Speed(double ekin)
