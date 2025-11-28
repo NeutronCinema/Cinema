@@ -40,7 +40,6 @@ namespace Prompt {
     const double m_sourceSampleDist;
     int m_method;
     int m_scatnum;
-    std::fstream m_file;
 
   };
 }

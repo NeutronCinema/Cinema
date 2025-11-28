@@ -30,14 +30,12 @@ m_samplePos(samplePos),
 m_refDir(refDir), 
 m_sourceSampleDist(sourceSampleDist), 
 m_method(method), 
-m_scatnum(scatnum), 
-m_file()
+m_scatnum(scatnum)
 {
   std::string s = std::__cxx11::to_string(Singleton<SingletonPTRand>::getInstance().getSeed());
-  m_file.open(m_name+"_"+s +".txt", std::ios::out);
 }
 
-Prompt::ScorerDeltaMomentum::~ScorerDeltaMomentum(){m_file.close();}
+Prompt::ScorerDeltaMomentum::~ScorerDeltaMomentum(){}
 
 void Prompt::ScorerDeltaMomentum::score(Prompt::Particle &particle)
 {
@@ -57,13 +55,6 @@ void Prompt::ScorerDeltaMomentum::score(Prompt::Particle &particle)
       double ekin = 0.5*const_neutron_mass_evc2*v*v;
       double q = neutronAngleCosine2Q(angle_cos, ekin, ekin);
 
-      m_file << time << " "
-             << angle_cos << " "
-             << particle.getEKin0() - particle.getEKin() << " "
-             << particle.getWeight() << " "
-             << q << " "
-             << qt << "\n";
-
     // std::cout << , particle.getEKin()) << " "
     // <<q << std::endl;
     } 
@@ -77,7 +68,7 @@ void Prompt::ScorerDeltaMomentum::score(Prompt::Particle &particle)
     {
       double dist = m_sourceSampleDist+(particle.getPosition()-m_samplePos).mag();
       double v = dist/particle.getTime();
-      double ekin = 0.5*const_neutron_mass_evc2*v*v;
+      double ekin = neutronSpeed2Ekin(v);
       double q = neutronAngleCosine2Q(angle_cos, ekin, ekin);
       m_hist->fill(q, particle.getWeight()/q);
     }
