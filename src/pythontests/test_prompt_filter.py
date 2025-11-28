@@ -14,9 +14,9 @@ class MySim(Prompt):
     def makeWorld(self):
         world = Volume("world", Box(50, 50, 100))
         filter = Volume("det1", Tube(0, 25, 50), 
-                        matCfg=Material(''' 'Al2O3_sg167_Corundum.ncmat;mos=2deg;
+                        matCfg=Material('''Al2O3_sg167_Corundum.ncmat;mos=2deg;
                                         dir1=@crys_hkl:0,0,6@lab:0,0,1;
-                                        dir2=@crys_hkl:3,0,0@lab:1,0,0' '''))
+                                        dir2=@crys_hkl:3,0,0@lab:1,0,0''') )
         
         world.placeChild("filter", filter, Transformation3D(0., 0., 0))
 
