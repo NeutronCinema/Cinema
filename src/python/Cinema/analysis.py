@@ -372,22 +372,6 @@ class ParticleParameter(Enum):
         
         return units.get(self, '')
     
-    def get_conversion_factor(self, u: Union[str, UNITEnum]) -> float:
-        """
-        Get the conversion factor to convert this parameter to the given unit.
-        
-        Args:
-            unit (UNITEnum): The unit to convert to
-            
-        Returns:
-            float: The conversion factor
-        """
-        if not isinstance(u, UNITEnum) and not isinstance(u, str):
-            raise ValueError(f"Invalid unit '{u}' for {self.__name__}, must be UNITEnum instance or string.")
-        if isinstance(u, str):
-            u = self.unit.from_str(u)
-            
-        return u.conversion_factor
 
     def get_label(self) -> str:
         """
@@ -470,10 +454,10 @@ class IncidentParameters(ABC):
     """
     
     def __init__(self, 
-incident_energy_eV: float = None,
-                 incident_wavelength_A: float = None,
-                 incident_direction: Tuple[float, float, float] = (0.0, 0.0, 1.0),
-                 sample_position: Tuple[float, float, float] = (0.0, 0.0, 0.0)):
+                incident_energy_eV: float = None,
+                incident_wavelength_A: float = None,
+                incident_direction: Tuple[float, float, float] = (0.0, 0.0, 1.0),
+                sample_position: Tuple[float, float, float] = (0.0, 0.0, 0.0)):
         """
         Initialize incident parameters.
         
@@ -531,6 +515,31 @@ incident_energy_eV: float = None,
         """
         pass
     
+    @classmethod
+    def from_string(cls, params_str: str) -> 'IncidentParameters':
+        """
+        Create IncidentParameters instance from string.
+        
+        Args:
+            params_str: String in format "inc_ekin=123.45;inc_wl=1.234;inc_dir=(0.1,0.2,0.3);inc_sample=(0.0,0.0,0.0)"
+        
+        Returns:
+            IncidentParameters: Instance with parsed parameters
+        """
+        # Parse the string
+        params = {}
+        for param in params_str.split(';'):
+            key, value = param.split('=')
+            key = key.strip()
+            value = value.strip()
+            
+            if key == 'incident_energy_eV' or key == 'incident_wavelength_A':
+                params[key] = float(value)
+            elif key == 'incident_direction' or key == 'sample_position':
+                params[key] = tuple(float(x.strip()) for x in value.strip('()').split(','))
+        
+        return cls(**params)
+
     def __str__(self) -> str:
         return f"{self.__class__.__name__}(energy={self.incident_energy_eV:.3f}eV, wavelength={self.incident_wavelength_A:.3f}Å)"
 
@@ -641,8 +650,8 @@ class ScatteringAngleParameters(IncidentParameters):
         incident_dir = np.array(self.incident_direction)
         angle_cos = np.sum(directions * incident_dir, axis=1)
         
-        # Calculate angle in radians
-        angle_values = np.arccos(np.clip(angle_cos, -1.0, 1.0))
+        # Calculate angle in cosine
+        angle_values = np.clip(angle_cos, -1.0, 1.0)
         
         return angle_values
 
@@ -654,7 +663,7 @@ class MCPL_Analyzer_1D(Hist1D):
     
     def __init__(self, para: Union[ParticleParameter, str] = ParticleParameter.TIME, 
                  unit: Optional[str] = None,
-                 incident_params: IncidentParameters = None,
+                 incident_params: Optional[Union[IncidentParameters, str]] = None,
                  binmin=0.0, binmax=10.0, binnum=100, linear=True, 
                  auto_range_file: str = ''):
         """
@@ -682,6 +691,9 @@ class MCPL_Analyzer_1D(Hist1D):
         
         self.default_unit = self.para.unit.get_default()
         # Validate parameter and incident parameters compatibility
+        if isinstance(incident_params, str):
+            incident_params = self.para.get_required_incident_class().from_string(incident_params)
+            
         self._validate_parameter_compatibility(incident_params)
         self.incident_params = incident_params
         
@@ -697,20 +709,19 @@ class MCPL_Analyzer_1D(Hist1D):
             min_val, max_val = self.getRange(auto_range_file)
             super().__init__(min_val*0.9, max_val*1.1, binnum, linear=linear)
         else:
-        # filling at default unit of MCPL, but input unit != default unit
-        # need to convert binmin, binmax back to default unit, then init
-            recover = self._get_unit_revoverer()
-            binmax = recover(binmax)
-            binmin = recover(binmin)
 
             super().__init__(binmin, binmax, binnum, linear=linear)
 
-    def get_unit_converter(self) -> Callable[[Union[float, np.ndarray]], Union[float, np.ndarray]]:
+    @property
+    def unit_converter(self) -> Callable[[Union[float, np.ndarray]], Union[float, np.ndarray]]:
+        return self._get_unit_converter()
+
+    def _get_unit_converter(self) -> Callable[[Union[float, np.ndarray]], Union[float, np.ndarray]]:
         def convert(values: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
             return self.default_unit.convert_to(values, self.demanded_unit)
         return convert
     
-    def _get_unit_revoverer(self) -> Callable[[Union[float, np.ndarray]], Union[float, np.ndarray]]:
+    def _get_unit_recoverer(self) -> Callable[[Union[float, np.ndarray]], Union[float, np.ndarray]]:
         def recover(values: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
             return self.demanded_unit.convert_to(values, self.default_unit)
         return recover
@@ -768,6 +779,8 @@ class MCPL_Analyzer_1D(Hist1D):
         
         for pb in file.particle_blocks:
             param_values = getattr(pb, self.para.value)
+            # Convert parameter values to demanded unit
+            param_values = self.unit_converter(param_values)
             
             if len(param_values) > 0:
                 has_data = True
@@ -783,6 +796,8 @@ class MCPL_Analyzer_1D(Hist1D):
         """Get range for calculated parameters."""
         # Calculate values for all particles to determine range
         values = self._calculate_parameter_values(filename)
+        # Convert values to demanded unit
+        values = self.unit_converter(values)
         
         if len(values) == 0:
             raise ValueError(f"No particle data found in file: {filename}")
@@ -842,6 +857,7 @@ class MCPL_Analyzer_1D(Hist1D):
         
         for pb in file.particle_blocks:
             param_values = getattr(pb, self.para.value)
+            param_values = self.unit_converter(param_values)
             if len(param_values) > 0:
                 self.fillmany(
                     np.asarray(param_values, dtype=np.float64), 
@@ -878,7 +894,7 @@ class MCPL_Analyzer_1D(Hist1D):
                 if self.incident_params is None:
                     raise ValueError(f"Incident parameters required for {self.para}")
                 values = self.incident_params.calc(particle_data)
-            
+            values = self.unit_converter(values)
             # Fill histogram with calculated values
             if len(values) > 0:
                 self.fillmany(
