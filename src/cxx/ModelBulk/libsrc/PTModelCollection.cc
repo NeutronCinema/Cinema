@@ -26,7 +26,7 @@
 
 Prompt::ModelCollection::ModelCollection(int gpd)
 :m_cache({}), m_containsOriented(false), m_rng( Singleton<SingletonPTRand>::getInstance() ),
- m_forgpd(gpd), m_res()
+ m_forgpd(gpd), m_res(), m_disappearingModel(nullptr)
 {}
 
 Prompt::ModelCollection::~ModelCollection() {}
@@ -34,6 +34,16 @@ Prompt::ModelCollection::~ModelCollection() {}
 
 void Prompt::ModelCollection::addPhysicsModel(std::shared_ptr<Prompt::DiscreteModel> model)
 {
+  // Check if this is a disappearing reaction model
+  if (model->isDispearingReaction()) {
+    if (m_disappearingModel != nullptr) {
+      // Multiple disappearing reaction models detected - this is an error
+      PROMPT_THROW2(CalcError, 
+        "Multiple disappearing reaction models detected in ModelCollection. "
+        "Only one disappearing reaction model is allowed per collection.");
+    }
+    m_disappearingModel = model;
+  }
 
   m_models.emplace_back(model);
 
@@ -42,29 +52,20 @@ void Prompt::ModelCollection::addPhysicsModel(std::shared_ptr<Prompt::DiscreteMo
   m_cache.cache_xs.push_back(0.);
   m_cache.bias.push_back(1.); // to be update in totalCrossSection
   if(m_models.back()->isOriented())
-    m_containsOriented=true;
+    m_containsOriented = true;
 }
-
 
 double Prompt::ModelCollection::absorptionCrossSection(int pdg, double ekin) const 
 {
-  double xs(0.);
-  for(unsigned i=0;i<m_models.size();i++)
+  // Use cached disappearing model if available
+  if (m_disappearingModel != nullptr)
   {
-    double channelxs(0);
-    // if the model is valid for the particle
-    if(m_models[i]->isValid(pdg, ekin))
-    {
-      if( m_models[i]->isDispearingReaction())
-      {
-        xs += m_models[i]->getCrossSection(ekin);
-        printf("***** here!");
-        break;
-      }
-    }
+    if (m_disappearingModel->isValid(pdg, ekin)) 
+      return m_disappearingModel->getCrossSection(ekin);
   }
-  return xs;
-}
+  
+  return 0.;
+  }
 
 double Prompt::ModelCollection::totalCrossSection(int pdg, double ekin, const Vector &dir) const
 {

@@ -134,7 +134,7 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
       double totxs = m_discretModels->totalCrossSection(particle.getPDG(), particle.getEKin(), particle.getDirection());
       double absxs = m_discretModels->absorptionCrossSection(particle.getPDG(), particle.getEKin());
       pt_assert_always(totxs); // totxs must greater than zero, otherwise, no reaction should be picked
-      particle.scaleAbsP(absxs/totxs);
+      particle.scaleSurviveP(absxs/totxs);
       particle.setDeposition(res.deposition);
       particle.scaleWeight(weightCorrection);
       return isPropagateInVol;    

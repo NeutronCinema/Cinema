@@ -75,6 +75,9 @@ namespace Prompt {
     mutable Vector m_localdir;
     mutable SampledResult m_res;
 
+    // Cache for disappearing reaction models to optimize absorptionCrossSection
+    mutable std::shared_ptr<DiscreteModel> m_disappearingModel;
+
     SingletonPTRand &m_rng;
   };
 }

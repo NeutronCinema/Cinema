@@ -706,7 +706,7 @@ class MCPL_Analyzer_1D(Hist1D):
         # Auto-range detection if specified
         if auto_range_file:
             # In MCPL default unit
-            min_val, max_val = self.getRange(auto_range_file)
+            min_val, max_val = self.get_range(auto_range_file)
             super().__init__(min_val*0.9, max_val*1.1, binnum, linear=linear)
         else:
 
@@ -760,7 +760,7 @@ class MCPL_Analyzer_1D(Hist1D):
                     f"Direct parameter {self.para} does not require incident parameters"
                 )
     
-    def getRange(self, filename) -> Tuple[float, float]:
+    def get_range(self, filename) -> Tuple[float, float]:
         """
         Get the range of parameter values in the MCPL file.
         """
