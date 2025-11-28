@@ -29,11 +29,12 @@
 namespace Prompt {
   class ParticleProcess  {
   public:
-    ParticleProcess(const std::string& name, int pdg = const_neutron_pgd);
+    ParticleProcess(const std::string& name, int pdg = const_neutron_pgd, bool absorp_in_weight = false);
     const std::string& getName() const { return m_name; }
     virtual ~ParticleProcess();
     ModelCollection* getModelCollection() {return m_discretModels.get(); }
     double getNumDensity() {return m_numdensity; }
+    void setAbsorpInWeight(bool enable) { m_absorp_in_weight = enable; } 
 
     double sampleStepLength(const Prompt::Particle &particle, double &macxs) const;
     bool sampleFinalState(Prompt::Particle &particle, double stepLength=0., bool hitWall=false) const;
@@ -46,7 +47,7 @@ namespace Prompt {
     SingletonPTRand &m_rng;
     std::unique_ptr<ModelCollection> m_discretModels;
     double m_numdensity;
-
+    bool m_absorp_in_weight; 
   };
 
 }

@@ -46,6 +46,25 @@ void Prompt::ModelCollection::addPhysicsModel(std::shared_ptr<Prompt::DiscreteMo
 }
 
 
+double Prompt::ModelCollection::absorptionCrossSection(int pdg, double ekin) const 
+{
+  double xs(0.);
+  for(unsigned i=0;i<m_models.size();i++)
+  {
+    double channelxs(0);
+    // if the model is valid for the particle
+    if(m_models[i]->isValid(pdg, ekin))
+    {
+      if( m_models[i]->isDispearingReaction())
+      {
+        xs += m_models[i]->getCrossSection(ekin);
+        printf("***** here!");
+        break;
+      }
+    }
+  }
+  return xs;
+}
 
 double Prompt::ModelCollection::totalCrossSection(int pdg, double ekin, const Vector &dir) const
 {

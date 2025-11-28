@@ -88,6 +88,10 @@ namespace Prompt {
     PhysicsModel(const std::string &name, unsigned gdp, double emin, double emax);
     virtual ~PhysicsModel() = default;
 
+    bool isDispearingReaction() const
+    { return m_res.dispeared; }
+
+
     virtual const SampledResult& sampleReaction(double ekin, const Vector &dir) const = 0;
   protected:
     mutable SampledResult m_res;

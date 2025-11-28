@@ -167,10 +167,10 @@ std::unique_ptr<Prompt::ModelCollection> Prompt::PhysicsFactory::createParticleP
   else
   {
     // example cfg
-    // physics=ncrystal; nccfg="LiquidHeavyWaterD2O_T293.6K.ncmat;density=1.0gcm3";scatter_bias=1.0;abs_bias=1.0;
+    // physics=ncrystal; nccfg="LiquidHeavyWaterD2O_T293.6K.ncmat;density=1.0gcm3";scatter_bias=1.0;abs_bias=1.0;absorp_in_weight=true;
     if(physDef == "ncrystal")
     {
-      int parCount = 4; 
+      int parCount = 3;  
       std::string nccfg = cfg.find("nccfg", true);
 
       double scatter_bias = 1.;
@@ -181,9 +181,10 @@ std::unique_ptr<Prompt::ModelCollection> Prompt::PhysicsFactory::createParticleP
       if(!cfg.getDoubleIfExist("abs_bias", abs_bias))
         parCount--;
 
+
       if(!scatter_bias && !abs_bias)  
       {
-        PROMPT_THROW2(BadInput, "At lease one of the \"scatter_bias\" and \"abs_bias\" key shoule be set to a non-zero positive value" );
+        PROMPT_THROW2(BadInput, "At least one of the \"scatter_bias\" and \"abs_bias\" key should be set to a non-zero positive value" );
       }
 
       compmod = std::make_unique<ModelCollection> (2112);
@@ -408,5 +409,3 @@ Prompt::PhysicsFactory::PhysicsType Prompt::PhysicsFactory::checkPhysicsType(con
 
 
 }
-
-

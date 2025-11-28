@@ -85,12 +85,15 @@ namespace Prompt {
     double getDeposition() const { return m_deposition; }
     void setDeposition(double e) { m_deposition=e; }
 
+    double getAbsP() const { return m_absP; }
+    void scaleAbsP(double scale) { m_absP*= scale;}
+
     friend std::ostream& operator << (std::ostream &, const Particle&);
 
   protected:
     Vector m_dir, m_pos;
     double m_ekin0, m_ekin, m_time;
-    double m_weight;
+    double m_weight, m_absP;
     double m_rest_mass;
     unsigned long long m_eventid, m_id, m_parentid;
     int m_pdg;
@@ -111,7 +114,7 @@ namespace Prompt {
 
 inline Prompt::Particle::Particle(int pdg)
   :m_ekin0(0.), m_ekin(0.), m_effekin(0.), m_time(0.), m_dir(), m_effdir(), m_pos(), m_pdg(pdg),
-  m_weight(1.), m_rest_mass(0.), m_alive(true), m_eventid(0), m_id(0), m_parentid(0),
+  m_weight(1.), m_absP(1.), m_rest_mass(0.), m_alive(true), m_eventid(0), m_id(0), m_parentid(0),
   m_step(0.), m_deltaEn(0.), m_deposition(0.)
 {
   if(m_pdg == const_neutron_pgd)
@@ -120,7 +123,7 @@ inline Prompt::Particle::Particle(int pdg)
 
 inline Prompt::Particle::Particle(double ekin, const Vector& dir, const Vector& pos, int pdg)
   :m_ekin0(ekin), m_ekin(ekin), m_effekin(0.), m_time(0.), m_dir(dir), m_effdir(), m_pos(pos), m_pdg(pdg),
-  m_weight(1.), m_rest_mass(0), m_alive(true), m_eventid(0), m_id(0), m_parentid(0),
+  m_weight(1.), m_absP(1.), m_rest_mass(0), m_alive(true), m_eventid(0), m_id(0), m_parentid(0),
   m_step(0.), m_deltaEn(0.), m_deposition(0.)
 {
   if(m_pdg == const_neutron_pgd)

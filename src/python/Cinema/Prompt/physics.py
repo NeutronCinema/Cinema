@@ -1,4 +1,3 @@
-
 ################################################################################
 ##                                                                            ##
 ##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
@@ -28,6 +27,7 @@ class Material(ConfigString):
         self.cfg_nccfg = nccfg
         self.cfg_scatter_bias = 1.
         self.cfg_abs_bias = 1.
+        self.cfg_absorp_in_weight = False  # Add this
     
     def setBiasScat(self, factor):
         self.cfg_scatter_bias = factor
@@ -35,8 +35,26 @@ class Material(ConfigString):
     def setBiasAbsp(self, factor):
         self.cfg_abs_bias = factor
 
+    def setAbsorpInWeight(self, enable):  # Add this method
+        self.cfg_absorp_in_weight = enable
+
     def cfgMaterial(self, cfg):
         self.cfg_nccfg = cfg
+    
+    @property
+    def cfg(self):  # Update this property to include absorp_in_weight
+        if self.cfg_nccfg is None:
+            raise ValueError("Material config string is not set")
+        
+        cfg_str = f"physics={self.cfg_physics};nccfg='{self.cfg_nccfg}'"
+        if self.cfg_scatter_bias != 1.:
+            cfg_str += f";scatter_bias={self.cfg_scatter_bias}"
+        if self.cfg_abs_bias != 1.:
+            cfg_str += f";abs_bias={self.cfg_abs_bias}"
+        if self.cfg_absorp_in_weight:  # Add this condition
+            cfg_str += ";absorp_in_weight=true"
+        
+        return cfg_str
 
 
 class Mirror(ConfigString):
@@ -55,4 +73,3 @@ class DiskChopper(ConfigString):
         self.cfg_theta0 = theta0
         self.cfg_n = n
         self.cfg_phase = phase
-

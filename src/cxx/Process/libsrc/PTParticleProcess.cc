@@ -38,10 +38,10 @@
 #endif
 #include "PTStackManager.hh"
 
-Prompt::ParticleProcess::ParticleProcess(const std::string &name, int pdg)
+Prompt::ParticleProcess::ParticleProcess(const std::string &name, int pdg, bool absorp_in_weight)
     : m_rng(Singleton<SingletonPTRand>::getInstance()),
       m_discretModels(std::make_unique<ModelCollection>(pdg)),
-      m_numdensity(0.), m_name(name)
+      m_numdensity(0.), m_name(name), m_absorp_in_weight(absorp_in_weight)
 {
   cfgPhysicsModel(name);
 }
@@ -129,7 +129,18 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
   // if (lab_ekin == -1. )
   if(res.dispeared)
   {
-    particle.kill(Particle::KillType::ABSORB);
+    if(m_absorp_in_weight)
+    {
+      double totxs = m_discretModels->totalCrossSection(particle.getPDG(), particle.getEKin(), particle.getDirection());
+      double absxs = m_discretModels->absorptionCrossSection(particle.getPDG(), particle.getEKin());
+      pt_assert_always(totxs); // totxs must greater than zero, otherwise, no reaction should be picked
+      particle.scaleAbsP(absxs/totxs);
+      particle.setDeposition(res.deposition);
+      particle.scaleWeight(weightCorrection);
+      return isPropagateInVol;    
+    }
+    else
+      particle.kill(Particle::KillType::ABSORB);
   }
   else
   {
@@ -173,6 +184,18 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
 
   auto &pfact = Singleton<PhysicsFactory>::getInstance();
   PhysicsFactory::PhysicsType type = pfact.checkPhysicsType(cfgstr);
+
+  if (type != PhysicsFactory::PhysicsType::NC_RAW)
+  {
+    // Parse the config string to check for absorp_in_weight parameter
+    auto &ps = Singleton<CfgParser>::getInstance();
+    auto cfg = ps.parse(cfgstr);
+    
+    // Check for absorp_in_weight parameter and set it accordingly
+    bool absorp_in_weight_cfg = m_absorp_in_weight; // Use default value
+    cfg.getBoolIfExist("absorp_in_weight", absorp_in_weight_cfg);
+    m_absorp_in_weight = absorp_in_weight_cfg;
+  }
 
   #ifdef ENABLE_GIDI
   auto &cd = Singleton<GidiSetting>::getInstance();

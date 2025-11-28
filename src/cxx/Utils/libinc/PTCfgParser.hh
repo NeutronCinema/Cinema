@@ -24,6 +24,7 @@
 #include <string>
 #include <map>
 #include <iostream>
+#include <algorithm>
 #include "PTSingleton.hh"
 #include "PTUtils.hh"
 
@@ -104,9 +105,30 @@ namespace Prompt {
         }
       }
 
-
-
-
+      bool getBoolIfExist(const std::string &key, bool &value)
+      {
+        std::string valueAsStr = find(key);
+        if(!getStringIfExist(key, valueAsStr))
+          return false;
+        else
+        {
+          // Convert string to boolean (case-insensitive)
+          std::string lowerStr = valueAsStr;
+          std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(), ::tolower);
+          
+          if (lowerStr == "true" || lowerStr == "1" || lowerStr == "yes") {
+            value = true;
+          } else if (lowerStr == "false" || lowerStr == "0" || lowerStr == "no") {
+            value = false;
+          } else {
+            // If it's not a recognized boolean string, try to parse as double
+            // and treat non-zero as true
+            double numValue = ptstod(valueAsStr);
+            value = (numValue != 0.0);
+          }
+          return true;
+        }
+      }
 
     };
   public:

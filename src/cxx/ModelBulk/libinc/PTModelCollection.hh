@@ -57,6 +57,9 @@ namespace Prompt {
     { return m_models; }
 
     double totalCrossSection(int pdg, double ekin, const Vector &dir) const;
+
+    // fixme: absorptionCrossSection is very very slow 
+    double absorptionCrossSection(int pdg, double ekin) const;
     double calculateWeight(double lengthRho, bool hitWall);
     const SampledResult&  pickAndSample(double ekin, const Vector &dir) const;
     int getSupportedGPD() const { return m_forgpd; }
