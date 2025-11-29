@@ -44,7 +44,14 @@ class UNITEnum(Enum):
             UNITEnum: The created instance.
         """
         return cls(value)
-    
+
+    @property
+    def symbol(self) -> str:
+        """
+        Get LaTeX symbol for this unit.
+        """
+        raise NotImplementedError("Unit symbol not implemented.")
+
     def _convert_to_by_multiplication(self, value: Union[float, np.ndarray], target_unit: 'UNITEnum') -> Union[float, np.ndarray]:
         return value * target_unit.conversion_factor / self.conversion_factor
     
@@ -73,8 +80,21 @@ class TimeUnit(UNITEnum):
     """
     SECOND = 's'
     MILLISECOND = 'ms'
-    MICROSECOND = 'us'
+    MICROSECOND = 'μs'
     NANOSECOND = 'ns'
+
+    @property
+    def symbol(self) -> str:
+        """
+        Get LaTeX symbol for this time unit.
+        """
+        symbols = {
+            TimeUnit.SECOND: r'$\mathrm{s}$',
+            TimeUnit.MILLISECOND: r'$\mathrm{ms}$',
+            TimeUnit.MICROSECOND: r'$\mu\mathrm{s}$',
+            TimeUnit.NANOSECOND: r'$\mathrm{ns}$',
+        }
+        return symbols[self]
 
     @property
     def conversion_factor(self) -> float:
@@ -110,6 +130,20 @@ class EnergyUnit(UNITEnum):
     NANOEV = 'neV'
 
     @property
+    def symbol(self) -> str:
+        """
+        Get LaTeX symbol for this energy unit.
+        """
+        symbols = {
+            EnergyUnit.MEGAEV: r'$\mathrm{MeV}$',
+            EnergyUnit.KILOEV: r'$\mathrm{keV}$',
+            EnergyUnit.EV: r'$\mathrm{eV}$',
+            EnergyUnit.MILLIEV: r'$\mathrm{meV}$',
+            EnergyUnit.NANOEV: r'$\mathrm{neV}$',
+        }
+        return symbols[self]
+
+    @property
     def conversion_factor(self) -> float:
         """
         Get the conversion factor to convert energy to this unit.
@@ -143,6 +177,19 @@ class LengthUnit(UNITEnum):
     MICROMETER = 'μm'
 
     @property
+    def symbol(self) -> str:
+        """
+        Get LaTeX symbol for this length unit.
+        """
+        symbols = {
+            LengthUnit.METER: r'$\mathrm{m}$',
+            LengthUnit.CENTIMETER: r'$\mathrm{cm}$',
+            LengthUnit.MILLIMETER: r'$\mathrm{mm}$',
+            LengthUnit.MICROMETER: r'$\mu\mathrm{m}$',
+        }
+        return symbols[self]
+
+    @property
     def conversion_factor(self) -> float:
         """
         Get the conversion factor to convert length to this unit.
@@ -174,22 +221,19 @@ class AngleUnit(UNITEnum):
     COSINE = ''  # Standard cosine value between -1 and 1
     DEGREES = 'deg'  # Converted to degrees (arccos)
     RADIANS = 'rad'  # Converted to radians (arccos)
-
-    @property
-    def conversion_factor(self) -> float:
-        """
-        Get the conversion factor to convert direction cosine to this representation.
-        
-        Returns:
-            float: The conversion factor
-        """
-        factors = {
-            AngleUnit.COSINE: 1, 
-            AngleUnit.DEGREES: np.arccos(1),  # Convert to degrees
-            AngleUnit.RADIANS: 1,  # Convert to radians (same as standard for arccos)
-        }
-        return factors[self]
     
+    @property
+    def symbol(self) -> str:
+        """
+        Get LaTeX symbol for this angle unit.
+        """
+        symbols = {
+            AngleUnit.COSINE: r'$-$',
+            AngleUnit.DEGREES: r'$\circ$',
+            AngleUnit.RADIANS: r'$\mathrm{rad}$',
+        }
+        return symbols[self]
+
     @classmethod
     def get_default(cls) -> 'AngleUnit':
         return cls.COSINE
@@ -224,6 +268,17 @@ class MomentumTransferUnit(UNITEnum):
     NANOMETER_INVERSE = 'nm⁻¹'
 
     @property
+    def symbol(self) -> str:
+        """
+        Get LaTeX symbol for this momentum transfer unit.
+        """
+        symbols = {
+            MomentumTransferUnit.ANGSTROM_INVERSE: r'$\mathrm{\AA}^{-1}$',
+            MomentumTransferUnit.NANOMETER_INVERSE: r'$\mathrm{nm}^{-1}$',
+        }
+        return symbols[self]
+
+    @property
     def conversion_factor(self) -> float:
         """
         Get the conversion factor to convert momentum transfer to this unit.
@@ -251,6 +306,18 @@ class WavelengthUnit(UNITEnum):
     ANGSTROM = 'Å'
     NANOMETER = 'nm'
     MICROMETER = 'μm'
+
+    @property
+    def symbol(self) -> str:
+        """
+        Get LaTeX symbol for this wavelength unit.
+        """
+        symbols = {
+            WavelengthUnit.ANGSTROM: r'$\mathrm{\AA}$',
+            WavelengthUnit.NANOMETER: r'$\mathrm{nm}$',
+            WavelengthUnit.MICROMETER: r'$\mu\mathrm{m}$',
+        }
+        return symbols[self]
 
     @property
     def conversion_factor(self) -> float:
@@ -283,6 +350,18 @@ class VelocityUnit(UNITEnum):
     MILLIMETER_PER_SECOND = 'mm/s'
 
     @property
+    def symbol(self) -> str:
+        """
+        Get LaTeX symbol for this velocity unit.
+        """
+        symbols = {
+            VelocityUnit.METER_PER_SECOND: r'$\mathrm{m/s}$',
+            VelocityUnit.CENTIMETER_PER_SECOND: r'$\mathrm{cm/s}$',
+            VelocityUnit.MILLIMETER_PER_SECOND: r'$\mathrm{mm/s}$',
+        }
+        return symbols[self]
+
+    @property
     def conversion_factor(self) -> float:
         """
         Get the conversion factor to convert velocity to this unit.
@@ -303,6 +382,7 @@ class VelocityUnit(UNITEnum):
 
     def convert_to(self, value: Union[float, np.ndarray], target_unit: 'VelocityUnit') -> Union[float, np.ndarray]:
         return self._convert_to_by_multiplication(value, target_unit)
+
         
 class ParticleParameter(Enum):
     """
@@ -379,11 +459,11 @@ class ParticleParameter(Enum):
         """
         labels = {
             # Direct MCPL parameters
-            ParticleParameter.TIME: "Time of Flight (ms)",
-            ParticleParameter.KINETIC_ENERGY: "Kinetic Energy (MeV)",
-            ParticleParameter.X_POSITION: "X Position (cm)",
-            ParticleParameter.Y_POSITION: "Y Position (cm)", 
-            ParticleParameter.Z_POSITION: "Z Position (cm)",
+            ParticleParameter.TIME: "Time of Flight",
+            ParticleParameter.KINETIC_ENERGY: "Kinetic Energy",
+            ParticleParameter.X_POSITION: "X Position",
+            ParticleParameter.Y_POSITION: "Y Position", 
+            ParticleParameter.Z_POSITION: "Z Position",
             ParticleParameter.X_DIRECTION: "X Direction Cosine",
             ParticleParameter.Y_DIRECTION: "Y Direction Cosine",
             ParticleParameter.Z_DIRECTION: "Z Direction Cosine",
@@ -398,11 +478,11 @@ class ParticleParameter(Enum):
             ParticleParameter.DIRECTION_VECTOR: "Direction Vector",
             
             # Calculated parameters
-            ParticleParameter.MOMENTUM_TRANSFER_Q: "Momentum Transfer Q (Å⁻¹)",
-            ParticleParameter.ENERGY_TRANSFER_OMEGA: "Energy Transfer ω (eV)",
-            ParticleParameter.SCATTERING_ANGLE: "Scattering Angle (rad)",
-            ParticleParameter.WAVELENGTH: "Wavelength (Å)",
-            ParticleParameter.VELOCITY: "Velocity (mm/s)",
+            ParticleParameter.MOMENTUM_TRANSFER_Q: "Momentum Transfer Q",
+            ParticleParameter.ENERGY_TRANSFER_OMEGA: "Energy Transfer ω",
+            ParticleParameter.SCATTERING_ANGLE: "Scattering Angle",
+            ParticleParameter.WAVELENGTH: "Wavelength",
+            ParticleParameter.VELOCITY: "Velocity",
         }
         
         return labels.get(self, self.value.replace('_', ' ').title())
@@ -711,6 +791,13 @@ class MCPL_Analyzer_1D(Hist1D):
         else:
 
             super().__init__(binmin, binmax, binnum, linear=linear)
+
+    @property
+    def label_axis(self) -> str:
+        """
+        Get appropriate axis label for this particle parameter.
+        """
+        return self.para.get_label() + f", {self.demanded_unit.symbol}"
 
     @property
     def unit_converter(self) -> Callable[[Union[float, np.ndarray]], Union[float, np.ndarray]]:
