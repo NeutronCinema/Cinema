@@ -228,7 +228,7 @@ class AngleUnit(UNITEnum):
         Get LaTeX symbol for this angle unit.
         """
         symbols = {
-            AngleUnit.COSINE: r'$-$',
+            AngleUnit.COSINE: r'$\cos$',
             AngleUnit.DEGREES: r'$\circ$',
             AngleUnit.RADIANS: r'$\mathrm{rad}$',
         }
@@ -480,7 +480,7 @@ class ParticleParameter(Enum):
             # Calculated parameters
             ParticleParameter.MOMENTUM_TRANSFER_Q: "Momentum Transfer Q",
             ParticleParameter.ENERGY_TRANSFER_OMEGA: "Energy Transfer ω",
-            ParticleParameter.SCATTERING_ANGLE: "Scattering Angle",
+            ParticleParameter.SCATTERING_ANGLE: "Scattering Angle θ",
             ParticleParameter.WAVELENGTH: "Wavelength",
             ParticleParameter.VELOCITY: "Velocity",
         }
