@@ -80,7 +80,7 @@ class TimeUnit(UNITEnum):
     """
     SECOND = 's'
     MILLISECOND = 'ms'
-    MICROSECOND = 'μs'
+    MICROSECOND = 'us'
     NANOSECOND = 'ns'
 
     @property
@@ -174,7 +174,7 @@ class LengthUnit(UNITEnum):
     METER = 'm'
     CENTIMETER = 'cm'
     MILLIMETER = 'mm'
-    MICROMETER = 'μm'
+    MICROMETER = 'um'
 
     @property
     def symbol(self) -> str:
@@ -264,8 +264,8 @@ class MomentumTransferUnit(UNITEnum):
     """
     Enumeration of available momentum transfer units.
     """
-    ANGSTROM_INVERSE = 'Å⁻¹'
-    NANOMETER_INVERSE = 'nm⁻¹'
+    ANGSTROM_INVERSE = 'AA^-1'
+    NANOMETER_INVERSE = 'nm^-1'
 
     @property
     def symbol(self) -> str:
@@ -303,9 +303,9 @@ class WavelengthUnit(UNITEnum):
     """
     Enumeration of available wavelength units.
     """
-    ANGSTROM = 'Å'
+    ANGSTROM = 'AA'
     NANOMETER = 'nm'
-    MICROMETER = 'μm'
+    MICROMETER = 'um'
 
     @property
     def symbol(self) -> str:
