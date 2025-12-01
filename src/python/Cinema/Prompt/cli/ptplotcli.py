@@ -599,7 +599,7 @@ Examples:
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     parser.add_argument('-d', '--downbinning', action='count', default=0,
                        help='Downbinning data: -d for once, -dd for twice, -ddd for three times')
-    parser.add_argument('--ylog', action='store_true', help='Set y-axis to log scale')
+    parser.add_argument('--ylin', action='store_true', help='Set y-axis to linear scale')
     args = parser.parse_args()
     
     # Run main function
@@ -610,7 +610,7 @@ Examples:
             output_dir=args.output,
             show_plot=not args.no_show,
             downbinning_level=args.downbinning,
-            ylog=args.ylog
+            ylog=not args.ylin
         )
     except Exception as e:
         print(f"\nError message: {e}")
