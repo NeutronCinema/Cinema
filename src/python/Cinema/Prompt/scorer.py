@@ -291,6 +291,12 @@ class MultiScatMixin2D():
 
 # Counter 
 class MultiScatCounter(ScorerHelper):
+    """
+        Multi-scattering counter (MSC) Helper class.
+        A multi-scattering counter counts the number of scatterings inside a Volume of each particle.
+        Use `aScorer.addScatterCounter(MSC, scatterNumberRequired)` to filter the particles counted 
+    with required number of scatterings for `aScorer`.
+    """
     def __init__(self, name="ScatterCounter") -> None:
         super().__init__(name, min=-2.5, max=100.5, numbin=103, pdg=2112, ptstate = 'PEA_POST', groupID=0)
 
