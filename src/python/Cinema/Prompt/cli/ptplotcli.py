@@ -24,6 +24,18 @@ except ImportError as e:
     print(f"Failed to import CinemaXY class: {e}")
     sys.exit(1)
 
+AVAILABLE_PARTICLE_PARAMETERS = ['time', 'ekin', 'x', 'y', 'z', 'ux', 'uy', 'uz',
+                                 'momentum_transfer_q', 'energy_transfer_omega', 'scattering_angle', 'wavelength', 'velocity']
+
+def _show_para_units():
+    for para in AVAILABLE_PARTICLE_PARAMETERS:
+        para_enum = ParticleParameter(para)
+        print()
+        print(f"{para}:")
+        for u in para_enum.unit:
+            print(f"para={para};unit={u.value}")
+        
+
 @dataclass
 class _ParticleParameterCfgStr:
     """
@@ -64,7 +76,7 @@ class _ParticleParameterCfgStr:
     
 
     def _validate(self, v, typeconvert : type, exceptions=[], exception_only = False):
-        errmsg = f"ERROR: invalid value: '{v}'\nValid values are: '{', '.join(exceptions)}' or type {typeconvert.__name__}"
+        errmsg = f"ERROR: invalid value: '{v}'\nValid values are: '{', '.join(exceptions)}', type {typeconvert.__name__}"
         if v in exceptions:
             return v
         if exception_only:
@@ -203,7 +215,7 @@ class MCPLDataCfgStr(_ParticleParameterCfgStr):
     def __post_init__(self):
            
         self.para = self._validate(self.para, str, 
-                           [v.value for k,v in ParticleParameter.__members__.items()], 
+                           AVAILABLE_PARTICLE_PARAMETERS, 
                            exception_only=True)
         self.binmin = self._validate(self.binmin, float, ["auto"])
         self.binmax = self._validate(self.binmax, float, ["auto"])
@@ -605,8 +617,15 @@ Examples:
     parser.add_argument('-d', '--downbinning', action='count', default=0,
                        help='Downbinning data: -d for once, -dd for twice, -ddd for three times')
     parser.add_argument('--ylin', action='store_true', help='Set y-axis to linear scale')
+    parser.add_argument('-s', '--show', action='store_true', help='Show available units for particle parameters')
+
     args = parser.parse_args()
     
+    # Show available units for particle parameters
+    if args.show:
+        _show_para_units()
+        return
+
     # Run main function
     success = False
     try:
