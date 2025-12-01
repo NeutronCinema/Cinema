@@ -164,6 +164,12 @@ class ArrayPlotMixin:
     """Plotting functionality mixin"""
     def plot(self, ax=None, bar=False, **plot_kwargs):
         """Plot data points with error bars"""
+        try:
+            from Cinema.Interface import plotStyle
+            plotStyle()
+        except Exception as e:
+            print(f"Warning: Fail to apply plot style: {e}")
+                                                        
         if ax is None:
             import matplotlib.pyplot as plt
             ax = plt.gca()
