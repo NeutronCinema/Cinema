@@ -81,7 +81,13 @@ def plotStyle(fontSize=16):
 
     plt.rcParams.update({'font.size': fontSize})
     matplotlib.rcParams['lines.linewidth'] = 2
-
+    
+    matplotlib.rcParams['lines.marker'] = 's'
+    matplotlib.rcParams['lines.linestyle'] = '-'
+    matplotlib.rcParams['lines.markersize'] = 6
+    matplotlib.rcParams['lines.markeredgewidth'] = 1.5
+    matplotlib.rcParams['lines.markeredgecolor'] = 'auto'
+    matplotlib.rcParams['lines.markerfacecolor'] = 'auto'
 
     _plt_legend_orig = plt.legend
     def _plt_legend(*args,**kwargs):
@@ -103,4 +109,3 @@ def singleton(cls):
             _instance[cls] = cls()
         return _instance[cls]
     return inner
-
