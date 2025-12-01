@@ -590,12 +590,13 @@ def main():
         description='Load HDF5 files using CinemaXY.from_hdf5 and create plots with combined plotting support',
         epilog='''
 Examples:
-  python load_and_plot_h5.py file1.h5 file2.h5
-  python load_and_plot_h5.py *.h5
-  python load_and_plot_h5.py monitor1_TOF.h5+monitor2_TOF.h5
-  python load_and_plot_h5.py data/*.h5 -o plots/
-  python load_and_plot_h5.py "monitor*_MCPL.mcpl;x=time;bmin=0;bmax=10;bnum=100;bscale=1e-3+"
-  python load_and_plot_h5.py --help
+  ptplot file1.h5 file2.h5
+  ptplot *.h5
+  ptplot monitor1_TOF.h5+monitor2_TOF.h5
+  ptplot data/*.h5 -o plots/
+  ptplot "monitor*_MCPL.mcpl;para=time;binmin=0;binmax=10;binnum=100+"
+  ptplot "detMCPL_scat_*_pro0.mcpl;para=scattering_angle;unit=deg;binmin=0;binmax=180;binnum=1800;incident_params=[incident_wavelength_A=4;incident_direction=(0,0,1);sample_position=(0.0,0.0,0.0)]
+  ptplot --help
         ''',
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
