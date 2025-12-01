@@ -346,9 +346,10 @@ def create_combined_plot(cinema_data_list : list[CinemaXY],
         cinema_data.plot(ax=ax, fmt=f'{color}-', marker=marker, markersize=3, alpha=alpha,
                        label=f'{basename} ± Std Dev, integral {integral_str}', capsize=3, elinewidth=1)
     
-    ax.set_xlabel('X Coordinate')
+    # Set axis labels
+    ax.set_xlabel(xlabel if xlabel else 'X Coordinate')
     ax.set_ylabel('Weight')
-    ax.set_title('Combined HDF5 Data Visualization')
+    # ax.set_title('Combined HDF5 Data Visualization')
     ax.legend()
     ax.grid(True, alpha=0.3)
     
@@ -361,7 +362,7 @@ def create_combined_plot(cinema_data_list : list[CinemaXY],
     
     return fig
 
-def create_individual_plot(cinema_data : CinemaXY, file_basename, output_image=None):
+def create_individual_plot(cinema_data : CinemaXY, file_basename, xlabel=None, output_image=None, downbinning_level=0):
     """
     Create an individual plot for a single CinemaXY object
     
@@ -385,11 +386,12 @@ def create_individual_plot(cinema_data : CinemaXY, file_basename, output_image=N
 
     # Format integral value display using the new function
     integral_str = format_integral_value(integral)
-
+    
     # Use CinemaXY's built-in plot method
     cinema_data.plot(ax=ax, fmt='b-', marker='o', markersize=4, 
                    label=f'Weight ± Standard Deviation, integral {integral_str}', capsize=3, elinewidth=1)
-    ax.set_xlabel('X Coordinate')
+    # Set axis labels
+    ax.set_xlabel(xlabel if xlabel else 'X Coordinate')
     ax.set_ylabel('Weight')
     ax.set_title(f'HDF5 Data Visualization (File: {file_basename})')
     ax.legend()
@@ -516,17 +518,19 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True, downbinn
         cinema_data_list = []
         file_basenames = []
         
+        xlabel = 'X coordinate'
         for file_dict in file_group:
+
             filepath = file_dict.get('filename', None)
             kwargs = {k: v for k, v in file_dict.items() if k not in ['filename']}
             
             if filepath.endswith('.h5'):
                 cinema_data, file_basename = load_single_h5_file(filepath)
-                bs = lambda x: x
             elif filepath.endswith('.mcpl') or filepath.endswith('.mcpl.gz'):
                 # Pass parameters to load_single_mcpl_file
                 analyser, file_basename = load_single_mcpl_file(filepath, **kwargs)
                 cinema_data = analyser.toArrayXY()
+                xlabel = analyser.label_axis
             
             if cinema_data is None:
                 print(f"Failed to process file: {filepath}")
@@ -546,6 +550,7 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True, downbinn
                 cinema_data_list[0], 
                 file_basenames[0],
                 output_image=output_dir,
+                xlabel=xlabel,
                 downbinning_level=downbinning_level
             )
             all_figures.append(fig)
@@ -567,11 +572,13 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True, downbinn
             output_path = None
             if output_dir and os.path.isdir(output_dir):
                 output_path = os.path.join(output_dir, f"combined_{combined_name}.png")
-            
+
             fig = create_combined_plot(
                 cinema_data_list,
                 file_basenames,
+                xlabel=xlabel,
                 output_image=output_path,
+                downbinning_level=downbinning_level
             )
             all_figures.append(fig)
             
