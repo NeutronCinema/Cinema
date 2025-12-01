@@ -998,6 +998,8 @@ class MCPL_Analyzer_2D(Hist2D):
     def __init__(self, 
                  x_para: Union[ParticleParameter, str] = ParticleParameter.TIME,
                  y_para: Union[ParticleParameter, str] = ParticleParameter.KINETIC_ENERGY,
+                 x_unit: Optional[str] = None,
+                 y_unit: Optional[str] = None,
                  x_incident_params: IncidentParameters = None,
                  y_incident_params: IncidentParameters = None,
                  x_binmin=0.0, x_binmax=10.0, x_binnum=100,
@@ -1022,28 +1024,20 @@ class MCPL_Analyzer_2D(Hist2D):
         Raises:
             ValueError: If parameters and incident parameters don't match
         """
-        # Convert parameters to enum if they're strings
-        if isinstance(x_para, str):
-            self.x_para = ParticleParameter(x_para)
-        elif isinstance(x_para, ParticleParameter):
-            self.x_para = x_para
-        else:
-            raise ValueError(f"Invalid x parameter type: {type(x_para)}")
-            
-        if isinstance(y_para, str):
-            self.y_para = ParticleParameter(y_para)
-        elif isinstance(y_para, ParticleParameter):
-            self.y_para = y_para
-        else:
-            raise ValueError(f"Invalid y parameter type: {type(y_para)}")
-        
+        # Validate particle parameters
+        self.x_para = self._validate_particle_parameter(x_para)
+        self.y_para = self._validate_particle_parameter(y_para)
+
+        # Get default and demanded units
+        self._get_default_and_demanded_unit(x_unit, y_unit)
+
         # Validate parameters and incident parameters compatibility
         self._validate_parameter_compatibility(self.x_para, x_incident_params, "x")
         self._validate_parameter_compatibility(self.y_para, y_incident_params, "y")
         
         self.x_incident_params = x_incident_params
         self.y_incident_params = y_incident_params
-        
+
         # Auto-range detection if specified
         if auto_range_file:
             x_min, x_max = self.get_x_range(auto_range_file)
@@ -1060,6 +1054,57 @@ class MCPL_Analyzer_2D(Hist2D):
         else:
             # Call Hist2D constructor with correct parameters (no linear arguments)
             super().__init__(x_binmin, x_binmax, x_binnum, y_binmin, y_binmax, y_binnum)
+    
+    def _get_default_and_demanded_unit(self, x_unit, y_unit):
+        """Get the demanded unit for a given parameter."""
+        self.x_default_unit = self.x_para.unit.get_default()
+        if x_unit is None:
+            self.x_demanded_unit = self.x_default_unit
+        else:
+            self.x_demanded_unit = self.x_para.unit.from_str(x_unit)
+
+        self.y_default_unit = self.y_para.unit.get_default()
+        if y_unit is None:
+            self.y_demanded_unit = self.y_default_unit
+        else:
+            self.y_demanded_unit = self.y_para.unit.from_str(y_unit)
+
+    @property
+    def x_unit_converter(self):
+        def convert(values: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+            return self.x_default_unit.convert_to(values, self.x_demanded_unit)
+        return convert
+
+    @property
+    def y_unit_converter(self):
+        def convert(values: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+            return self.y_default_unit.convert_to(values, self.y_demanded_unit)
+        return convert
+
+    @staticmethod
+    def _validate_particle_parameter(para) -> ParticleParameter:
+        # Convert parameters to enum if they're strings
+        if isinstance(para, str):
+            para = ParticleParameter(para)
+        elif not isinstance(para, ParticleParameter):
+            raise ValueError(f"Invalid parameter type: {type(para)}")
+        return para
+
+
+    @property
+    def label_axis_x(self) -> str:
+        """
+        Get appropriate axis label for this particle parameter.
+        """
+        return self.x_para.get_label() + f", {self.x_demanded_unit.symbol}"
+    
+    @property
+    def label_axis_y(self) -> str:
+        """
+        Get appropriate axis label for this particle parameter.
+        """
+        return self.y_para.get_label() + f", {self.y_demanded_unit.symbol}"
+    
     
     def _validate_parameter_compatibility(self, para: ParticleParameter, 
                                          incident_params: IncidentParameters, 
@@ -1104,20 +1149,20 @@ class MCPL_Analyzer_2D(Hist2D):
         Get the range of x-axis parameter values in the MCPL file.
         """
         if self.x_para.is_calculated():
-            return self._get_calculated_range(filename, self.x_para, self.x_incident_params)
+            return self._get_calculated_range(filename, self.x_para, self.x_incident_params, self.x_unit_converter)
         else:
-            return self._get_direct_range(filename, self.x_para)
+            return self._get_direct_range(filename, self.x_para, self.x_unit_converter)
     
     def get_y_range(self, filename) -> Tuple[float, float]:
         """
         Get the range of y-axis parameter values in the MCPL file.
         """
         if self.y_para.is_calculated():
-            return self._get_calculated_range(filename, self.y_para, self.y_incident_params)
+            return self._get_calculated_range(filename, self.y_para, self.y_incident_params, self.y_unit_converter)
         else:
-            return self._get_direct_range(filename, self.y_para)
+            return self._get_direct_range(filename, self.y_para, self.y_unit_converter)
     
-    def _get_direct_range(self, filename, para: ParticleParameter) -> Tuple[float, float]:
+    def _get_direct_range(self, filename, para: ParticleParameter, converter: Callable) -> Tuple[float, float]:
         """Get range for direct MCPL parameters."""
         file = MCPLFile(filename)
         
@@ -1127,6 +1172,7 @@ class MCPL_Analyzer_2D(Hist2D):
         
         for pb in file.particle_blocks:
             param_values = getattr(pb, para.value)
+            param_values = converter(param_values)
             
             if len(param_values) > 0:
                 has_data = True
@@ -1139,10 +1185,11 @@ class MCPL_Analyzer_2D(Hist2D):
         return min_val, max_val
     
     def _get_calculated_range(self, filename, para: ParticleParameter, 
-                            incident_params: IncidentParameters) -> Tuple[float, float]:
+                            incident_params: IncidentParameters, converter: Callable) -> Tuple[float, float]:
         """Get range for calculated parameters."""
         # Calculate values for all particles to determine range
         values = self._calculate_parameter_values(filename, para, incident_params)
+        values = converter(values)
         
         if len(values) == 0:
             raise ValueError(f"No particle data found in file: {filename}")
