@@ -307,7 +307,7 @@ def format_integral_value(integral):
         return f"{integral:.4f}"
 
 def create_combined_plot(cinema_data_list : list[CinemaXY], 
-                         file_basenames, xlabel=None, output_image=None, downbinning_level=0):
+                         file_basenames, xlabel=None, output_image=None, downbinning_level=0, ylog=False):
     """
     Create a combined plot for multiple CinemaXY objects
     
@@ -344,7 +344,7 @@ def create_combined_plot(cinema_data_list : list[CinemaXY],
         # Use CinemaXY's built-in plot method with different styles
         alpha = 0.4 if i == 0 else 1.0
         cinema_data.plot(ax=ax, fmt=f'{color}-', marker=marker, markersize=3, alpha=alpha,
-                       label=f'{basename} ± Std Dev, integral {integral_str}', capsize=3, elinewidth=1)
+                       label=f'{basename} ± Std Dev, integral {integral_str}', capsize=3, elinewidth=1, ylog=ylog)
     
     # Set axis labels
     ax.set_xlabel(xlabel if xlabel else 'X Coordinate')
@@ -362,7 +362,7 @@ def create_combined_plot(cinema_data_list : list[CinemaXY],
     
     return fig
 
-def create_individual_plot(cinema_data : CinemaXY, file_basename, xlabel=None, output_image=None, downbinning_level=0):
+def create_individual_plot(cinema_data : CinemaXY, file_basename, xlabel=None, output_image=None, downbinning_level=0, ylog=False):
     """
     Create an individual plot for a single CinemaXY object
     
@@ -389,7 +389,8 @@ def create_individual_plot(cinema_data : CinemaXY, file_basename, xlabel=None, o
     
     # Use CinemaXY's built-in plot method
     cinema_data.plot(ax=ax, fmt='b-', marker='o', markersize=4, 
-                   label=f'Weight ± Standard Deviation, integral {integral_str}', capsize=3, elinewidth=1)
+                   label=f'Weight ± Standard Deviation, integral {integral_str}', capsize=3, elinewidth=1, ylog=ylog)
+    
     # Set axis labels
     ax.set_xlabel(xlabel if xlabel else 'X Coordinate')
     ax.set_ylabel('Weight')
@@ -480,7 +481,7 @@ def parse_file_groups(file_patterns):
         groups.append(dictgroup)
     return groups
 
-def load_and_plot_files(file_patterns, output_dir=None, show_plot=True, downbinning_level=0):
+def load_and_plot_files(file_patterns, output_dir=None, show_plot=True, downbinning_level=0, ylog=False):
     """
     Load HDF5 files and create plots with support for combined plotting
     
@@ -489,6 +490,7 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True, downbinn
         output_dir (str): Output directory for saving plots (optional)
         show_plot (bool): Whether to display plots
         downbinning_level (int): Downbinning level (0=no downbinning, 1=downbinning once, etc.)
+        ylog (bool): Whether to set y-axis to log scale
         
     Returns:
         bool: True if all files processed successfully, False otherwise
@@ -551,7 +553,8 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True, downbinn
                 file_basenames[0],
                 output_image=output_dir,
                 xlabel=xlabel,
-                downbinning_level=downbinning_level
+                downbinning_level=downbinning_level,
+                ylog=ylog
             )
             all_figures.append(fig)
             
@@ -578,7 +581,8 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True, downbinn
                 file_basenames,
                 xlabel=xlabel,
                 output_image=output_path,
-                downbinning_level=downbinning_level
+                downbinning_level=downbinning_level,
+                ylog=ylog
             )
             all_figures.append(fig)
             
@@ -593,8 +597,8 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True, downbinn
     
     # Show all plots at once if requested
     if show_plot and all_figures:
-        # plt.xscale('log')
-        plt.yscale('log')
+        # Remove the global ylog setting since it's now handled per plot
+        # plt.yscale('log')
         plt.show()  # Now plt is defined in global scope
     
     print(f"\nSuccessfully processed {success_count}/{len(file_dicts)} file groups")
@@ -612,7 +616,7 @@ Examples:
   ptplot monitor1_TOF.h5+monitor2_TOF.h5
   ptplot data/*.h5 -o plots/
   ptplot "monitor*_MCPL.mcpl;para=time;binmin=0;binmax=10;binnum=100+"
-  ptplot "detMCPL_scat_*_pro0.mcpl;para=scattering_angle;unit=deg;binmin=0;binmax=180;binnum=1800;incident_params=[incident_wavelength_A=4;incident_direction=(0,0,1);sample_position=(0.0,0.0,0.0)]
+  ptplot "detMCPL_scat_*_pro0.mcpl;para=scattering_angle;unit=deg;binmin=0;binmax=180;binnum=1800;incident_params=[incident_wavelength_A=4;incident_direction=(0,0,1);sample_position=(0.0,0.0,0.0)]"
   ptplot --help
         ''',
         formatter_class=argparse.RawDescriptionHelpFormatter
@@ -624,6 +628,7 @@ Examples:
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     parser.add_argument('-d', '--downbinning', action='count', default=0,
                        help='Downbinning data: -d for once, -dd for twice, -ddd for three times')
+    parser.add_argument('--ylog', action='store_true', help='Set y-axis to log scale')
     args = parser.parse_args()
     
     # Run main function
@@ -633,7 +638,8 @@ Examples:
             args.input_files,
             output_dir=args.output,
             show_plot=not args.no_show,
-            downbinning_level=args.downbinning
+            downbinning_level=args.downbinning,
+            ylog=args.ylog
         )
     except Exception as e:
         print(f"\nError message: {e}")
