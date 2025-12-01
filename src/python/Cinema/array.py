@@ -173,6 +173,10 @@ class ArrayPlotMixin:
         if ax is None:
             import matplotlib.pyplot as plt
             ax = plt.gca()
+        
+        if plot_kwargs.get('ylog', False):
+            ax.set_yscale('log')
+        plot_kwargs.pop('ylog', None)
 
         # Convert data to plain numpy arrays to avoid indexing issues
         x = np.asarray(self.x)
