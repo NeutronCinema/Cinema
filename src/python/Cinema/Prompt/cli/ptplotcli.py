@@ -306,7 +306,8 @@ def format_integral_value(integral):
     else:
         return f"{integral:.4f}"
 
-def create_combined_plot(cinema_data_list : list[CinemaXY], file_basenames, output_image=None):
+def create_combined_plot(cinema_data_list : list[CinemaXY], 
+                         file_basenames, xlabel=None, output_image=None, downbinning_level=0):
     """
     Create a combined plot for multiple CinemaXY objects
     
@@ -333,7 +334,10 @@ def create_combined_plot(cinema_data_list : list[CinemaXY], file_basenames, outp
         
         # Calculate integral
         integral = calculate_integral(cinema_data)
-        
+        # Downbinning
+        for _ in range(downbinning_level):
+            cinema_data = (cinema_data[::2] + cinema_data[1::2])
+
         # Format integral value display using the new function
         integral_str = format_integral_value(integral)
         
@@ -375,6 +379,10 @@ def create_individual_plot(cinema_data : CinemaXY, file_basename, output_image=N
     # Calculate integral
     integral = calculate_integral(cinema_data)
     
+    # Downbinning
+    for _ in range(downbinning_level):
+        cinema_data = (cinema_data[::2] + cinema_data[1::2])
+
     # Format integral value display using the new function
     integral_str = format_integral_value(integral)
 
@@ -470,7 +478,7 @@ def parse_file_groups(file_patterns):
         groups.append(dictgroup)
     return groups
 
-def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
+def load_and_plot_files(file_patterns, output_dir=None, show_plot=True, downbinning_level=0):
     """
     Load HDF5 files and create plots with support for combined plotting
     
@@ -478,6 +486,7 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
         file_patterns (list): List of file paths, glob patterns, or combined groups
         output_dir (str): Output directory for saving plots (optional)
         show_plot (bool): Whether to display plots
+        downbinning_level (int): Downbinning level (0=no downbinning, 1=downbinning once, etc.)
         
     Returns:
         bool: True if all files processed successfully, False otherwise
@@ -537,6 +546,7 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
                 cinema_data_list[0], 
                 file_basenames[0],
                 output_image=output_dir,
+                downbinning_level=downbinning_level
             )
             all_figures.append(fig)
             
@@ -605,6 +615,8 @@ Examples:
     parser.add_argument('-o', '--output', help='Output directory for saving plots (optional)')
     parser.add_argument('--no-show', action='store_true', help='Do not display plot windows')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
+    parser.add_argument('-d', '--downbinning', action='count', default=0,
+                       help='Downbinning data: -d for once, -dd for twice, -ddd for three times')
     args = parser.parse_args()
     
     # Run main function
@@ -613,7 +625,8 @@ Examples:
         success = load_and_plot_files(
             args.input_files,
             output_dir=args.output,
-            show_plot=not args.no_show
+            show_plot=not args.no_show,
+            downbinning_level=args.downbinning
         )
     except Exception as e:
         print(f"\nError message: {e}")
