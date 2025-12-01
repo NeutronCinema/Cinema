@@ -305,7 +305,7 @@ def format_integral_value(integral):
     else:
         return f"{integral:.4f}"
 
-def create_plot(cinema_data_list, file_basenames, xlabel=None, output_image=None, downbinning_level=0, ylog=False, is_combined=False):
+def create_plot(cinema_data_list : list[CinemaXY], file_basenames, xlabel=None, output_image=None, downbinning_level=0, ylog=False, is_combined=False):
     """
     Create a plot for one or multiple CinemaXY objects
     
@@ -339,8 +339,13 @@ def create_plot(cinema_data_list, file_basenames, xlabel=None, output_image=None
         integral = calculate_integral(cinema_data)
         
         # Downbinning
+        _maxdb_level = 0
         for _ in range(downbinning_level):
+            if len(cinema_data.x) % 2 != 0:
+                print(f"Warning: Maximun downbinning level reached for {basename}, fall back to {_maxdb_level} downbinning operations")
+                break
             cinema_data = (cinema_data[::2] + cinema_data[1::2])
+            _maxdb_level += 1
 
         # Format integral value
         integral_str = format_integral_value(integral)
