@@ -24,6 +24,18 @@ except ImportError as e:
     print(f"Failed to import CinemaXY class: {e}")
     sys.exit(1)
 
+AVAILABLE_PARTICLE_PARAMETERS = ['time', 'ekin', 'x', 'y', 'z', 'ux', 'uy', 'uz',
+                                 'momentum_transfer_q', 'energy_transfer_omega', 'scattering_angle', 'wavelength', 'velocity']
+
+def _show_para_units():
+    for para in AVAILABLE_PARTICLE_PARAMETERS:
+        para_enum = ParticleParameter(para)
+        print()
+        print(f"{para}:")
+        for u in para_enum.unit:
+            print(f"para={para};unit={u.value}")
+        
+
 @dataclass
 class _ParticleParameterCfgStr:
     """
@@ -64,7 +76,7 @@ class _ParticleParameterCfgStr:
     
 
     def _validate(self, v, typeconvert : type, exceptions=[], exception_only = False):
-        errmsg = f"ERROR: invalid value: '{v}'\nValid values are: '{', '.join(exceptions)}' or type {typeconvert.__name__}"
+        errmsg = f"ERROR: invalid value: '{v}'\nValid values are: '{', '.join(exceptions)}', type {typeconvert.__name__}"
         if v in exceptions:
             return v
         if exception_only:
@@ -203,7 +215,7 @@ class MCPLDataCfgStr(_ParticleParameterCfgStr):
     def __post_init__(self):
            
         self.para = self._validate(self.para, str, 
-                           [v.value for k,v in ParticleParameter.__members__.items()], 
+                           AVAILABLE_PARTICLE_PARAMETERS, 
                            exception_only=True)
         self.binmin = self._validate(self.binmin, float, ["auto"])
         self.binmax = self._validate(self.binmax, float, ["auto"])
@@ -218,7 +230,6 @@ def load_single_h5_file(h5_filepath):
     
     Args:
         h5_filepath (str): Path to HDF5 file
-        
     Returns:
         tuple: (CinemaXY object, file_basename) or (None, None) if failed
     """
@@ -306,45 +317,74 @@ def format_integral_value(integral):
     else:
         return f"{integral:.4f}"
 
-def create_combined_plot(cinema_data_list : list[CinemaXY], file_basenames, output_image=None):
+def create_plot(cinema_data_list : list[CinemaXY], file_basenames, xlabel=None, output_image=None, downbinning_level=0, ylog=False, is_combined=False):
     """
-    Create a combined plot for multiple CinemaXY objects
+    Create a plot for one or multiple CinemaXY objects
     
     Args:
-        cinema_data_list: List of CinemaXY objects
-        file_basenames (list): List of base names for each file
+        cinema_data_list: CinemaXY object or list of CinemaXY objects
+        file_basenames: Single filename or list of filenames
+        xlabel (str): X-axis label
         output_image (str): Output image file path (optional)
+        downbinning_level (int): Downbinning level
+        ylog (bool): Whether to set y-axis to log scale
+        is_combined (bool): Whether this is a combined plot
         
     Returns:
         matplotlib.figure.Figure: The created figure
     """
-    # Remove internal import, use global plt
-    # Create a figure for combined plot
-    fig, ax = plt.subplots(figsize=(12, 8))
+    # Convert single data to list for unified processing
+    if not isinstance(cinema_data_list, list):
+        cinema_data_list = [cinema_data_list]
+        file_basenames = [file_basenames]
+    
+    # Create figure with appropriate size
+    figsize = (12, 8) if is_combined else (10, 6)
+    fig, ax = plt.subplots(figsize=figsize)
     
     # Define colors and markers for different files
     colors = ['b', 'r', 'g', 'c', 'm', 'y', 'k']
     markers = ['o', 's', '^', 'D', 'v', '<', '>']
     
     for i, (cinema_data, basename) in enumerate(zip(cinema_data_list, file_basenames)):
-
-        color = colors[i % len(colors)]
-        marker = markers[i % len(markers)]
-        
         # Calculate integral
         integral = calculate_integral(cinema_data)
         
-        # Format integral value display using the new function
+        # Downbinning
+        _maxdb_level = 0
+        for _ in range(downbinning_level):
+            if len(cinema_data.x) % 2 != 0:
+                print(f"Warning: Maximun downbinning level reached for {basename}, fall back to {_maxdb_level} downbinning operations")
+                break
+            cinema_data = (cinema_data[::2] + cinema_data[1::2])
+            _maxdb_level += 1
+
+        # Format integral value
         integral_str = format_integral_value(integral)
         
-        # Use CinemaXY's built-in plot method with different styles
-        alpha = 0.4 if i == 0 else 1.0
-        cinema_data.plot(ax=ax, fmt=f'{color}-', marker=marker, markersize=3, alpha=alpha,
-                       label=f'{basename} ± Std Dev, integral {integral_str}', capsize=3, elinewidth=1)
+        # Set plot style based on plot type
+        if is_combined:
+            color = colors[i % len(colors)]
+            marker = markers[i % len(markers)]
+            alpha = 0.4 if i == 0 else 1.0
+            label = f'{basename} ± Std Dev, integral {integral_str}'
+        else:
+            color = 'b'
+            marker = 'o'
+            alpha = 1.0
+            label = f'Weight ± Standard Deviation, integral {integral_str}'
+        
+        # Use CinemaXY's built-in plot method
+        cinema_data.plot(ax=ax, fmt=f'{color}-', marker=marker, markersize=4, alpha=alpha,
+                       label=label, capsize=3, elinewidth=1, ylog=ylog)
     
-    ax.set_xlabel('X Coordinate')
+    # Set axis labels and title
+    ax.set_xlabel(xlabel if xlabel else 'X Coordinate')
     ax.set_ylabel('Weight')
-    ax.set_title('Combined HDF5 Data Visualization')
+    
+    if not is_combined:
+        ax.set_title(f'HDF5 Data Visualization (File: {file_basenames[0]})')
+    
     ax.legend()
     ax.grid(True, alpha=0.3)
     
@@ -352,57 +392,20 @@ def create_combined_plot(cinema_data_list : list[CinemaXY], file_basenames, outp
     
     # Save image
     if output_image:
-        plt.savefig(output_image, dpi=300, bbox_inches='tight')
-        print(f"Combined plot saved to: {output_image}")
-    
-    return fig
-
-def create_individual_plot(cinema_data : CinemaXY, file_basename, output_image=None):
-    """
-    Create an individual plot for a single CinemaXY object
-    
-    Args:
-        cinema_data: CinemaXY object
-        file_basename (str): Base name of the file for title
-        output_image (str): Output image file path (optional)
-        
-    Returns:
-        matplotlib.figure.Figure: The created figure
-    """
-    # Remove internal import, use global plt
-    # Create a figure for this file
-    fig, ax = plt.subplots(figsize=(10, 6))
-    # Calculate integral
-    integral = calculate_integral(cinema_data)
-    
-    # Format integral value display using the new function
-    integral_str = format_integral_value(integral)
-
-    # Use CinemaXY's built-in plot method
-    cinema_data.plot(ax=ax, fmt='b-', marker='o', markersize=4, 
-                   label=f'Weight ± Standard Deviation, integral {integral_str}', capsize=3, elinewidth=1)
-    ax.set_xlabel('X Coordinate')
-    ax.set_ylabel('Weight')
-    ax.set_title(f'HDF5 Data Visualization (File: {file_basename})')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    
-    # Save image with filename-based naming if output directory is specified
-    if output_image:
-        # If output_image is a directory, create filename based on input file
-        if os.path.isdir(output_image):
-            output_dir = output_image
-            # Create output filename: remove .h5 extension and add .png
-            output_filename = file_basename.replace('.h5', '.png')
-            output_path = os.path.join(output_dir, output_filename)
+        if is_combined:
+            # Combined plot: save directly to specified path
+            plt.savefig(output_image, dpi=300, bbox_inches='tight')
+            print(f"Combined plot saved to: {output_image}")
         else:
-            # If single file specified, use it for the first file only
-            output_path = output_image
-        
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        print(f"Plot saved to: {output_path}")
+            # Individual plot: handle directory vs file path
+            if os.path.isdir(output_image):
+                output_dir = output_image
+                output_filename = file_basenames[0].replace('.h5', '.png')
+                output_path = os.path.join(output_dir, output_filename)
+            else:
+                output_path = output_image
+            plt.savefig(output_path, dpi=300, bbox_inches='tight')
+            print(f"Plot saved to: {output_path}")
     
     return fig
 
@@ -470,7 +473,7 @@ def parse_file_groups(file_patterns):
         groups.append(dictgroup)
     return groups
 
-def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
+def load_and_plot_files(file_patterns, output_dir=None, show_plot=True, downbinning_level=0, ylog=False):
     """
     Load HDF5 files and create plots with support for combined plotting
     
@@ -478,6 +481,8 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
         file_patterns (list): List of file paths, glob patterns, or combined groups
         output_dir (str): Output directory for saving plots (optional)
         show_plot (bool): Whether to display plots
+        downbinning_level (int): Downbinning level (0=no downbinning, 1=downbinning once, etc.)
+        ylog (bool): Whether to set y-axis to log scale
         
     Returns:
         bool: True if all files processed successfully, False otherwise
@@ -507,17 +512,19 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
         cinema_data_list = []
         file_basenames = []
         
+        xlabel = 'X coordinate'
         for file_dict in file_group:
+
             filepath = file_dict.get('filename', None)
             kwargs = {k: v for k, v in file_dict.items() if k not in ['filename']}
             
             if filepath.endswith('.h5'):
                 cinema_data, file_basename = load_single_h5_file(filepath)
-                bs = lambda x: x
             elif filepath.endswith('.mcpl') or filepath.endswith('.mcpl.gz'):
                 # Pass parameters to load_single_mcpl_file
                 analyser, file_basename = load_single_mcpl_file(filepath, **kwargs)
                 cinema_data = analyser.toArrayXY()
+                xlabel = analyser.label_axis
             
             if cinema_data is None:
                 print(f"Failed to process file: {filepath}")
@@ -530,55 +537,57 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True):
             print(f"No valid data loaded for group {i}")
             continue
         
-        # Create appropriate plot type
-        if len(cinema_data_list) == 1:
-            # Individual plot
-            fig = create_individual_plot(
-                cinema_data_list[0], 
-                file_basenames[0],
-                output_image=output_dir,
-            )
-            all_figures.append(fig)
-            
-            # Calculate and display integral
+        # Determine if this is a combined plot
+        is_combined = len(cinema_data_list) > 1
+        
+        # Set output path
+        output_path = None
+        if output_dir:
+            if is_combined:
+                combined_name = "+".join([os.path.basename(f.get('filename', None)).replace('.h5', '') for f in file_group])
+                if os.path.isdir(output_dir):
+                    output_path = os.path.join(output_dir, f"combined_{combined_name}.png")
+                else:
+                    output_path = output_dir
+            else:
+                output_path = output_dir
+        
+        # Create plot using unified function
+        fig = create_plot(
+            cinema_data_list,
+            file_basenames,
+            xlabel=xlabel,
+            output_image=output_path,
+            downbinning_level=downbinning_level,
+            ylog=ylog,
+            is_combined=is_combined
+        )
+        all_figures.append(fig)
+        
+        # Display statistics and integrals
+        if is_combined:
+            combined_name = "+".join([os.path.basename(f.get('filename', None)).replace('.h5', '') for f in file_group])
+            print(f"\nIntegrals for combined plot {combined_name}:")
+            for cinema_data, basename in zip(cinema_data_list, file_basenames):
+                integral = calculate_integral(cinema_data)
+                integral_str = format_integral_value(integral)
+                print(f"  {basename}: {integral_str}")
+        else:
+            # Individual plot statistics
             integral = calculate_integral(cinema_data_list[0])
-            integral_str = format_integral_value(integral)  # Use the new function
+            integral_str = format_integral_value(integral)
             
-            # Print statistics for this file
             print(f"\nStatistics for {file_basenames[0]}:")
             print(f"  Data points: {len(cinema_data_list[0].x)}")
             print(f"  Weight range: [{cinema_data_list[0].mean.min():.6f}, {cinema_data_list[0].mean.max():.6f}]")
             print(f"  Std dev range: [{cinema_data_list[0].sdev.min():.6f}, {cinema_data_list[0].sdev.max():.6f}]")
             print(f"  Curve integral: {integral:.6f}")
-            
-        else:
-            # Combined plot
-            combined_name = "+".join([os.path.basename(f.get('filename', None)).replace('.h5', '') for f in file_group])
-            output_path = None
-            if output_dir and os.path.isdir(output_dir):
-                output_path = os.path.join(output_dir, f"combined_{combined_name}.png")
-            
-            fig = create_combined_plot(
-                cinema_data_list,
-                file_basenames,
-                output_image=output_path,
-            )
-            all_figures.append(fig)
-            
-            # Display integrals for each file
-            print(f"\nIntegrals for combined plot {combined_name}:")
-            for cinema_data, basename in zip(cinema_data_list, file_basenames):
-                integral = calculate_integral(cinema_data)
-                integral_str = format_integral_value(integral)  # Use the new function
-                print(f"  {basename}: {integral_str}")
         
         success_count += 1
     
     # Show all plots at once if requested
     if show_plot and all_figures:
-        # plt.xscale('log')
-        plt.yscale('log')
-        plt.show()  # Now plt is defined in global scope
+        plt.show()
     
     print(f"\nSuccessfully processed {success_count}/{len(file_dicts)} file groups")
     return success_count == len(file_dicts)
@@ -590,12 +599,13 @@ def main():
         description='Load HDF5 files using CinemaXY.from_hdf5 and create plots with combined plotting support',
         epilog='''
 Examples:
-  python load_and_plot_h5.py file1.h5 file2.h5
-  python load_and_plot_h5.py *.h5
-  python load_and_plot_h5.py monitor1_TOF.h5+monitor2_TOF.h5
-  python load_and_plot_h5.py data/*.h5 -o plots/
-  python load_and_plot_h5.py "monitor*_MCPL.mcpl;x=time;bmin=0;bmax=10;bnum=100;bscale=1e-3+"
-  python load_and_plot_h5.py --help
+  ptplot file1.h5 file2.h5
+  ptplot *.h5
+  ptplot monitor1_TOF.h5+monitor2_TOF.h5
+  ptplot data/*.h5 -o plots/
+  ptplot "monitor*_MCPL.mcpl;para=time;binmin=0;binmax=10;binnum=100+"
+  ptplot "detMCPL_scat_*_pro0.mcpl;para=scattering_angle;unit=deg;binmin=0;binmax=180;binnum=1800;incident_params=[incident_wavelength_A=4;incident_direction=(0,0,1);sample_position=(0.0,0.0,0.0)]"
+  ptplot --help
         ''',
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -604,15 +614,27 @@ Examples:
     parser.add_argument('-o', '--output', help='Output directory for saving plots (optional)')
     parser.add_argument('--no-show', action='store_true', help='Do not display plot windows')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
+    parser.add_argument('-d', '--downbinning', action='count', default=0,
+                       help='Downbinning data: -d for once, -dd for twice, -ddd for three times')
+    parser.add_argument('--ylin', action='store_true', help='Set y-axis to linear scale')
+    parser.add_argument('-s', '--show', action='store_true', help='Show available units for particle parameters')
+
     args = parser.parse_args()
     
+    # Show available units for particle parameters
+    if args.show:
+        _show_para_units()
+        return
+
     # Run main function
     success = False
     try:
         success = load_and_plot_files(
             args.input_files,
             output_dir=args.output,
-            show_plot=not args.no_show
+            show_plot=not args.no_show,
+            downbinning_level=args.downbinning,
+            ylog=not args.ylin
         )
     except Exception as e:
         print(f"\nError message: {e}")
