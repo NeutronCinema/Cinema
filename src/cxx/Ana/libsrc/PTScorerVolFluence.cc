@@ -48,6 +48,6 @@ void Prompt::ScorerVolFluence::score(Particle &particle)
     << std::endl;
   #endif
   
-  m_hist->fill(particle.getEKin(), m_iVol*particle.getStep());
+  m_hist->fill(particle.getEKin(), m_iVol*particle.getStep()*particle.getSurviveP());
   
 }
