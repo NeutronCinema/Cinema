@@ -35,7 +35,7 @@ void Prompt::ScorerSplit::score(Particle &particle)
     
   if(m_lastsplit != particle.getEventID() )
   {
-    m_hist->fill(particle.getWeight());
+    m_hist->fill(particle.getWeight()*particle.getSurviveP());
     if (m_split>1)
     {
       particle.scaleWeight(1./m_split);

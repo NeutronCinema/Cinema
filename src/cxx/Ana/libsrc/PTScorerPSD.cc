@@ -43,11 +43,11 @@ void Prompt::ScorerPSD::score(Prompt::Particle &particle)
     vec = m_activeVolume.getGeoTranslator().global2Local(particle.getPosition());
 
   if (m_type==PSDType::XY)
-    m_hist->fill(vec.x(), vec.y(), particle.getWeight() );
+    m_hist->fill(vec.x(), vec.y(), particle.getWeight() *particle.getSurviveP());
   else if (m_type==PSDType::YZ)
-    m_hist->fill(vec.y(), vec.z(), particle.getWeight() );
+    m_hist->fill(vec.y(), vec.z(), particle.getWeight() *particle.getSurviveP());
   else if (m_type==PSDType::XZ)
-    m_hist->fill(vec.x(), vec.z(), particle.getWeight() );
+    m_hist->fill(vec.x(), vec.z(), particle.getWeight() *particle.getSurviveP() );
   else
     PROMPT_THROW2(BadInput, m_name << " not support type");
 }

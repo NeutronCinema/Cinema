@@ -35,5 +35,5 @@ void Prompt::ScorerDeposition::score(Prompt::Particle &particle)
 {
   if(!rightScorer(particle))
     return;
-  m_hist->fill(particle.getDeposition(), particle.getWeight());  
+  m_hist->fill(particle.getDeposition(), particle.getWeight()*particle.getSurviveP());  
 }

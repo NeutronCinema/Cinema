@@ -31,5 +31,5 @@ void Prompt::ScorerWlSpectrum::score(Prompt::Particle &particle)
 {
   if(!rightScorer(particle))
     return;
-  m_hist->fill(ekin2wl(particle.getEKin()),  particle.getWeight() );
+  m_hist->fill(ekin2wl(particle.getEKin()),  particle.getWeight() *particle.getSurviveP());
 }

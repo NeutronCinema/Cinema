@@ -48,7 +48,7 @@ void Prompt::ScorerWlAngle::score(Prompt::Particle &particle)
   if(m_method==0)
   {
     double wl0 = ekin2wl(particle.getEKin0());
-    m_hist->fill(wl0, angle, particle.getWeight() );
+    m_hist->fill(wl0, angle, particle.getWeight() *particle.getSurviveP());
   }
   else if(m_method==1) //static approximation
   {
@@ -56,6 +56,6 @@ void Prompt::ScorerWlAngle::score(Prompt::Particle &particle)
     double v = dist/particle.getTime();
     double ekin = 0.5*const_neutron_mass_evc2*v*v;
     double wl_ela = ekin2wl(ekin);
-    m_hist->fill(wl_ela, angle, particle.getWeight());
+    m_hist->fill(wl_ela, angle, particle.getWeight()*particle.getSurviveP());
   }
 }

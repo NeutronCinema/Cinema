@@ -48,5 +48,5 @@ void Prompt::ScorerDirectSqw::score(Prompt::Particle &particle)
   double time = particle.getTime()-m_time_L1;
   double ekin = neutronSpeed2Ekin(time ? flight_dist/time: 0.);
   double q = neutronAngleCosine2Q(dir.angleCos(m_incident_dir), m_mean_ekin, ekin);
-  m_hist->fill(q, m_mean_ekin-ekin, particle.getWeight());
+  m_hist->fill(q, m_mean_ekin-ekin, particle.getWeight()*particle.getSurviveP());
 }

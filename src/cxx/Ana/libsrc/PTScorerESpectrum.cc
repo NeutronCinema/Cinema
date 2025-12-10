@@ -36,8 +36,8 @@ void Prompt::ScorerESpectrum::score(Prompt::Particle &particle)
   if(!rightScorer(particle))
     return;
 
-  m_scoreTransfer ? m_hist->fill(particle.getEKin0()-particle.getEKin(),  particle.getWeight() ) :
-                    m_hist->fill(particle.getEKin(),  particle.getWeight() );
+  m_scoreTransfer ? m_hist->fill(particle.getEKin0()-particle.getEKin(),  particle.getWeight()*particle.getSurviveP() ) :
+                    m_hist->fill(particle.getEKin(),  particle.getWeight()*particle.getSurviveP() );
   
 
   // if (!m_scoreTransfer)

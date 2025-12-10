@@ -32,5 +32,5 @@ void Prompt::ScorerTOF::score(Prompt::Particle &particle)
   if(!rightScorer(particle))
     return;
 
-  m_hist->fill(particle.getTime(), particle.getWeight());
+  m_hist->fill(particle.getTime(), particle.getWeight()*particle.getSurviveP());
 }

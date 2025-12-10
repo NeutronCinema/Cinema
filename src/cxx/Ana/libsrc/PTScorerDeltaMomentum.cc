@@ -62,7 +62,7 @@ void Prompt::ScorerDeltaMomentum::score(Prompt::Particle &particle)
     {
       double qt = neutronAngleCosine2Q(angle_cos, particle.getEKin0(), particle.getEKin());
       if(qt)
-        m_hist->fill(qt, particle.getWeight()/qt); 
+        m_hist->fill(qt, particle.getWeight()/qt*particle.getSurviveP()); 
     }
     else if(m_method==1) //static approximation
     {
@@ -70,7 +70,7 @@ void Prompt::ScorerDeltaMomentum::score(Prompt::Particle &particle)
       double v = dist/particle.getTime();
       double ekin = neutronSpeed2Ekin(v);
       double q = neutronAngleCosine2Q(angle_cos, ekin, ekin);
-      m_hist->fill(q, particle.getWeight()/q);
+      m_hist->fill(q, particle.getWeight()/q*particle.getSurviveP());
     }
     else 
       PROMPT_THROW(BadInput,"m_method should be either 0 or 1"); 

@@ -131,11 +131,7 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
   {
     if(m_absorp_in_weight)
     {
-      double totxs = m_discretModels->totalCrossSection(particle.getPDG(), particle.getEKin(), particle.getDirection());
       double absxs = m_discretModels->absorptionCrossSection(particle.getPDG(), particle.getEKin());
-      pt_assert_always(totxs); // totxs must greater than zero, otherwise, no reaction should be picked
-      // printf("Particle %llu absorbed, totxs: %e, absxs: %e, stepLength: %e, m_numdensity: %e\n", particle.getEventID(), totxs, absxs, stepLength, m_numdensity);
-      // printf("Weight biasing factor: %f\n", bias);
       particle.scaleSurviveP(exp(-100.0*absxs*stepLength*m_numdensity));
       particle.setDeposition(res.deposition);
       particle.scaleWeight(weightCorrection);

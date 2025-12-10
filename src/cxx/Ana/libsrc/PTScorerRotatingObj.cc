@@ -66,5 +66,5 @@ void Prompt::ScorerRotatingObj::score(Prompt::Particle &particle)
   double comvEkin = 0.5*comovingSpeed*comovingSpeed*particle.getMass();
   particle.setEffEKin(comvEkin);
   particle.setEffDirection(comovingVel.unit());
-  m_hist->fill(comvEkin, particle.getWeight());
+  m_hist->fill(comvEkin, particle.getWeight()*particle.getSurviveP());
 }

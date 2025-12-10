@@ -53,5 +53,5 @@ void Prompt::ScorerAngular::score(Prompt::Particle &particle)
     return;
 
   double angle_cos = std::clamp(m_refDir.angleCos(particle.getDirection()), -1., 1.);
-  m_hist->fill(m_inDegree ? std::acos(angle_cos)*const_rad2deg: angle_cos, particle.getWeight());  
+  m_hist->fill(m_inDegree ? std::acos(angle_cos)*const_rad2deg: angle_cos, particle.getWeight()*particle.getSurviveP());  
 }
