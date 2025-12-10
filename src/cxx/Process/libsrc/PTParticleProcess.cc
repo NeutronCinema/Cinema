@@ -78,7 +78,7 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
   Vector lab_dir;
 
 
-  const auto &res = particle.hasEffEnergy()?
+  auto &res = particle.hasEffEnergy()?
                     m_discretModels->pickAndSample(particle.getEffEKin(), particle.getEffDirection()):
                     m_discretModels->pickAndSample(particle.getEKin(), particle.getDirection());
 
@@ -134,9 +134,17 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
       double totxs = m_discretModels->totalCrossSection(particle.getPDG(), particle.getEKin(), particle.getDirection());
       double absxs = m_discretModels->absorptionCrossSection(particle.getPDG(), particle.getEKin());
       pt_assert_always(totxs); // totxs must greater than zero, otherwise, no reaction should be picked
-      particle.scaleSurviveP(absxs/totxs);
+      // printf("Particle %llu absorbed, totxs: %e, absxs: %e, stepLength: %e, m_numdensity: %e\n", particle.getEventID(), totxs, absxs, stepLength, m_numdensity);
+      // printf("Weight biasing factor: %f\n", bias);
+      particle.scaleSurviveP(exp(-100.0*absxs*stepLength*m_numdensity));
       particle.setDeposition(res.deposition);
       particle.scaleWeight(weightCorrection);
+      // printf("Particle %llu is absorbed, weight correction: %f, surviveP: %f\n", 
+      //       particle.getEventID(), weightCorrection, particle.getSurviveP());
+      res.dispeared = false; // continue the transport
+      res.deposition = 0.;
+      res.final_dir = particle.getDirection();
+      res.final_ekin = particle.getEKin();
       return isPropagateInVol;    
     }
     else

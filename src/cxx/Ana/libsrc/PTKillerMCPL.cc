@@ -37,6 +37,8 @@ void Prompt::KillerMCPL::score(Prompt::Particle &particle)
 {
   if(!rightScorer(particle))
     return;
+
+  // printf("$$$Particle %llu surviveP: %f\n", particle.getEventID(), particle.getSurviveP());
    
   m_writer->write(particle);
   m_hist->fill(m_scatterNumberRequired);

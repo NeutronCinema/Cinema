@@ -118,9 +118,10 @@ void Prompt::MCPLBinaryWrite::write(const Particle &p)
   // modify userflags (unsigned_32) and polarisation (double[3]) as well, if enabled.
   if(m_with_extraUserUnsigned) {
     // Store the survive probability as a 32-bit float in userflags field
-    float surviveP = static_cast<float>(p.getSurviveP());
+    float survivePF = static_cast<float>(p.getSurviveP());
+
     // Use type punning to store float bits as uint32_t
-    m_particleInFile->userflags = *reinterpret_cast<uint32_t*>(&surviveP);
+    m_particleInFile->userflags = *reinterpret_cast<uint32_t*>(&survivePF);
   }
 
   mcpl_add_particle(m_file, m_particleInFile);
