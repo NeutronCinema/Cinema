@@ -205,15 +205,18 @@ class Hist1D(HistBase):
 
 
     def fill(self, x, weight=1.):
-        _pt_Hist1D_fill(self.cobj, x, weight)
-
+        if hasattr(x, '__iter__') and not np.isscalar(x):
+            self.fillmany(x, weight)
+        else:
+            _pt_Hist1D_fill(self.cobj, x, weight)
+        
     def fillmany(self, x, weight=None):
         if weight is None:
             weight = np.ones(x.size)
         if(x.size !=weight.size):
             raise RuntimeError('fillnamy different size')
         
-        _pt_Hist1D_fill_many(self.cobj, x.size, np.ascontiguousarray(x), np.ascontiguousarray(weight) )
+        _pt_Hist1D_fill_many(self.cobj, x.size, np.ascontiguousarray(x.astype(np.float64)), np.ascontiguousarray(weight.astype(np.float64)) )
 
     def plot(self, show=False, label=None, title=None, log=False, sigma=1, ax=None):
         try:
@@ -352,7 +355,11 @@ class Hist2D(HistBase):
         return d
 
     def fill(self, x, y, weight=1.):
-        _pt_Hist2D_fill(self.cobj, x, y, weight)
+        if hasattr(x, '__iter__') and not np.isscalar(x):
+            self.fillmany(x, y, weight)
+        else:
+            _pt_Hist2D_fill(self.cobj, x, y, weight)
+
 
     def fillmany(self, x, y, weight=None):
         if weight is None:
