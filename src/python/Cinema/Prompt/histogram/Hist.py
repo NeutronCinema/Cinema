@@ -204,11 +204,11 @@ class Hist1D(HistBase):
             return (self.getCentre() * self.getWeight()).sum()/self.getAccWeight()
 
 
-    def fill(self, x, weight=1.):
+    def fill(self, x, weight=None):
         if hasattr(x, '__iter__') and not np.isscalar(x):
             self.fillmany(x, weight)
         else:
-            _pt_Hist1D_fill(self.cobj, x, weight)
+            _pt_Hist1D_fill(self.cobj, x, 1. if weight is None else weight)
         
     def fillmany(self, x, weight=None):
         if weight is None:
@@ -354,11 +354,11 @@ class Hist2D(HistBase):
         _pt_Hist2D_getWeight(self.cobj, d)
         return d
 
-    def fill(self, x, y, weight=1.):
+    def fill(self, x, y, weight=None):
         if hasattr(x, '__iter__') and not np.isscalar(x):
             self.fillmany(x, y, weight)
         else:
-            _pt_Hist2D_fill(self.cobj, x, y, weight)
+            _pt_Hist2D_fill(self.cobj, x, y, 1. if weight is None else weight)
 
 
     def fillmany(self, x, y, weight=None):

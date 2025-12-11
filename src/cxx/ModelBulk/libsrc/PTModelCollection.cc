@@ -63,6 +63,7 @@ double Prompt::ModelCollection::absorptionCrossSection(int pdg, double ekin) con
     if (m_disappearingModel->isValid(pdg, ekin)) 
       return m_disappearingModel->getCrossSection(ekin);
   }
+  pt_assert_always(m_disappearingModel != nullptr);
   
   return 0.;
   }

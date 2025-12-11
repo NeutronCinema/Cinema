@@ -27,15 +27,19 @@ class Material(ConfigString):
         self.cfg_nccfg = nccfg
         self.cfg_scatter_bias = 1.
         self.cfg_abs_bias = 1.
-        self.cfg_absorp_in_weight = False  # Add this
+        self.cfg_absorp_in_weight = False  
     
     def setBiasScat(self, factor):
         self.cfg_scatter_bias = factor
     
     def setBiasAbsp(self, factor):
+        if self.cfg_absorp_in_weight:
+            raise ValueError("Cannot set abs_bias when absorp_in_weight is set")
         self.cfg_abs_bias = factor
 
-    def setAbsorpInWeight(self, enable):  # Add this method
+    def setAbsorpInWeight(self, enable):  
+        if self.cfg_abs_bias:
+            raise ValueError("Cannot set absorp_in_weight when abs_bias is set")
         self.cfg_absorp_in_weight = enable
 
     def cfgMaterial(self, cfg):

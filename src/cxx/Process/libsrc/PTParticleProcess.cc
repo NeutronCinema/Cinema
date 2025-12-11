@@ -50,8 +50,8 @@ Prompt::ParticleProcess::~ParticleProcess() {}
 
 double Prompt::ParticleProcess::macroCrossSection(const Prompt::Particle &particle) const
 {
-  double ekin = particle.hasEffEnergy() ? particle.getEffEKin() : particle.getEKin();
-  const auto &dir = particle.hasEffEnergy() ? particle.getEffDirection() : particle.getDirection();
+  double ekin =  particle.getEKin();
+  const auto &dir =  particle.getDirection();
   return m_numdensity * m_discretModels->totalCrossSection(particle.getPDG(), ekin, dir);
 }
 
@@ -64,6 +64,12 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
   if (!particle.isAlive())
     PROMPT_THROW(CalcError, "Particle is not alive");
 
+  if(m_absorp_in_weight) 
+  {
+      double absxs = m_discretModels->absorptionCrossSection(particle.getPDG(), particle.getEKin());
+      particle.scaleSurviveP(exp(-absxs*stepLength*m_numdensity));
+  }
+
   // if particle is escaped to the the next volume
   if (hitWall)
   {
@@ -73,41 +79,11 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
     }
     return isPropagateInVol;
   }
+  else
+    isPropagateInVol = true;
 
-  double lab_ekin(0);
-  Vector lab_dir;
 
-
-  auto &res = particle.hasEffEnergy()?
-                    m_discretModels->pickAndSample(particle.getEffEKin(), particle.getEffDirection()):
-                    m_discretModels->pickAndSample(particle.getEKin(), particle.getDirection());
-
-  if (particle.hasEffEnergy())
-  {
-    double comove_ekin = res.final_ekin;
-    Vector comove_dir = res.final_dir;
-
-    // sample in the comoving frame
-    if (!res.dispeared) // non-capture fixme: this should not be called when EXITing
-    {
-      Vector v_comoving = comove_dir * std::sqrt(2 * comove_ekin / particle.getMass());
-      // the rotatioal velocity
-      auto v_rot = particle.getDirection() * particle.calcSpeed() - particle.getEffDirection() * particle.calcEffSpeed();
-
-      particle.setEffEKin(comove_ekin);
-      particle.setEffDirection(comove_dir);
-
-      // bring back to the lab
-      auto v_lab = v_comoving + v_rot;
-
-      // set the final value in the lab frame
-      double speed(0);
-      v_lab.magdir(speed, lab_dir);
-      // lab_ekin = particle.getEKin();
-      lab_ekin = 0.5 * particle.getMass() * speed * speed;
-    }
-  }
- 
+  auto &res = m_discretModels->pickAndSample(particle.getEKin(), particle.getDirection());
 
   // fixme: when a particle exiting a volume, a reaction channel is forced to sampled at the moment
   // lab_ekin could be -1 in those cases, but the transport keeps going, that is very confusing.
@@ -124,41 +100,15 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
     stm.scalceSecondary(i, weightCorrection);
   }
 
-  // if it is an absorption reaction, the state of the particle is set,
-  // but the energy and direction are kept for the subsequent capture scorers.
-  // if (lab_ekin == -1. )
   if(res.dispeared)
   {
-    if(m_absorp_in_weight)
-    {
-      double absxs = m_discretModels->absorptionCrossSection(particle.getPDG(), particle.getEKin());
-      particle.scaleSurviveP(exp(-100.0*absxs*stepLength*m_numdensity));
-      particle.setDeposition(res.deposition);
-      particle.scaleWeight(weightCorrection);
-      // printf("Particle %llu is absorbed, weight correction: %f, surviveP: %f\n", 
-      //       particle.getEventID(), weightCorrection, particle.getSurviveP());
-      res.dispeared = false; // continue the transport
-      res.deposition = 0.;
-      res.final_dir = particle.getDirection();
-      res.final_ekin = particle.getEKin();
-      return isPropagateInVol;    
-    }
-    else
+    if(!m_absorp_in_weight)
       particle.kill(Particle::KillType::ABSORB);
   }
   else
   {
-    if(particle.hasEffEnergy())
-    {
-      particle.setEKin(lab_ekin);
-      particle.setDirection(lab_dir);
-    }
-    else
-    {
-      particle.setEKin(res.final_ekin);
-      particle.setDirection(res.final_dir);
-    }
-    isPropagateInVol = true;
+    particle.setEKin(res.final_ekin);
+    particle.setDirection(res.final_dir);
   }
   particle.setDeposition(res.deposition);
   particle.scaleWeight(weightCorrection);
