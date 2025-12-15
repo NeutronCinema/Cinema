@@ -135,7 +135,6 @@ _pt_ScorerDirectSqw_new = importFunc('pt_ScorerDirectSqw_new', type_voidp, [type
 _pt_ScorerPSD_new = importFunc('pt_ScorerPSD_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint,
                                                                 type_dbl, type_dbl, type_uint,
                                                                 type_uint, type_int, type_int, type_int, type_bool])
-
 _pt_addMultiScatter1D = importFunc('pt_addMultiScatter1D', None, [type_voidp, type_voidp, type_int])
 _pt_addMultiScatter2D = importFunc('pt_addMultiScatter2D', None, [type_voidp, type_voidp, type_int])
 
@@ -280,6 +279,50 @@ class MultiScatMixin1D():
         pass
 
     def addScatterCounter(self, scatterCounter, scatterNumberRequired=-2):
+        """
+        Associate a multi-scattering counter with this scorer to filter particles based on scattering count.
+        
+        This method enables particle filtering by requiring that particles have undergone a specific
+        number of scattering events before being counted by this scorer. The scattering counter
+        tracks the number of scatterings each particle experiences within a specified volume.
+        
+        Parameters:
+        -----------
+        scatterCounter : MultiScatCounter
+            An instance of MultiScatCounter that tracks scattering events for particles.
+            This counter must be attached to the volume where scatterings are counted.
+            
+        scatterNumberRequired : int, optional
+            The required number of scatterings for particles to be counted by this scorer.
+            Special values:
+                -2: Count all particles (default)
+                -1: Count only particles that do not enter the region of interest
+                0: Count only particles that have entered the region of interest but not scattered
+                >0: Count only particles that have scattered exactly n times (n > 0)
+            
+        Notes:
+        ------
+        - The scatter counter must be properly initialized and attached to a volume before use
+        - Multiple scorers can share the same scatter counter with different scattering requirements
+        - This filtering mechanism is particularly useful for analyzing multiple scattering effects
+          in neutron scattering experiments
+        - The method delegates to the underlying C++ implementation via _pt_addMultiScatter1D
+        
+        Example:
+        --------
+        # Create a scatter counter for a sample volume
+        scatter_counter = MultiScatCounter("SampleScatterCounter")
+        sample_volume.addScorer(scatter_counter, scatter_counter.make(sample_volume))
+        
+        # Create a 1D scorer that only counts particles with exactly 1 scattering
+        scorer_1d = ESpectrumHelper("EnergySpectrum", min=1e-5, max=1, numbin=100)
+        scorer_1d.addScatterCounter(scatter_counter, scatterNumberRequired=1)
+        
+        See Also:
+        ---------
+        MultiScatCounter : Helper class for counting scattering events
+        MultiScatMixin2D.addScatterCounter : 2D version of this method
+        """
         _pt_addMultiScatter1D(scatterCounter.cobj, self.cobj, scatterNumberRequired)
 
 class MultiScatMixin2D():
@@ -287,6 +330,50 @@ class MultiScatMixin2D():
         pass
 
     def addScatterCounter(self, scatterCounter, scatterNumberRequired=-2):
+        """
+        Associate a multi-scattering counter with this scorer to filter particles based on scattering count.
+        
+        This method enables particle filtering by requiring that particles have undergone a specific
+        number of scattering events before being counted by this scorer. The scattering counter
+        tracks the number of scatterings each particle experiences within a specified volume.
+        
+        Parameters:
+        -----------
+        scatterCounter : MultiScatCounter
+            An instance of MultiScatCounter that tracks scattering events for particles.
+            This counter must be attached to the volume where scatterings are counted.
+            
+        scatterNumberRequired : int, optional
+            The required number of scatterings for particles to be counted by this scorer.
+            Special values:
+                -2: Count all particles (default)
+                -1: Count only particles that do not enter the region of interest
+                0: Count only particles that have entered the region of interest but not scattered
+                >0: Count only particles that have scattered exactly n times (n > 0)
+            
+        Notes:
+        ------
+        - The scatter counter must be properly initialized and attached to a volume before use
+        - Multiple scorers can share the same scatter counter with different scattering requirements
+        - This filtering mechanism is particularly useful for analyzing multiple scattering effects
+          in neutron scattering experiments
+        - The method delegates to the underlying C++ implementation via _pt_addMultiScatter2D
+        
+        Example:
+        --------
+        # Create a scatter counter for a sample volume
+        scatter_counter = MultiScatCounter("SampleScatterCounter")
+        sample_volume.addScorer(scatter_counter, scatter_counter.make(sample_volume))
+        
+        # Create a 2D scorer that only counts particles with exactly 2 scatterings
+        scorer_2d = Some2DScorerHelper("MyScorer", ...)
+        scorer_2d.addScatterCounter(scatter_counter, scatterNumberRequired=2)
+        
+        See Also:
+        ---------
+        MultiScatCounter : Helper class for counting scattering events
+        MultiScatMixin1D.addScatterCounter : 1D version of this method
+        """
         _pt_addMultiScatter2D(scatterCounter.cobj, self.cobj, scatterNumberRequired)
 
 # Counter 
