@@ -86,6 +86,48 @@ void Prompt::MCPLBinaryWrite::write(const mcpl_particle_t &p)
   mcpl_add_particle(m_file, m_particleInFile);
 }
 
+void Prompt::MCPLBinaryWrite::write(const Particle &p, int scatterNumber)
+{
+  if(m_fileCreated) init();
+
+  m_headerClosed=true;
+  m_particleInFile->pdgcode = p.getPDG();
+
+  //position in centimeters:
+  const Vector &pos = p.getPosition();
+  m_particleInFile->position[0] = pos.x();
+  m_particleInFile->position[1] = pos.y();
+  m_particleInFile->position[2] = pos.z();
+
+  //kinetic energy in MeV:
+  m_particleInFile->ekin = p.getEKin();
+
+  const Vector &dir = p.getDirection();
+
+  m_particleInFile->direction[0] = dir.x();
+  m_particleInFile->direction[1] = dir.y();
+  m_particleInFile->direction[2] = dir.z();
+
+  //time in milliseconds:
+  m_particleInFile->time = p.getTime();
+
+  //weight in unspecified units:
+  m_particleInFile->weight = p.getWeight();
+
+  if(m_with_extraUserUnsigned) {
+    m_particleInFile->userflags = p.getEventID();
+  }
+
+  if(m_with_extra3double) {
+    // use polarisation to store scatter number info
+    m_particleInFile->polarisation[0] = p.getSurviveP();
+    m_particleInFile->polarisation[1] = static_cast<double>(scatterNumber);
+    m_particleInFile->polarisation[2] = (p.getEKin0()-p.getEKin()); // energy loss in MeV
+  }
+
+
+  mcpl_add_particle(m_file, m_particleInFile);
+}
 
 void Prompt::MCPLBinaryWrite::write(const Particle &p)
 {
@@ -115,13 +157,8 @@ void Prompt::MCPLBinaryWrite::write(const Particle &p)
   //weight in unspecified units:
   m_particleInFile->weight = p.getWeight();
 
-  // modify userflags (unsigned_32) and polarisation (double[3]) as well, if enabled.
   if(m_with_extraUserUnsigned) {
-    // Store the survive probability as a 32-bit float in userflags field
-    float survivePF = static_cast<float>(p.getSurviveP());
-
-    // Use type punning to store float bits as uint32_t
-    m_particleInFile->userflags = *reinterpret_cast<uint32_t*>(&survivePF);
+    m_particleInFile->userflags = p.getEventID();
   }
 
   mcpl_add_particle(m_file, m_particleInFile);

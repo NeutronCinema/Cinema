@@ -23,7 +23,7 @@
 
 Prompt::KillerMCPL::KillerMCPL(const std::string &name, unsigned int pdg, int groupid, bool kill, bool compress)
 :Scorer1D("KillerMCPL_"+name, Scorer::ScorerType::ENTRY, std::make_unique<Hist1D>("KillerMCPL_"+name, -2.5, 100.5, 103, true)),
-m_writer(new MCPLBinaryWrite(name+".mcpl", false, false, true, compress)),
+m_writer(new MCPLBinaryWrite(name+".mcpl", false, true, true, compress)),
 m_kill(kill)
 {
 }
@@ -38,9 +38,13 @@ void Prompt::KillerMCPL::score(Prompt::Particle &particle)
   if(!rightScorer(particle))
     return;
 
-  // printf("$$$Particle %llu surviveP: %f\n", particle.getEventID(), particle.getSurviveP());
-   
-  m_writer->write(particle);
+  if(m_scatterCounter==nullptr)
+  {
+    m_writer->write(particle, -3);
+  }
+  else
+    m_writer->write(particle, m_scatterCounter->getScatNumber());
+
   m_hist->fill(m_scatterNumberRequired);
   if(m_kill)
     particle.kill(Particle::KillType::SCORE);

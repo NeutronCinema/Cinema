@@ -279,14 +279,14 @@ class MultiScatMixin1D():
     def __init__(self) -> None:
         pass
 
-    def addScatterCounter(self, scatterCounter, scatterNumberRequired):
+    def addScatterCounter(self, scatterCounter, scatterNumberRequired=-2):
         _pt_addMultiScatter1D(scatterCounter.cobj, self.cobj, scatterNumberRequired)
 
 class MultiScatMixin2D():
     def __init__(self) -> None:
         pass
 
-    def addScatterCounter(self, scatterCounter, scatterNumberRequired):
+    def addScatterCounter(self, scatterCounter, scatterNumberRequired=-2):
         _pt_addMultiScatter2D(scatterCounter.cobj, self.cobj, scatterNumberRequired)
 
 # Counter 

@@ -90,6 +90,7 @@ namespace Prompt {
 
     // Write to particle list
     void write(const Particle &p);
+    void write(const Particle &p, int scatterNumber); 
     void write(const PromptRecord &p);
     void write(const mcpl_particle_t &p);
 
