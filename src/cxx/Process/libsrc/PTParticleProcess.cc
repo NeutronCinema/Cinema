@@ -59,7 +59,6 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
 {
   // if (m_discretModels->getSupportedGPD() != particle.getPDG())
   //   PROMPT_THROW2(CalcError, "ParticleProcess::sampleFinalState " << m_name << " does not support particle " << particle.getPDG() << ", " << m_discretModels->getSupportedGPD());
-  bool isPropagateInVol = false;
 
   if (!particle.isAlive())
     PROMPT_THROW(CalcError, "Particle is not alive");
@@ -77,11 +76,8 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
     {
       particle.scaleWeight(m_discretModels->calculateWeight(stepLength * m_numdensity, true));
     }
-    return isPropagateInVol;
+    return false;
   }
-  else
-    isPropagateInVol = true;
-
 
   auto &res = m_discretModels->pickAndSample(particle.getEKin(), particle.getDirection());
 
@@ -100,7 +96,7 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
     stm.scalceSecondary(i, weightCorrection);
   }
 
-  if(res.dispeared)
+  if(res.dispeared) //Sample results = Absorption
   {
     if(!m_absorp_in_weight)
       particle.kill(Particle::KillType::ABSORB);
@@ -112,7 +108,7 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
   }
   particle.setDeposition(res.deposition);
   particle.scaleWeight(weightCorrection);
-  return isPropagateInVol;
+  return !res.dispeared;
 }
 
 double Prompt::ParticleProcess::sampleStepLength(const Prompt::Particle &particle, double &mxs) const

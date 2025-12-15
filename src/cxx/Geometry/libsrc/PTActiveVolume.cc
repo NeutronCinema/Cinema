@@ -347,13 +347,15 @@ bool Prompt::ActiveVolume::proprogateInAVolume(Particle &particle)
   #endif
   
   // Here is the state just before interaction
+  // FIXME: absorption reaction will score twice for PEA_PRE type scorer, affects Volfluence
   if(sameVolume)
     scorePropagatePre(particle);
 
-  m_matphysscor->bulkMaterialProcess->sampleFinalState(particle, step, !sameVolume);
+  bool scattered = m_matphysscor->bulkMaterialProcess->sampleFinalState(particle, step, !sameVolume);
 
   // Here is the state just after interaction
-  if(sameVolume)
+  // no direct exit or absorption
+  if(sameVolume && scattered)
     scorePropagatePost(particle);
   
   

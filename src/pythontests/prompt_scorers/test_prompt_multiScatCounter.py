@@ -147,10 +147,50 @@ def test_scatter_twice():
     np.testing.assert_allclose(score[4], 10.)
     # when a particle scatter twice, it must scatter once before
     np.testing.assert_allclose(score[3], 10.)
+    sim.clear()
+
+def test_direct_absorb():
+    class MySim(PromptMPI):
+        def __init__(self, seed=4096) -> None:
+            super().__init__(seed)   
+
+        def makeWorld(self):
+            length = 5
+            world = Volume('world', Box(50, 50, length * 2 + 100))
+
+            sample_mat = "B4C_sg166_BoronCarbide.ncmat"
+
+            sample = Volume('sample', Tube(0,5,length,), sample_mat)
+            scatterCounter = MultiScatCounter()
+            scatterCounter.make(sample)
+            
+            world.placeChild('physicalSample', sample, Transformation3D(z=length))
+
+            self.setWorld(world)
+
+    sim = MySim(seed=1010)
+    sim.makeWorld()
+
+    gun = SimpleThermalGun()
+    gun.setWavelength(8)
+    gun.setPosition([0,0,-100])
 
 
+    if 0:
+        partnum = 100
+        sim.show(gun, partnum)
+    else:
+        partnum = 100
+        sim.simulate(gun, partnum)
+
+    dtt0 = sim.gatherHistData("ScatterCounter")
+    score = dtt0.getWeight()
+    print(score)
+    np.testing.assert_allclose(score[2], 100.)
+    sim.clear()
 
 if __name__ == '__main__':
     test_direct_exit()
     test_scatter_once()
     test_scatter_twice()
+    test_direct_absorb()
