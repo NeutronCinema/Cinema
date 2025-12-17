@@ -65,7 +65,7 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
 
   if(m_absorp_in_weight) 
   {
-      double absxs = m_discretModels->absorptionCrossSection(particle.getPDG(), particle.getEKin());
+      double absxs = m_discretModels->unbiasedAbsorptionCrossSection(particle.getPDG(), particle.getEKin());
       particle.scaleSurviveP(exp(-absxs*stepLength*m_numdensity));
   }
 

@@ -33,13 +33,11 @@ class Material(ConfigString):
         self.cfg_scatter_bias = factor
     
     def setBiasAbsp(self, factor):
-        if self.cfg_absorp_in_weight:
-            raise ValueError("Cannot set abs_bias when absorp_in_weight is set")
+        # if self.cfg_absorp_in_weight:
+        #     raise ValueError("Cannot set abs_bias when absorp_in_weight is set")
         self.cfg_abs_bias = factor
 
     def setAbsorpInWeight(self, factor):  
-        if self.cfg_abs_bias!=1.:
-            raise ValueError("Cannot set absorp_in_weight when abs_bias is set")
         self.cfg_absorp_in_weight = factor
 
     def cfgMaterial(self, cfg):

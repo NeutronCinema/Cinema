@@ -55,13 +55,13 @@ void Prompt::ModelCollection::addPhysicsModel(std::shared_ptr<Prompt::DiscreteMo
     m_containsOriented = true;
 }
 
-double Prompt::ModelCollection::absorptionCrossSection(int pdg, double ekin) const 
+double Prompt::ModelCollection::unbiasedAbsorptionCrossSection(int pdg, double ekin) const 
 {
   // Use cached disappearing model if available
   if (m_disappearingModel != nullptr)
   {
     if (m_disappearingModel->isValid(pdg, ekin)) 
-      return m_disappearingModel->getCrossSection(ekin);
+      return m_disappearingModel->getCrossSection(ekin)/m_disappearingModel->getBias();
   }
   pt_assert_always(m_disappearingModel != nullptr);
   
