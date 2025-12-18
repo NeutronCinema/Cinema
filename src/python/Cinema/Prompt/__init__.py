@@ -51,6 +51,7 @@ from .histogram import *
 from .geo import *
 
 from .scorer import *
+from .mcpl import *
 
 # __all__ = launcher.__all__
 # __all__ += PromptFileReader.__all__
