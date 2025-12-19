@@ -20,13 +20,19 @@
 ##                                                                            ##
 ################################################################################
 
+import sys
 from ..Interface import *
 
 import random
 import matplotlib.colors as mcolors
 from .Mesh import Mesh
 
-import pyvista as pv
+try:
+    import pyvista as pv
+except Exception as e:
+    print(e)
+    sys.exit(1)
+
 # from https://stackoverflow.com/questions/57173235/how-to-detect-whether-in-jupyter-notebook-or-lab 
 def is_jupyterlab_session() -> bool:
     """Check whether we are in a Jupyter-Lab session.

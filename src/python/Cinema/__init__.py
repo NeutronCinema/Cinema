@@ -28,6 +28,6 @@ if os.getenv('CINEMAPATH') is None:
     sys.path.append(os.getcwd())
     sys.path.append(os.path.dirname(__file__))
     os.environ["NCRYSTAL_DATA_PATH"] = os.path.join(cwdir, 'ncmat')
-# __version__='2.0.0' #Fixme: duplicated?
 
-from .array import *
+from .array import CinemaXY, CinemaXYZ, CinemaArray
+__all__ = ["CinemaXY", "CinemaXYZ", "CinemaArray"]

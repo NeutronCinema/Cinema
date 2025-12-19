@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-from Cinema.Prompt import Prompt, PromptMPI, Launcher, Visualiser
+from Cinema.Prompt import Prompt, PromptMPI, Visualiser
+from Cinema.Prompt.launcher import Launcher
 from Cinema.Prompt.gun import Gun
 import argparse
 import inspect
