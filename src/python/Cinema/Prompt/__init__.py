@@ -22,5 +22,7 @@
 
 from .promptCore import *
 from .PromptFileReader import PromptFileReader
+from .launcher import Launcher
+from .mcpl import PTMCPL
 
-__all__ = ["Prompt", "PromptMPI", "PromptFileReader"]
+__all__ = ["Prompt", "PromptMPI", "PromptFileReader", "Launcher", "PTMCPL"]
