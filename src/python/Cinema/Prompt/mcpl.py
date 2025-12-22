@@ -1,5 +1,3 @@
-
-
 from mcpl import MCPLFile
 import numpy as np
 
@@ -13,6 +11,46 @@ class PTMCPL:
     - polarisation[0]: survival_probability (double)
     - polarisation[1]: scatteringNumber (double) 
     - polarisation[2]: differentialEnergy (double)
+    
+    Example usage:
+    
+    ```python
+    from Cinema.Prompt import PTMCPL
+    from Cinema.Prompt.histogram import Hist1D
+    import numpy as np
+    
+    # Load MCPL file and analyze survival probabilities
+    fn = 'detMCPL_scat_pro0.mcpl'
+    hist_E = Hist1D(xmin=1e-6, xmax=4e-2, num=500)
+    hist_E_sgl = Hist1D(xmin=1e-6, xmax=4e-2, num=500)
+    
+    file = PTMCPL(fn)
+    sum = 0.0        
+    sgl_elast = 0.
+    sgl_inelast = 0.
+    mul_scatt = 0.
+    
+    for pb in file.particle_blocks:
+        survP = pb.survival_probability
+        sgl_elast += np.sum(pb.getSingleElasticScatteringWeight()* survP)
+        sgl_inelast += np.sum(pb.getSingleInelasticScatteringWeight()* survP)
+        mul_scatt += np.sum(pb.getMultipleScatteringWeight()* survP)
+        sum += np.sum(survP * pb.weight)
+        hist_E.fill(pb.differential_energy, survP * pb.weight)
+        hist_E_sgl.fill(pb.differential_energy, survP * pb.weight *pb.single_scattering_flags)
+    
+    print(f"Total sum: {sum}, offset: {sum - sgl_elast - sgl_inelast - mul_scatt}")
+    print(f"Single elastic sum: {sgl_elast}")
+    print(f"Single inelastic sum: {sgl_inelast}")
+    print(f"Multiple scatter sum: {mul_scatt}")
+    
+    # Visualize results
+    hist_E_sgl.plot()
+    hist_E.plot(show=True)
+    ```
+    
+    This example demonstrates how to analyze survival probabilities and 
+    categorize scattering events by type (single elastic, single inelastic, multiple).
     """
     
     def __init__(self, filename: str, blocklength: int = 10000):
@@ -21,6 +59,12 @@ class PTMCPL:
         
         Args:
             filename: Path to the MCPL file to read
+            blocklength: Number of particles per block (default: 10000)
+            
+        Example:
+            >>> file = PTMCPL('simulation_output.mcpl')
+            >>> for block in file.particle_blocks:
+            ...     print(f"Block with {len(block.ekin)} particles")
         """
         self._mcpl_file = MCPLFile(filename, blocklength)
         self.filename = filename
@@ -83,6 +127,43 @@ class PTParticleBlock:
     - polarisation[1]: scatteringNumber (double)
     - polarisation[2]: differentialEnergy (double)
     """
+    
+    def getSingleElasticScatteringWeight(self) -> np.ndarray:
+        """
+        Get weights for single elastic scattering events.
+        
+        Returns:
+            np.ndarray: Array of weights for single elastic scattering
+            
+        Example:
+            >>> for pb in file.particle_blocks:
+            ...     elastic_weights = pb.getSingleElasticScatteringWeight()
+            ...     weighted_sum = np.sum(elastic_weights * pb.survival_probability)
+        """
+        single_flags = self.getSingleScatteringFlags()
+        elastic_flags = self.getElasticFlags()
+        return (single_flags & elastic_flags).astype(float) * self.weight
+    
+    def getSingleInelasticScatteringWeight(self) -> np.ndarray:
+        """
+        Get weights for single inelastic scattering events.
+        
+        Returns:
+            np.ndarray: Array of weights for single inelastic scattering
+        """
+        single_flags = self.getSingleScatteringFlags()
+        inelastic_flags = self.getInelasticFlags()
+        return (single_flags & inelastic_flags).astype(float) * self.weight
+    
+    def getMultipleScatteringWeight(self) -> np.ndarray:
+        """
+        Get weights for multiple scattering events.
+        
+        Returns:
+            np.ndarray: Array of weights for multiple scattering
+        """
+        multiple_flags = self.getMultipleScatteringFlags()
+        return multiple_flags.astype(float) * self.weight
     
     def __init__(self, particle_block):
         """
@@ -154,6 +235,125 @@ class PTParticleBlock:
         
         return np.array(self._particle_block.polz)
         
+    def getSingleScatteringFlags(self) -> np.ndarray:
+        """
+        Get flags indicating if particles are single scattered (scatteringNumber == 1).
+        
+        Returns:
+            np.ndarray: Boolean array indicating single scattering for each particle
+        """
+        scattering_numbers = self.getScatteringNumber()
+        return scattering_numbers == 1
+    
+    def getElasticFlags(self) -> np.ndarray:
+        """
+        Get flags indicating if particles are elastic (differentialEnergy == 0).
+        
+        Returns:
+            np.ndarray: Boolean array indicating elastic scattering for each particle
+        """
+        differential_energies = self.getDifferentialEnergy()
+        return differential_energies == 0.
+    
+    def getInelasticFlags(self) -> np.ndarray:
+        """
+        Get flags indicating if particles are inelastic (differentialEnergy != 0).
+        
+        Returns:
+            np.ndarray: Boolean array indicating inelastic scattering for each particle
+        """
+        differential_energies = self.getDifferentialEnergy()
+        return differential_energies != 0.
+    
+    @property
+    def inelastic_flags(self) -> np.ndarray:
+        """
+        Property access to inelastic scattering flags.
+        
+        Returns:
+            np.ndarray: Boolean array indicating inelastic scattering for each particle
+        """
+        return self.getInelasticFlags()
+    
+    def getMultipleScatteringFlags(self) -> np.ndarray:
+        """
+        Get flags indicating if particles are multiple scattered (scatteringNumber > 1).
+        
+        Returns:
+            np.ndarray: Boolean array indicating multiple scattering for each particle
+        """
+        scattering_numbers = self.getScatteringNumber()
+        return scattering_numbers > 1
+    
+    @property
+    def multiple_scattering_flags(self) -> np.ndarray:
+        """
+        Property access to multiple scattering flags.
+        
+        Returns:
+            np.ndarray: Boolean array indicating multiple scattering for each particle
+        """
+        return self.getMultipleScatteringFlags()
+    
+    def getSingleElasticScatteringWeight(self) -> np.ndarray:   
+        """
+        Get weights for single elastic scattered particles.
+        
+        Returns:
+            np.ndarray: Weights for single elastic scattered particles
+        """
+        elastic_flags = self.getElasticFlags()
+        single_scattering_flags = self.getSingleScatteringFlags()
+        weights = np.array(self._particle_block.weight)
+        
+        return elastic_flags * single_scattering_flags * weights 
+    
+
+    def getSingleInelasticScatteringWeight(self) -> np.ndarray:   
+        """
+        Get weights for single inelastic scattered particles.
+        
+        Returns:
+            np.ndarray: Weights for single inelastic scattered particles
+        """
+        inelastic_flags = self.getInelasticFlags()
+        single_scattering_flags = self.getSingleScatteringFlags()
+        weights = np.array(self._particle_block.weight)
+        
+        return inelastic_flags * single_scattering_flags * weights 
+    
+
+    def getMultipleScatteringWeight(self) -> np.ndarray:   
+        """
+        Get weights for multiple scattered particles.
+        
+        Returns:
+            np.ndarray: Weights for multiple scattered particles
+        """
+        multiple_scattering_flags = self.getMultipleScatteringFlags()
+        weights = np.array(self._particle_block.weight)
+        
+        return multiple_scattering_flags * weights
+
+    @property
+    def elastic_flags(self) -> np.ndarray:
+        """
+        Property access to elastic scattering flags.
+        
+        Returns:
+            np.ndarray: Boolean array indicating elastic scattering for each particle
+        """
+        return self.getElasticFlags()
+    
+    @property
+    def single_scattering_flags(self) -> np.ndarray:
+        """
+        Property access to single scattering flags.
+        
+        Returns:
+            np.ndarray: Boolean array indicating single scattering for each particle
+        """
+        return self.getSingleScatteringFlags()
     
     @property
     def event_id(self) -> np.ndarray:
