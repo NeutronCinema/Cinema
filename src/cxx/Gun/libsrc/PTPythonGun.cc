@@ -65,3 +65,11 @@ void pt_PythonGun_pushToStack(void *obj, double *pdata)
 {
     static_cast<Prompt::PythonGun *> (obj)->pushToStack(pdata);
 }
+
+void pt_PythonGun_pushToStackMany(void *obj, double *pdata, unsigned num)
+{
+    for(unsigned i=0;i<num;i++)
+    {
+        static_cast<Prompt::PythonGun *> (obj)->pushToStack(pdata + i*9);
+    }
+}

@@ -25,6 +25,8 @@ from Cinema.convertor import wl2ekin
 _pt_PythonGun_new = importFunc('pt_PythonGun_new', type_voidp, [type_int])
 _pt_PythonGun_delete = importFunc('pt_PythonGun_delete', None, [type_voidp])
 _pt_PythonGun_pushToStack = importFunc('pt_PythonGun_pushToStack', None, [type_voidp, type_npdbl1d])
+_pt_PythonGun_pushToStackMany = importFunc('pt_PythonGun_pushToStackMany', None, [type_voidp, type_npdbl1d, type_uint])
+
 
 class Gun():
     """
@@ -51,7 +53,7 @@ class PythonGun(Gun):
         pdg (int): Particle Data Group code
         cobj (void*): Pointer to C++ gun object
     """
-    def __init__(self, pdg=2112):
+    def __init__(self, pdg: int =2112, vectorized: int = 0):
         """
         Initialize PythonGun with specified particle type.
         
@@ -59,6 +61,7 @@ class PythonGun(Gun):
             pdg (int, optional): Particle Data Group code. Defaults to 2112 (neutron).
         """
         self.pdg = pdg
+        self.vectorized = vectorized
         self.cobj = _pt_PythonGun_new(int(self.pdg))
         
     def __del__(self):
@@ -71,19 +74,23 @@ class PythonGun(Gun):
         Raises:
             RuntimeError: If sampled direction vector has zero magnitude
         """
-        pdata = np.zeros(9)
-        pdata[0] = self.sampleEnergy()
-        pdata[1] = self.sampleWeight()
-        pdata[2] = self.sampleTime()
-        pdata[3:6] = self.samplePosition()
-        
-        sampledDir = self.sampleDirection()
-        norm = np.linalg.norm(sampledDir)
-        if norm == 0:
-            raise RuntimeError('Sampled direction is zero')
-        pdata[6:]  = sampledDir/norm
-        
-        _pt_PythonGun_pushToStack(self.cobj, pdata)  # Push particle to C++ stack
+        pdata = np.zeros((1 if self.vectorized == 0 else self.vectorized, 9))
+        for i in range(1 if self.vectorized == 0 else self.vectorized):
+            pdata[i,0] = self.sampleEnergy()
+            pdata[i,1] = self.sampleWeight()
+            pdata[i,2] = self.sampleTime()        
+            pdata[i,3:6] = self.samplePosition()
+            
+            sampledDir = self.sampleDirection()
+            norm = np.linalg.norm(sampledDir)
+            if norm == 0:
+                raise RuntimeError('Sampled direction is zero')
+            pdata[i,6:]  = sampledDir/norm
+
+        if self.vectorized == 0:
+            _pt_PythonGun_pushToStack(self.cobj, np.ascontiguousarray(pdata[0]))  # Push particle to C++ stack
+        else:
+            _pt_PythonGun_pushToStackMany(self.cobj, pdata.flatten(), self.vectorized)  # Push particle to C++ stack
     
     def sampleEnergy(self):
         """Sample particle energy. Default: 0.0253 eV."""

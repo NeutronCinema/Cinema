@@ -32,8 +32,8 @@ extern "C" {
   void* pt_PythonGun_new(int pdg);
   void pt_PythonGun_delete(void *obj);
   void pt_PythonGun_pushToStack(void *obj, double *pdata);
-
-
+  void pt_PythonGun_pushToStackMany(void *obj, double *pdata, unsigned num);
+  
 #ifdef __cplusplus
 }
 #endif
