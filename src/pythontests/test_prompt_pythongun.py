@@ -31,22 +31,22 @@ class MySim(PromptMPI):
 
 class MyGun(PythonGun):
     def __init__(self):
-        super().__init__()
+        super().__init__(vectorized=1)
         self.rds = [np.random.RandomState(300 + i) for i in range(4)]
     
-    def sampleEnergy(self):
-        return self.rds[0].normal(0.0253, 0.0253 * 0.05)
+    def sampleEnergy(self, dummy):
+        self.pdata['ekin'] = self.rds[0].normal(0.0253, 0.0253 * 0.05)
     
-    def sampleTime(self):
-        return self.rds[1].normal(0, 0.05)
+    def sampleTime(self, dummy):
+        self.pdata['t'] = self.rds[1].normal(0, 0.05)
     
-    def sampleDirection(self):
+    def sampleDirection(self, dummy):
         dirs = self.rds[2].rand(3)
-        return dirs[0] - 0.5, dirs[1] - 0.5, dirs[2]
+        self.pdata['dir'] = [dirs[0] - 0.5, dirs[1] - 0.5, dirs[2]]
     
-    def samplePosition(self):
+    def samplePosition(self, dummy):
         pos = self.rds[3].rand(3)
-        return (pos[0] - 0.5) * 20, (pos[1] - 0.5) * 20, pos[2] - 0.5
+        self.pdata['pos'] = [(pos[0] - 0.5) * 20, (pos[1] - 0.5) * 20, pos[2] - 0.5]
 
 
 sim = MySim(seed=1010)
@@ -61,4 +61,3 @@ wlhist = sim.gatherHistData("detector")
 PSDhist = sim.gatherHistData("NeutronHistMap")
 np.testing.assert_allclose(PSDhist.getHit().sum(), 64840.0)
 np.testing.assert_allclose(wlhist.getHit(), expected_wl)
-

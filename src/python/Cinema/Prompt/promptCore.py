@@ -162,20 +162,32 @@ class Prompt:
             self.l.setGun(gun)
             self.l.go(int(num), timer=timer, save2Dis=save2Disk)
         else:
+            # it is a python gun
             from tqdm import tqdm
-            if hasattr(self, 'rank'):
-                if self.rank == 0:
-                    for i in tqdm(range(int(num)), desc='Progress:', unit=" events"):
-                        gun.generate()
-                        self.l.simOneEvent(False)
-                else:
-                    for i in range(int(num)):
-                        gun.generate()
-                        self.l.simOneEvent(False)
-            else:
-                for i in tqdm(range(int(num)), desc='Progress:', unit=" events"):
-                    gun.generate()
-                    self.l.simOneEvent(False)
+            show_progress = not hasattr(self, 'rank') or self.rank == 0
+            
+            # Calculate actual number of iterations based on vectorized size
+            vectorized_size = getattr(gun, 'vectorized', 1)
+            actual_iterations = int(num) // vectorized_size
+            remaining_particles = int(num) % vectorized_size
+            
+            # Create progress bar with batch size information
+            desc = f'Progress (batch_size={vectorized_size}):'
+            event_range = tqdm(range(actual_iterations), desc=desc, unit=" batches") if show_progress else range(actual_iterations)
+        
+            for _ in event_range:
+                gun.generate()
+                self.l.simOneEvent(False)
+            
+            # Handle remaining particles if any
+            if remaining_particles > 0:
+                # Temporarily set vectorized to remaining particles
+                original_vectorized = gun.vectorized
+                gun.vectorized = remaining_particles
+                gun.generate()
+                self.l.simOneEvent(False)
+                # Restore original vectorized size
+                gun.vectorized = original_vectorized
 
     def gatherHistData(self, cfg, raw=False):
         """

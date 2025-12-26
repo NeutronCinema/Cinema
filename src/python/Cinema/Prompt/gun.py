@@ -53,7 +53,7 @@ class PythonGun(Gun):
         pdg (int): Particle Data Group code
         cobj (void*): Pointer to C++ gun object
     """
-    def __init__(self, pdg: int =2112, vectorized: int = 0):
+    def __init__(self, pdg: int =2112, vectorized: int = 1):
         """
         Initialize PythonGun with specified particle type.
         
@@ -63,54 +63,76 @@ class PythonGun(Gun):
         self.pdg = pdg
         self.vectorized = vectorized
         self.cobj = _pt_PythonGun_new(int(self.pdg))
+        self.particle_dtype = np.dtype([
+            ('ekin', np.float64),  # energy
+            ('w', np.float64),     # weight
+            ('t', np.float64),     # time
+            ('pos', np.float64, 3), # position (x, y, z)
+            ('dir', np.float64, 3)  # direction (dx, dy, dz)
+        ])
+        if self.vectorized < 1:
+            raise RuntimeError('')
+        self.pdata = np.zeros(self.vectorized, dtype=self.particle_dtype)
         
     def __del__(self):
         _pt_PythonGun_delete(self.cobj)
 
-    def generate(self):
+    def generate(self, num=None):
         """
         Generate a particle with implemented methods for energy, weight, time, position, and direction.
         
         Raises:
             RuntimeError: If sampled direction vector has zero magnitude
         """
-        pdata = np.zeros((1 if self.vectorized == 0 else self.vectorized, 9))
-        for i in range(1 if self.vectorized == 0 else self.vectorized):
-            pdata[i,0] = self.sampleEnergy()
-            pdata[i,1] = self.sampleWeight()
-            pdata[i,2] = self.sampleTime()        
-            pdata[i,3:6] = self.samplePosition()
-            
-            sampledDir = self.sampleDirection()
-            norm = np.linalg.norm(sampledDir)
-            if norm == 0:
-                raise RuntimeError('Sampled direction is zero')
-            pdata[i,6:]  = sampledDir/norm
+        if num is not None and num != self.vectorized:
+            if num<1:
+                raise RuntimeError('num should be an integer')
+            self.pdata = np.zeros(num, dtype=self.particle_dtype)
 
-        if self.vectorized == 0:
-            _pt_PythonGun_pushToStack(self.cobj, np.ascontiguousarray(pdata[0]))  # Push particle to C++ stack
-        else:
-            _pt_PythonGun_pushToStackMany(self.cobj, pdata.flatten(), self.vectorized)  # Push particle to C++ stack
-    
-    def sampleEnergy(self):
+        # sample a parameters and norm
+        self.sample(self.vectorized if num is None else num)  
+
+        norm = np.linalg.norm(self.pdata['dir'], axis=1)
+        if np.any(norm == 0.):
+            raise RuntimeError('Sampled direction is zero')
+        self.pdata['dir']  /= norm[:, np.newaxis]
+
+        _pt_PythonGun_pushToStackMany(self.cobj, self.pdata.view(np.float64), self.vectorized if num is None else num)  # Push particle to C++ stack
+
+        if num is not None and num != self.vectorized:
+            self.pdata = np.zeros(self.vectorized, dtype=self.particle_dtype)
+        
+    def sample(self, sample_size):
+        """Sample particle parameters directly into self.pdata"""
+
+        # Call all sampling methods with consistent parameter
+        self.sampleEnergy(sample_size)
+        self.sampleWeight(sample_size)
+        self.sampleTime(sample_size)
+        self.samplePosition(sample_size)
+        self.sampleDirection(sample_size)
+
+    def sampleEnergy(self, num):
         """Sample particle energy. Default: 0.0253 eV."""
-        return 0.0253
+        # NumPy broadcasting will handle scalar to array conversion
+        self.pdata['ekin'] = 0.0253
 
-    def sampleWeight(self):
+    def sampleWeight(self, num=None):
         """Sample particle weight. Default: 1.0."""
-        return 1. 
+        self.pdata['w'] = 1.0
     
-    def sampleTime(self):
+    def sampleTime(self, num=None):
         """Sample emission time. Default: 0.0."""
-        return 0.
+        self.pdata['t'] = 0.0
     
-    def samplePosition(self):
+    def samplePosition(self, num=None):
         """Sample emission position. Default: origin."""
-        return np.array([0.,0.,0.])
+        # NumPy broadcasting will handle list to array conversion
+        self.pdata['pos'] = [0., 0., 0.]
     
-    def sampleDirection(self):
+    def sampleDirection(self, num=None):
         """Sample emission direction. Default: +Z axis."""
-        return np.array([0.,0.,1.])
+        self.pdata['dir'] = [0., 0., 1.]
 
 
 class IsotropicGun(Gun, ConfigString):
