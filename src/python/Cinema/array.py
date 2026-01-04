@@ -151,7 +151,7 @@ class ArrayCoordinateMixin:
                 result.x = self.x[item]
         elif isinstance(item, tuple):
             # Multiple indices (e.g. from matplotlib)
-            if isinstance(result, type(self)):
+            if isinstance(result, type(self)) and len(item) > 0: # if `result` is indexed by empty tuple, eg. result[()], use default handlings
                 result.x = self.x[item[0]]  # Use first index for x
         elif isinstance(item, np.ndarray):
             # Boolean or integer array indexing
