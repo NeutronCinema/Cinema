@@ -30,8 +30,8 @@
 
 #include <VecGeom/base/Transformation3D.h>
 #include "VecGeom/base/Vector3D.h"
-
-
+#include <VecGeom/volumes/UnplacedBooleanVolume.h>
+#include <VecGeom/volumes/BooleanStruct.h>
 
 void* pt_Transformation3D_new(void *consttrfm3Dobj)
 {
@@ -152,14 +152,44 @@ void pt_generatePointCloud(size_t pvolID, size_t nPoint, double *points, double 
 }
 
 
-void pt_meshInfo(size_t pvolID, size_t nSegments, size_t &npoints, size_t &nPlolygen, size_t &faceSize)
+void pt_meshInfo(size_t pvolID, size_t nSegments, size_t &npoints, size_t &nPlolygen, size_t &faceSize,
+                  int &leftvolID, int &rightvolID, size_t &boolOp)
 {
-  auto tree = Prompt::Singleton<Prompt::GeoTree>::getInstance();
-  const auto node = tree.m_fullTreeNode[pvolID];
+  leftvolID = -1;
+  rightvolID = -1;
+  boolOp = 0;
+
   auto &geoManager = vecgeom::GeoManager::Instance();
 
   // const vgdml::VPlacedVolume
-  auto *vol = geoManager.Convert(node->physical);
+  auto *vol = geoManager.Convert(pvolID);
+  auto volName = vol->GetName();
+
+  auto unplacedVol = vol->GetUnplacedVolume();
+  if(unplacedVol)
+  {
+    using namespace vecgeom;
+    if(auto unionVol = dynamic_cast<UnplacedBooleanVolume<kUnion> const *>(unplacedVol)) 
+    {
+      boolOp = Union;
+      leftvolID = unionVol->GetLeft()->id();
+      rightvolID = unionVol->GetRight()->id();
+    }
+    if(auto unionVol = dynamic_cast<UnplacedBooleanVolume<kSubtraction> const *>(unplacedVol)) 
+    {
+      boolOp = Subtraction;
+      leftvolID = unionVol->GetLeft()->id();
+      rightvolID = unionVol->GetRight()->id();
+    }
+    if(auto unionVol = dynamic_cast<UnplacedBooleanVolume<kIntersection> const *>(unplacedVol)) 
+    {
+      boolOp = Intersection;
+      leftvolID = unionVol->GetLeft()->id();
+      rightvolID = unionVol->GetRight()->id();
+    }
+  }
+  else
+   PROMPT_THROW2(BadInput, "No unplaced volume found for physical volume ID: " << pvolID);
 
   // Utils3D::USolidMesh
   auto *mesh = vol->CreateMesh3D(nSegments);

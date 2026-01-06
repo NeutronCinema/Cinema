@@ -27,6 +27,12 @@
 extern "C" {
 #endif
 
+enum BooleanOp_t {
+  Union = 1,
+  Subtraction = 2,
+  Intersection = 3,
+};
+
 //  Transformation3D 
 void* pt_Transformation3D_new(void *consttrfm3Dobj);
 void* pt_Transformation3D_newfromID(int volid);
@@ -48,7 +54,8 @@ size_t pt_getPhysicalVolID_ByNodeID(size_t nodeID);
 const char* pt_getMeshName(size_t pvolID);
 void pt_getLogVolumeInfo(size_t pvolID, char* cp);
 const char* pt_getLogicalVolumeMaterialName(size_t pvolID);
-void pt_meshInfo(size_t pvolID, size_t nSegments, size_t &npoints, size_t &nPlolygen, size_t &faceSize);
+void pt_meshInfo(size_t pvolID, size_t nSegments, size_t &npoints, size_t &nPlolygen, size_t &faceSize,
+                  int &leftvolID, int &rightvolID, size_t &boolOp);
 void pt_generatePointCloud(size_t pvolID, size_t nPoint, double *points, double *normals);
 void pt_getMesh(size_t pvolID, size_t nSegments, float *points, size_t *NumPolygonPoints, size_t *faces);
 void pt_printMesh();
