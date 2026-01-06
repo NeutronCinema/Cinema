@@ -33,6 +33,11 @@ except Exception as e:
     print(e)
     sys.exit(1)
 
+high_contrast_colors = ["#FF0000","#FF4500","#FF8C00","#FFD700","#FFFF00","#FF6347","#CD5C5C",
+    "#0000FF","#1E90FF","#00BFFF","#00FFFF","#00FF00","#32CD32","#2E8B57","#20B2AA",
+    "#800080","#9370DB","#8A2BE2","#DA70D6","#FF00FF","#00FF7F","#4B0082","#7FFF00","#FF1493",
+    "#9400D3","#000000","#FFFFFF","#696969","#A9A9A9","#D3D3D3" ]
+
 # from https://stackoverflow.com/questions/57173235/how-to-detect-whether-in-jupyter-notebook-or-lab 
 def is_jupyterlab_session() -> bool:
     """Check whether we are in a Jupyter-Lab session.
@@ -80,43 +85,6 @@ class Visualiser():
     def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, dumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=False, geoClip=False):       
         if is_jupyterlab_session():
             pv.set_jupyter_backend('trame')  
-
-        high_contrast_colors = [
-            "#FF0000",
-            "#FF4500",
-            "#FF8C00",
-            "#FFD700",
-            "#FFFF00",
-            "#FF6347",
-            "#CD5C5C",
-            
-            "#0000FF",
-            "#1E90FF",
-            "#00BFFF",
-            "#00FFFF",
-            "#00FF00",
-            "#32CD32",
-            "#2E8B57",
-            "#20B2AA",
-            
-            "#800080",
-            "#9370DB",
-            "#8A2BE2",
-            "#DA70D6",
-            "#FF00FF",
-            
-            "#00FF7F",
-            "#4B0082",
-            "#7FFF00",
-            "#FF1493",
-            "#9400D3",
-            
-            "#000000",
-            "#FFFFFF",
-            "#696969",
-            "#A9A9A9",
-            "#D3D3D3" 
-        ]
         # self.color =  list(mcolors.CSS4_COLORS.keys())
         self.color = high_contrast_colors
         self.worldMesh = Mesh()
