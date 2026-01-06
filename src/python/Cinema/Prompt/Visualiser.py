@@ -61,6 +61,21 @@ def is_jupyterlab_session() -> bool:
 
     return False
 
+def generateVolumetricMesh(mesh : pv.PolyData):
+    try:
+        from tetgen import TetGen
+    except Exception as e:
+        print(e)
+        print("tetgen is required. Use 'pip install tetgen' to install. ")
+        sys.exit(1)
+
+    mesh.triangulate(inplace=True)
+    tet = TetGen(mesh)
+    tet.make_manifold()
+    tet.tetrahedralize(quality=False)
+    mesh = tet.mesh
+    return mesh
+
 class Visualiser():
     def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, dumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=False, geoClip=False):       
         if is_jupyterlab_session():
@@ -169,19 +184,7 @@ class Visualiser():
         #     print(f'saving {fn}')
         #     mesh.save(fn, False)
         # count+=1
-
-    def generateVolumetricMesh(self, mesh : pv.PolyData):
-        try:
-            from tetgen import TetGen
-        except:
-            raise ImportError("tetgen is required. Use 'pip install tetgen' to install. ")
-        mesh.triangulate(inplace=True)
-        tet = TetGen(mesh)
-        tet.make_manifold()
-        tet.tetrahedralize()
-        mesh = tet.grid
-        return mesh
-    
+        
     def loadMeshDefault(self, nSegments, geoClip=False):
         count = 0
         for am in self.worldMesh:
@@ -192,7 +195,7 @@ class Visualiser():
             if not mesh:
                 continue
             if geoClip:
-                mesh = self.generateVolumetricMesh(mesh)
+                mesh = generateVolumetricMesh(mesh)
                 clippedMesh = self.plotter.addClipPlane([mesh], not am.n, normal='x', opacity=0.5) 
                 self.plotter.addClippedMesh(clippedMesh, label=name , color=rcolor,opacity=0.5)
 
@@ -211,7 +214,7 @@ class Visualiser():
                 continue
             allmesh.append(mesh)
             if geoClip:
-                mesh = self.generateVolumetricMesh(mesh)
+                mesh = generateVolumetricMesh(mesh)
                 clippedMesh = self.plotter.addClipPlane([mesh], not am.n, normal='x', opacity=0.5) # am.n = 0 if is world
                 if count == 0:
                     label = 'Combined geometry'
@@ -245,7 +248,7 @@ class Visualiser():
             if not geoClip:
                 self.plotter.add_mesh(mesh, color=rcolor, opacity=0.3, label=matName)
             else:
-                mesh = self.generateVolumetricMesh(mesh)
+                mesh = generateVolumetricMesh(mesh)
                 clippedMesh = self.plotter.addClipPlane([mesh], not am.n, normal='x', opacity=0.5)
                 self.plotter.addClippedMesh(clippedMesh , label=matName, color=rcolor, opacity=0.5)
 
