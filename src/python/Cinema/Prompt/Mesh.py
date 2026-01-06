@@ -49,6 +49,7 @@ class MeshHelper(object):
         return _pt_Transformation3D_print(self.cobj).decode('utf-8')
 
 _pt_countFullTreeNode = importFunc('pt_countFullTreeNode', type_sizet, [])
+_pt_getPhysicalVolID_ByNodeID = importFunc('pt_getPhysicalVolID_ByNodeID', type_sizet, [type_sizet])
 _pt_printMesh = importFunc("pt_printMesh", type_voidp, [])
 _pt_meshInfo = importFunc("pt_meshInfo", None,  [type_sizet, type_sizet, type_sizetp, type_sizetp, type_sizetp])
 _pt_getMesh = importFunc("pt_getMesh", None,  [type_sizet, type_sizet, type_npsbl2d, type_npszt1d, type_npszt1d])
@@ -65,8 +66,10 @@ class Mesh():
 
     def countFullTreeNode(self):
         return _pt_countFullTreeNode()
-
-
+    
+    def getPhysicalVolID(self):
+        return _pt_getPhysicalVolID_ByNodeID(self.n)
+        
     def printMesh(self):
         _pt_printMesh()
 

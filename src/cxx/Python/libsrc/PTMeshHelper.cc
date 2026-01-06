@@ -117,6 +117,13 @@ size_t pt_countFullTreeNode()
   return tree.getNumNodes(Prompt::GeoTree::FULL);
 }
 
+size_t pt_getPhysicalVolID_ByNodeID(size_t nodeID)
+{
+  auto tree = Prompt::Singleton<Prompt::GeoTree>::getInstance();
+  const auto node = tree.m_fullTreeNode[nodeID];
+  return node->physical;
+}
+
 void pt_generatePointCloud(size_t pvolID, size_t nPoint, double *points, double *normals)
 {
   auto tree = Prompt::Singleton<Prompt::GeoTree>::getInstance();

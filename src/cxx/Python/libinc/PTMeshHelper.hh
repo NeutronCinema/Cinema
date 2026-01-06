@@ -43,6 +43,7 @@ void pt_Transformlation3D_setRotation(void *trfm3Dobj1, double r0, double r1, do
 void pt_Transformlation3D_setTranslation(void *obj, double x, double y, double z);
 
 size_t pt_countFullTreeNode();
+size_t pt_getPhysicalVolID_ByNodeID(size_t nodeID);
 
 const char* pt_getMeshName(size_t pvolID);
 void pt_getLogVolumeInfo(size_t pvolID, char* cp);
