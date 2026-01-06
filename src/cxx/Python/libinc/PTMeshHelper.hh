@@ -57,7 +57,7 @@ const char* pt_getLogicalVolumeMaterialName(size_t pvolID);
 void pt_meshInfo(size_t pvolID, size_t nSegments, size_t &npoints, size_t &nPlolygen, size_t &faceSize,
                   int &leftvolID, int &rightvolID, size_t &boolOp);
 void pt_generatePointCloud(size_t pvolID, size_t nPoint, double *points, double *normals);
-void pt_getMesh(size_t pvolID, size_t nSegments, float *points, size_t *NumPolygonPoints, size_t *faces);
+void pt_getMesh(size_t nodeID, size_t nSegments, float *points, size_t *NumPolygonPoints, size_t *faces, size_t pvolID);
 void pt_printMesh();
 
 #ifdef __cplusplus

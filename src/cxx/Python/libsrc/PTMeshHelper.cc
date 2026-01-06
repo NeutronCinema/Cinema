@@ -190,7 +190,7 @@ void pt_meshInfo(size_t pvolID, size_t nSegments, size_t &npoints, size_t &nPlol
   }
   else
    PROMPT_THROW2(BadInput, "No unplaced volume found for physical volume ID: " << pvolID);
-
+   
   // Utils3D::USolidMesh
   auto *mesh = vol->CreateMesh3D(nSegments);
   if(!mesh)
@@ -249,17 +249,24 @@ void pt_getLogVolumeInfo(size_t pvolID, char* cp)
 //size of points: 3*n
 //size of faces: n
 //size of NumPolygonPoints: m
-void pt_getMesh(size_t pvolID, size_t nSegments, float *points, size_t *NumPolygonPoints, size_t *faces)
+void pt_getMesh(size_t nodeID, size_t nSegments, float *points, size_t *NumPolygonPoints, size_t *faces, size_t pvolID)
 {
+  // std::cout << "Handling node:" << nodeID << " pvolID:" << pvolID << std::endl;
   auto tree = Prompt::Singleton<Prompt::GeoTree>::getInstance();
-  const auto node = tree.m_fullTreeNode[pvolID];
-  const auto &tMatrix = tree.m_fllTreeMatrix[pvolID];
+  const auto node = tree.m_fullTreeNode[nodeID];
+  const auto &tMatrix = tree.m_fllTreeMatrix[nodeID];
 
   auto &geoManager = vecgeom::GeoManager::Instance();
 
+  if(node->child.size() == 1 && node->physical != pvolID)
+    PROMPT_THROW(BadInput, "nodeID and pvolID not match");
+
   // const vgdml::VPlacedVolume
-  auto *vol = geoManager.Convert(node->physical);
+  auto *vol = geoManager.Convert(pvolID);
+  auto botTrans = vol->GetTransformation();
+
   vecgeom::Transformation3D matrix;
+  matrix = *botTrans;
   auto *mesh = vol->GetUnplacedVolume()->CreateMesh3D(matrix, nSegments);
 
   if(mesh->GetPolygons().empty())
