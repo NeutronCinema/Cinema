@@ -194,8 +194,6 @@ class VtkBoolWrapper:
     
     def _boolean_operation(self, other, operation):
         from vtkbool.vtkBool import vtkPolyDataBooleanFilter
-        from vtkmodules.vtkFiltersSources import vtkCubeSource
-        from vtkmodules.vtkCommonDataModel import vtkPolyData
         
         other_mesh = other.mesh if hasattr(other, 'mesh') else other
         boolean_filter = vtkPolyDataBooleanFilter()
