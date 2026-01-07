@@ -19,6 +19,7 @@
 ################################################################################
 
 from ..Interface import *
+from enum import Enum
 
 try:
     import pyvista as pv
@@ -62,6 +63,11 @@ _pt_getMeshName = importFunc("pt_getMeshName", type_cstr,  [type_sizet])
 _pt_getLogVolumeInfo = importFunc("pt_getLogVolumeInfo", None, [type_sizet, type_cstr])
 _pt_generatePointCloud = importFunc("pt_generatePointCloud", None,  [type_sizet, type_sizet, type_npdbl2d, type_npdbl2d])
 _pt_getLogicalVolumeMaterialName = importFunc("pt_getLogicalVolumeMaterialName", type_cstr, [type_sizet])
+
+class MeshBoolOpr(Enum):
+    Union = 1,
+    Subtraction = 2,
+    Intersection = 3,
 
 class Mesh():
     def __init__(self):
@@ -148,11 +154,11 @@ class Mesh():
                 lmesh = VtkBoolWrapper(lmesh)
                 rmesh = VtkBoolWrapper(rmesh)
 
-                if boolOp == 1:
+                if boolOp == MeshBoolOpr.Union.value[0]:
                     mesh = lmesh | rmesh
-                elif boolOp == 3:
+                elif boolOp == MeshBoolOpr.Intersection.value[0]:
                     mesh = lmesh & rmesh
-                elif boolOp == 2:
+                elif boolOp == MeshBoolOpr.Subtraction.value[0]:
                     mesh = lmesh - rmesh
                 else:
                     raise ValueError(f"Unknown boolean operation: {boolOp}")
