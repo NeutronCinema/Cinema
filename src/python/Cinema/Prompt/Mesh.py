@@ -129,40 +129,49 @@ class Mesh():
         Returns:
             tuple: A tuple containing the mesh name and the mesh object.
         """
+        def meshByPointCloud(npoints):
+            npoints = nSegments*100
+            points = np.zeros([npoints, 3])
+            norm = np.zeros_like(points)
+            _pt_generatePointCloud(self.n, npoints, points, norm)
+            point_cloud = pv.PolyData(points)
+            # Add normals to the point cloud
+            point_cloud.point_data['Normals'] = norm
+            # Use reconstruct_surface with normals
+            # Note: You can specify additional parameters such as `tolerance`, or `clean` as required.
+            mesh = point_cloud.reconstruct_surface()
+            return mesh
+
         if pvolID is None:
             pvolID = self.getPhysicalVolID()
 
         name, npoints, nPlolygen, faceSize, leftvolID, rightvolID, boolOp = self.meshInfo(nSegments, pvolID)
 
         if npoints==0 and boolOp!=0: # 3D mesh not created by VecGeom, intended to handle geometry boolean operation
-            if byPointCloud: # Point cloud mode
-                npoints = nSegments*100
-                points = np.zeros([npoints, 3])
-                norm = np.zeros_like(points)
-                _pt_generatePointCloud(self.n, npoints, points, norm)
-                point_cloud = pv.PolyData(points)
-                # Add normals to the point cloud
-                point_cloud.point_data['Normals'] = norm
-                # Use reconstruct_surface with normals
-                # Note: You can specify additional parameters such as `tolerance`, or `clean` as required.
-                mesh = point_cloud.reconstruct_surface()
-                return name, mesh
-            else: # handled by PyVista
-                lname, lmesh = self.getMesh(nSegments, pvolID=leftvolID)
-                rname, rmesh = self.getMesh(nSegments, pvolID=rightvolID)
+            if not byPointCloud:
+                try:
+                    _, lmesh = self.getMesh(nSegments, pvolID=leftvolID)
+                    _, rmesh = self.getMesh(nSegments, pvolID=rightvolID)
 
-                lmesh = VtkBoolWrapper(lmesh)
-                rmesh = VtkBoolWrapper(rmesh)
+                    lmesh = VtkBoolWrapper(lmesh)
+                    rmesh = VtkBoolWrapper(rmesh)
 
-                if boolOp == MeshBoolOpr.Union.value[0]:
-                    mesh = lmesh | rmesh
-                elif boolOp == MeshBoolOpr.Intersection.value[0]:
-                    mesh = lmesh & rmesh
-                elif boolOp == MeshBoolOpr.Subtraction.value[0]:
-                    mesh = lmesh - rmesh
-                else:
-                    raise ValueError(f"Unknown boolean operation: {boolOp}")
-
+                    if boolOp == MeshBoolOpr.Union.value[0]:
+                        mesh = lmesh | rmesh
+                    elif boolOp == MeshBoolOpr.Intersection.value[0]:
+                        mesh = lmesh & rmesh
+                    elif boolOp == MeshBoolOpr.Subtraction.value[0]:
+                        mesh = lmesh - rmesh
+                    else:
+                        raise ValueError(f"Unknown boolean operation: {boolOp}")
+                except: # fall back to point cloud mode
+                    print(f"Error: Meshing boolean operation via `vtkbool` is highly experimental. May be a rerun can solve it.")
+                    print(f"Mesh realized in point cloud mode.")
+                    mesh = meshByPointCloud(npoints)
+                finally:
+                    return name, mesh
+            else:
+                mesh = meshByPointCloud(npoints)
                 return name, mesh
         # The mesh mode
         else:
