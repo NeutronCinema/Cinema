@@ -258,9 +258,6 @@ void pt_getMesh(size_t nodeID, size_t nSegments, float *points, size_t *NumPolyg
 
   auto &geoManager = vecgeom::GeoManager::Instance();
 
-  if(node->child.size() == 0 && node->physical != pvolID)
-    PROMPT_THROW(BadInput, "nodeID and pvolID not match");
-
   // const vgdml::VPlacedVolume
   auto *vol = geoManager.Convert(pvolID);
   
