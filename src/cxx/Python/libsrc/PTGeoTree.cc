@@ -164,7 +164,6 @@ void Prompt::GeoTree::makeTree()
   {
     auto *vol = geoManager.Convert(i);
 
-    printf("volid %zu, adding physical volume \"%s\" into the tree\n", i, vol->GetLogicalVolume()->GetName());
 
     auto node = std::shared_ptr<Prompt::GeoTree::Node>(new Prompt::GeoTree::Node {vol->id(), vol->GetLogicalVolume()->id()});
     node->setMatrix(vol->GetTransformation());
@@ -188,6 +187,7 @@ void Prompt::GeoTree::makeTree()
     }
     for(auto m:mothers)
     {
+      printf("Physical volume ID %zu, \"%s\" added into the geometry tree\n", i, vol->GetName());
       m->addChild(node);
     }
   }
