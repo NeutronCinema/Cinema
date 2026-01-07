@@ -251,14 +251,14 @@ void pt_getLogVolumeInfo(size_t pvolID, char* cp)
 //size of NumPolygonPoints: m
 void pt_getMesh(size_t nodeID, size_t nSegments, float *points, size_t *NumPolygonPoints, size_t *faces, size_t pvolID)
 {
-  // std::cout << "Handling node:" << nodeID << " pvolID:" << pvolID << std::endl;
   auto tree = Prompt::Singleton<Prompt::GeoTree>::getInstance();
   const auto node = tree.m_fullTreeNode[nodeID];
+  // std::cout << "Handling node:" << node->physical << " pvolID:" << pvolID << std::endl;
   const auto &tMatrix = tree.m_fllTreeMatrix[nodeID];
 
   auto &geoManager = vecgeom::GeoManager::Instance();
 
-  if(node->child.size() == 1 && node->physical != pvolID)
+  if(node->child.size() == 0 && node->physical != pvolID)
     PROMPT_THROW(BadInput, "nodeID and pvolID not match");
 
   // const vgdml::VPlacedVolume
