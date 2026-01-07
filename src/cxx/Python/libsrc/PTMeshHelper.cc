@@ -263,10 +263,15 @@ void pt_getMesh(size_t nodeID, size_t nSegments, float *points, size_t *NumPolyg
 
   // const vgdml::VPlacedVolume
   auto *vol = geoManager.Convert(pvolID);
-  auto botTrans = vol->GetTransformation();
-
+  
   vecgeom::Transformation3D matrix;
-  matrix = *botTrans;
+  // handling physical volumes that do not belong to the node, 
+  // eg. boolean operation where the individual basic physical volumes not in the tree
+  if(node->physical != pvolID) 
+  {
+    auto botTrans = vol->GetTransformation();
+    matrix = *botTrans;
+  }
   auto *mesh = vol->GetUnplacedVolume()->CreateMesh3D(matrix, nSegments);
 
   if(mesh->GetPolygons().empty())
