@@ -149,7 +149,6 @@ class Visualiser():
                         matColorMap[matName] = rcolor
                     else:
                         rcolor = matColorMap[matName]
-                        matName = None # Not show the material name for the second time
                     mesh_label = f"{mesh_label}[{matName}]"
 
                 if geoClip:
