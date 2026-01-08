@@ -220,6 +220,15 @@ const char* pt_getMeshName(size_t pvolID)
   return geoManager.Convert(node->physical)->GetLogicalVolume()->GetName();
 }
 
+const char* pt_getPhysicalVolumeName(size_t pvolID)
+{
+  auto tree = Prompt::Singleton<Prompt::GeoTree>::getInstance();
+  const auto node = tree.m_fullTreeNode[pvolID];
+  auto &geoManager = vecgeom::GeoManager::Instance();
+  // const vgdml::VPlacedVolume
+  return geoManager.Convert(node->physical)->GetName();
+}
+
 const char* pt_getLogicalVolumeMaterialName(size_t pvolID)
 {
   auto tree = Prompt::Singleton<Prompt::GeoTree>::getInstance();

@@ -74,6 +74,7 @@ _pt_printMesh = importFunc("pt_printMesh", type_voidp, [])
 _pt_meshInfo = importFunc("pt_meshInfo", None,  [type_sizet, type_sizet, type_sizetp, type_sizetp, type_sizetp, type_intp, type_intp, type_sizetp])
 _pt_getMesh = importFunc("pt_getMesh", None,  [type_sizet, type_sizet, type_npsbl2d, type_npszt1d, type_npszt1d, type_sizet])
 _pt_getMeshName = importFunc("pt_getMeshName", type_cstr,  [type_sizet])
+_pt_getPhysicalVolumeName = importFunc("pt_getPhysicalVolumeName", type_cstr,  [type_sizet])
 _pt_getLogVolumeInfo = importFunc("pt_getLogVolumeInfo", None, [type_sizet, type_cstr])
 _pt_generatePointCloud = importFunc("pt_generatePointCloud", None,  [type_sizet, type_sizet, type_npdbl2d, type_npdbl2d])
 _pt_getLogicalVolumeMaterialName = importFunc("pt_getLogicalVolumeMaterialName", type_cstr, [type_sizet])
@@ -101,6 +102,9 @@ class Mesh():
     def getMeshName(self):
         return _pt_getMeshName(self.n).decode('utf-8')
 
+    def getPhysicalVolumeName(self):
+        return _pt_getPhysicalVolumeName(self.n).decode('utf-8')
+
     def getMaterialName(self):
         # print(_pt_getLogicalVolumeMaterialName(self.n).decode('utf-8'))
         return _pt_getLogicalVolumeMaterialName(self.n).decode('utf-8')
@@ -127,7 +131,7 @@ class Mesh():
 
         _pt_meshInfo(pvolID, nSegments, ctypes.byref(npoints), ctypes.byref(nPlolygen), 
                      ctypes.byref(faceSize), ctypes.byref(leftvolID), ctypes.byref(rightvolID), ctypes.byref(boolOp))
-        return self.getMeshName(), npoints.value, nPlolygen.value, faceSize.value, leftvolID.value, rightvolID.value, boolOp.value
+        return self.getPhysicalVolumeName(), npoints.value, nPlolygen.value, faceSize.value, leftvolID.value, rightvolID.value, boolOp.value
 
     def getMesh(self, nSegments=30, byPointCloud=False, pvolID = None) -> tuple[str, pv.PolyData]:
         """Get a mesh of volume. Multiple approaches to handle different cases:
