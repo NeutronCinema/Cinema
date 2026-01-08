@@ -134,8 +134,9 @@ class Visualiser():
             combined_meshes_block = pv.MultiBlock()
 
         for amesh in self.worldMesh:
-            mesh_label, mesh = self.loadOneMesh(amesh, nSegments)
+            mesh_name, mesh = self.loadOneMesh(amesh, nSegments)
             rcolor = random.choice(self.color)
+            mesh_label = mesh_name
 
             if not mesh:
                 continue
@@ -151,12 +152,15 @@ class Visualiser():
                         rcolor = matColorMap[matName]
                     mesh_label = f"{mesh_label}[{matName}]"
 
+                mesh_info = f"\nVolume name: {mesh_name}\nMaterial: {matName}\n"
                 if geoClip:
                     mesh = generateVolumetricMesh(mesh)
                     clippedmesh = self.plotter.addClipPlane([mesh], not amesh.n, normal='x', opacity=0.5)
                     self.plotter.addClippedMesh(clippedmesh , label=mesh_label, color=rcolor, opacity=0.5)
+                    clippedmesh.add_field_data([mesh_info], 'mesh_info')
                 else:
                     self.plotter.add_mesh(mesh, color=rcolor, opacity=0.3, label=mesh_label)
+                    mesh.add_field_data([mesh_info], 'mesh_info')
 
         if combineMesh:
             g = combined_meshes_block.combine()
