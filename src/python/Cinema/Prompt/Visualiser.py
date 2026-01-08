@@ -25,7 +25,7 @@ from ..Interface import *
 
 import random
 import matplotlib.colors as mcolors
-from .Mesh import Mesh
+from .Mesh import Mesh, generateVolumetricMesh
 
 try:
     import pyvista as pv
@@ -65,21 +65,6 @@ def is_jupyterlab_session() -> bool:
         return True
 
     return False
-
-def generateVolumetricMesh(mesh : pv.PolyData):
-    try:
-        from tetgen import TetGen
-    except Exception as e:
-        print(e)
-        print("tetgen is required. Use 'pip install tetgen' to install. ")
-        sys.exit(1)
-
-    mesh.triangulate(inplace=True)
-    tet = TetGen(mesh)
-    tet.make_manifold()
-    tet.tetrahedralize(quality=False)
-    mesh = tet.mesh
-    return mesh
 
 class Visualiser():
     def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, dumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=False, geoClip=False):       
