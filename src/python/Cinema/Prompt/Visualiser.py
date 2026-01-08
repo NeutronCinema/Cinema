@@ -115,12 +115,6 @@ class Visualiser():
         self.trj.append(line)
 
     def loadMesh(self, nSegments=30, dumpMesh=False, combineMesh=False, byMat=False, geoClip=False):
-        if geoClip:
-            try:
-                from tetgen import TetGen
-            except:
-                raise ImportError("tetgen is required. Use 'pip install tetgen' to install. ")
-            
         if combineMesh:
             self.loadCombinedMesh(nSegments, geoClip)
         elif byMat:
