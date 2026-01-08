@@ -115,12 +115,55 @@ class Visualiser():
         self.trj.append(line)
 
     def loadMesh(self, nSegments=30, dumpMesh=False, combineMesh=False, byMat=False, geoClip=False):
+        if geoClip:
+            print('INFO: Visualizing geometry with a geoClipper')
+            self.blacklist = [] # clip plane is on world, do not mask, especially for the world mesh
+            if combineMesh:
+                print('WARNING: meaningless to combine mesh with geoClip. Meshes not combined.')
+                combineMesh = False
+
+        if byMat:
+            print('INFO: Visualizing geometry by material')
+            matColorMap = {}
+            if combineMesh:
+                print('WARNING: meaningless to use combineMesh with byMat. Meshes not combined.')
+                combineMesh = False
+
         if combineMesh:
-            self.loadCombinedMesh(nSegments, geoClip)
-        elif byMat:
-            self.loadMeshByMat(nSegments, geoClip)
-        else:
-            self.loadMeshDefault(nSegments,geoClip)
+            print('INFO: Visualizing combined geometry')
+            combined_meshes_block = pv.MultiBlock()
+
+        for amesh in self.worldMesh:
+            mesh_label, mesh = self.loadOneMesh(amesh, nSegments)
+            rcolor = random.choice(self.color)
+
+            if not mesh:
+                continue
+
+            if combineMesh:  # In this case, byMat and geoClip are both False
+                combined_meshes_block.append(mesh)
+            else: # byMat or geoClip may be True
+                if byMat:
+                    matName = amesh.getMaterialName()
+                    if matName not in matColorMap.keys():
+                        matColorMap[matName] = rcolor
+                    else:
+                        rcolor = matColorMap[matName]
+                        matName = None # Not show the material name for the second time
+                    mesh_label = f"{mesh_label}[{matName}]"
+
+                if geoClip:
+                    mesh = generateVolumetricMesh(mesh)
+                    clippedmesh = self.plotter.addClipPlane([mesh], not amesh.n, normal='x', opacity=0.5)
+                    self.plotter.addClippedMesh(clippedmesh , label=mesh_label, color=rcolor, opacity=0.5)
+                else:
+                    self.plotter.add_mesh(mesh, color=rcolor, opacity=0.3, label=mesh_label)
+
+        if combineMesh:
+            g = combined_meshes_block.combine()
+            g.add_field_data(['Combined geometry'], 'mesh_info')
+            self.plotter.add_mesh(g, color=random.choice(self.color), opacity=0.3, label="Combined geometry")
+
         if dumpMesh:
             self.dumpMesh()
 
@@ -132,85 +175,24 @@ class Visualiser():
         #     mesh.save(fn, False)
         # count+=1
         
-    def loadMeshDefault(self, nSegments, geoClip=False):
-        count = 0
-        for am in self.worldMesh:
-            name = am.getMeshName()
-            name = f'{count}_{name}'
-            mesh = self.getValidMesh(am, nSegments)
-            rcolor = random.choice(self.color)
-            if not mesh:
-                continue
-            if geoClip:
-                mesh = generateVolumetricMesh(mesh)
-                clippedMesh = self.plotter.addClipPlane([mesh], not am.n, normal='x', opacity=0.5) 
-                self.plotter.addClippedMesh(clippedMesh, label=name , color=rcolor,opacity=0.5)
+    def loadOneMesh(self, amesh : Mesh, nSegments):
+        name, mesh = self.getValidMesh(amesh, nSegments)
+        if not mesh:
+            print(f"Warning: Mesh {name} is empty, not abled to visualize.")
+            return name, None
+        return name, mesh
 
-                mesh.add_field_data([' Volume name: '+name, ' Infomation: '+am.getLogVolumeInfo()], 'mesh_info')
-            else:
-                self.plotter.add_mesh(mesh, color=rcolor, opacity=0.3, label=name)
-            count += 1
-
-    def loadCombinedMesh(self, nSegments, geoClip=False):
-        print('INFO: Visualizing combined geometry')
-        allmesh = pv.MultiBlock()
-        count = 0
-        for am in self.worldMesh:
-            mesh = self.getValidMesh(am, nSegments)
-            if not mesh:
-                continue
-            allmesh.append(mesh)
-            if geoClip:
-                mesh = generateVolumetricMesh(mesh)
-                clippedMesh = self.plotter.addClipPlane([mesh], not am.n, normal='x', opacity=0.5) # am.n = 0 if is world
-                if count == 0:
-                    label = 'Combined geometry'
-                else:
-                    label = None
-                self.plotter.addClippedMesh(clippedMesh, label=label ,opacity=0.5)
-                count = 1
-
-        if not geoClip:
-            g = allmesh.combine()
-            g.add_field_data(['Combined geometry'], 'mesh_info')
-            self.plotter.add_mesh(g, color=random.choice(self.color), opacity=0.3, label="Combined geometry")
-
-    def loadMeshByMat(self, nSegments, geoClip=False):
-        print('INFO: Visualizing geometry by materials')
-        matColorMap = {}
-        for am in self.worldMesh:
-            matName = am.getMaterialName()
-
-            if matName not in matColorMap.keys():
-                rcolor = random.choice(self.color)
-                matColorMap[matName] = rcolor
-            else:
-                rcolor = matColorMap[matName]
-                matName = None
-
-            mesh = self.getValidMesh(am, nSegments)
-            if not mesh:
-                continue
-
-            if not geoClip:
-                self.plotter.add_mesh(mesh, color=rcolor, opacity=0.3, label=matName)
-            else:
-                mesh = generateVolumetricMesh(mesh)
-                clippedMesh = self.plotter.addClipPlane([mesh], not am.n, normal='x', opacity=0.5)
-                self.plotter.addClippedMesh(clippedMesh , label=matName, color=rcolor, opacity=0.5)
-
-
-    def getValidMesh(self, mesh : Mesh, nSegments, byMat=True):
-        name = mesh.getMeshName()
-        mat = mesh.getMaterialName()
+    def getValidMesh(self, ptmesh : Mesh, nSegments, byMat=True):
+        # name = mesh.getMeshName()
+        name, mesh = ptmesh.getMesh(nSegments)
+        mat = ptmesh.getMaterialName()
         if self.blacklist is not None:
             if any(srchstr in name for srchstr in self.blacklist):
-                return None
+                return name, None
             if byMat:
                 if any(srchstr in mat for srchstr in self.blacklist):
-                    return None
-        name, mesh = mesh.getMesh(nSegments)
-        return mesh
+                    return name, None
+        return name, mesh
 
     def callback(self, mesh):
         print(f'\nPicked volume info:')
