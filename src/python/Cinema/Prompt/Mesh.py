@@ -178,9 +178,10 @@ class Mesh():
                         mesh = lmesh - rmesh
                     else:
                         raise ValueError(f"Unknown boolean operation: {boolOp}")
-                except: # fall back to point cloud mode
+                except Exception as e: # fall back to point cloud mode
                     print(f"Error: Meshing boolean operation via `vtkbool` is highly experimental. May be a rerun can solve it.")
                     print(f"Mesh realized in point cloud mode.")
+                    print(e)
                     mesh = meshByPointCloud(npoints)
                 finally:
                     return name, mesh
