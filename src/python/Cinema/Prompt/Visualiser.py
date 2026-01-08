@@ -67,7 +67,7 @@ def is_jupyterlab_session() -> bool:
     return False
 
 class Visualiser():
-    def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, dumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=False, geoClip=False):       
+    def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, dumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=True, geoClip=False):
         if is_jupyterlab_session():
             pv.set_jupyter_backend('trame')  
         # self.color =  list(mcolors.CSS4_COLORS.keys())
@@ -84,7 +84,7 @@ class Visualiser():
 
         self.loadMesh(nSegments, dumpMesh, mergeMesh, byMat, geoClip)
         if addLegend:
-            self.plotter.add_legend(size=(0.5,0.3))
+            self.plotter.add_legend(loc='upper left', size=(0.3,0.1))
         self.trj=pv.MultiBlock()
         self.redpoints=pv.MultiBlock()
 
