@@ -152,20 +152,20 @@ class Visualiser():
                         rcolor = matColorMap[matName]
                     mesh_label = f"{mesh_label}[{matName}]"
 
-                mesh_info = f"\nVolume name: {mesh_name}\nMaterial: {matName}\n"
                 if geoClip:
                     mesh = generateVolumetricMesh(mesh)
-                    clippedmesh = self.plotter.addClipPlane([mesh], not amesh.n, normal='x', opacity=0.5)
-                    self.plotter.addClippedMesh(clippedmesh , label=mesh_label, color=rcolor, opacity=0.5)
-                    clippedmesh.add_field_data([mesh_info], 'mesh_info')
+                    mesh = self.plotter.addClipPlane([mesh], not amesh.n, normal='x', opacity=0.5)
+                    actor = self.plotter.addClippedMesh(mesh , label=mesh_label, color=rcolor, opacity=0.5)
                 else:
-                    self.plotter.add_mesh(mesh, color=rcolor, opacity=0.3, label=mesh_label)
-                    mesh.add_field_data([mesh_info], 'mesh_info')
+                    actor = self.plotter.add_mesh(mesh, color=rcolor, opacity=0.3, label=mesh_label)
+                self._add_builtin_mesh_info(mesh, mesh_name, matName)
 
+                self.mesh_actor_pair.append((mesh, actor))
         if combineMesh:
-            g = combined_meshes_block.combine()
-            g.add_field_data(['Combined geometry'], 'mesh_info')
-            self.plotter.add_mesh(g, color=random.choice(self.color), opacity=0.3, label="Combined geometry")
+            mesh = combined_meshes_block.combine()
+            self._add_builtin_mesh_info(mesh, "Combined geometry", "Material not defined for a combined geometry")
+            actor = self.plotter.add_mesh(mesh, color=random.choice(self.color), opacity=0.3, label="Combined geometry")
+            self.mesh_actor_pair.append((mesh, actor))
 
         if dumpMesh:
             self.dumpMesh()
@@ -177,7 +177,17 @@ class Visualiser():
         #     print(f'saving {fn}')
         #     mesh.save(fn, False)
         # count+=1
-        
+
+    def add_mesh_metadata(self, mesh:pv.PolyData, field_data, field_name = 'mesh_info'):
+        mesh.add_field_data(field_data, field_name)
+
+    def _add_builtin_mesh_info(self, mesh:pv.PolyData, name, mat_label):
+        self.add_mesh_metadata(mesh, [f"{name}"], 'mesh_name')
+        self.add_mesh_metadata(mesh, [f"{mat_label}"], 'material')
+        mesh_info = f"\t- Volume name: {name}\n\t- Material: {mat_label}\n"
+        self.add_mesh_metadata(mesh, [f"{mesh_info}"], 'mesh_info')
+
+
     def loadOneMesh(self, amesh : Mesh, nSegments):
         name, mesh = self.getValidMesh(amesh, nSegments)
         if not mesh:
