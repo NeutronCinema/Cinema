@@ -108,6 +108,12 @@ double pt_Hist2D_getYMax(void* obj);
 unsigned  pt_Hist2D_getNBinX(void* obj);
 unsigned  pt_Hist2D_getNBinY(void* obj);
 
+// Prompt::PointwiseDist
+void* pt_PointwiseDist_new(const double* x, const double* y, size_t n);
+void pt_PointwiseDist_delete(void* obj);
+double pt_PointwiseDist_percentile(void* obj, double p);
+void pt_PointwiseDist_percentile_many(void* obj, double* in, double* out, size_t n);
+
 // Prompt::MCPLBinaryWrite
 #include "mcpl.h"
 void* pt_MCPLBinaryWrite_new(const char *fn, bool enable_double=false, bool enable_extra3double=false, 

@@ -14,6 +14,8 @@ namespace Prompt {
   // values on a given set of points, which must form a proper grid of
   // increasing non-identical values.
 
+  // Copied from NCrystal project v3.1.0
+
   class PointwiseDist {
   public:
     PointwiseDist( const std::vector<double>& x, const std::vector<double>& y );
