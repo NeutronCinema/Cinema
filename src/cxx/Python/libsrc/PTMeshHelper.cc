@@ -234,7 +234,7 @@ const char* pt_getLogicalVolumeMaterialName(size_t pvolID)
   auto tree = Prompt::Singleton<Prompt::GeoTree>::getInstance();
   const auto node = tree.m_fullTreeNode[pvolID];
   auto &resman = Prompt::Singleton<Prompt::ResourceManager>::getInstance();
-  std::cout << resman.getLogicalVolumeMaterialName(node->logical) << std::endl;
+  // std::cout << resman.getLogicalVolumeMaterialName(node->logical) << std::endl;
   return resman.getLogicalVolumeMaterialName(node->logical);
 }
 
