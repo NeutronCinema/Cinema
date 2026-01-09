@@ -25,13 +25,18 @@ from ..Interface import *
 
 import random
 import matplotlib.colors as mcolors
-from .Mesh import Mesh
+from .Mesh import Mesh, generateVolumetricMesh
 
 try:
     import pyvista as pv
 except Exception as e:
     print(e)
     sys.exit(1)
+
+high_contrast_colors = ["#FF0000","#FF4500","#FF8C00","#FFD700","#FFFF00","#FF6347","#CD5C5C",
+    "#0000FF","#1E90FF","#00BFFF","#00FFFF","#00FF00","#32CD32","#2E8B57","#20B2AA",
+    "#800080","#9370DB","#8A2BE2","#DA70D6","#FF00FF","#00FF7F","#4B0082","#7FFF00","#FF1493",
+    "#9400D3","#000000","#696969","#A9A9A9"]
 
 # from https://stackoverflow.com/questions/57173235/how-to-detect-whether-in-jupyter-notebook-or-lab 
 def is_jupyterlab_session() -> bool:
@@ -62,67 +67,119 @@ def is_jupyterlab_session() -> bool:
     return False
 
 class Visualiser():
-    def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, dumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=False, geoClip=False):       
+    def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, doDumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=True, geoClip=False):
         if is_jupyterlab_session():
             pv.set_jupyter_backend('trame')  
-
-        high_contrast_colors = [
-            "#FF0000",
-            "#FF4500",
-            "#FF8C00",
-            "#FFD700",
-            "#FFFF00",
-            "#FF6347",
-            "#CD5C5C",
-            
-            "#0000FF",
-            "#1E90FF",
-            "#00BFFF",
-            "#00FFFF",
-            "#00FF00",
-            "#32CD32",
-            "#2E8B57",
-            "#20B2AA",
-            
-            "#800080",
-            "#9370DB",
-            "#8A2BE2",
-            "#DA70D6",
-            "#FF00FF",
-            
-            "#00FF7F",
-            "#4B0082",
-            "#7FFF00",
-            "#FF1493",
-            "#9400D3",
-            
-            "#000000",
-            "#FFFFFF",
-            "#696969",
-            "#A9A9A9",
-            "#D3D3D3" 
-        ]
         # self.color =  list(mcolors.CSS4_COLORS.keys())
         self.color = high_contrast_colors
         self.worldMesh = Mesh()
         self.blacklist = blacklist
+        self._mesh_actor_pair = []
         if printWorld:
             self.worldMesh.printMesh()
+        self._nSegments = nSegments
+        self._mergeMesh = mergeMesh
+        self._doDumpMesh = doDumpMesh
+        self._byMat = byMat
+        self._geoClip = geoClip
+        self._addLegend = addLegend
+        self._selected_mesh = None
+        self._selected_actor = None
+        self._trj=pv.MultiBlock()
+        self._redpoints=pv.MultiBlock()
+        self._hidden_meshes = []
+        self._window_size = window_size
+        self._load_plotter()
 
-        self.plotter = PtPlotter(window_size=window_size)
-        
-        # Enable depth peeling for better transparency handling
-        self.plotter.enable_depth_peeling()
+    @property
+    def selected_mesh(self):
+        return self._selected_mesh
 
-        self.loadMesh(nSegments, dumpMesh, mergeMesh, byMat, geoClip)
-        if addLegend:
-            self.plotter.add_legend(size=(0.5,0.3))
-        self.trj=pv.MultiBlock()
-        self.redpoints=pv.MultiBlock()
+    @property
+    def selected_actor(self):
+        return self._selected_actor
 
-        self.set_plotter_style()
-        self.plotter.enable_mesh_picking(callback=self.callback, left_clicking=False, show_message=False)
+    @property
+    def mesh_actor_pair(self):
+        return self._mesh_actor_pair
+
+    def _config_key_events(self):
+        self.plotter.enable_mesh_picking(callback=self._pick_callback, left_clicking=False, show_message=False)
         self.plotter.add_key_event('s', self.save)
+        self.plotter.add_key_event('m', self._mask_selected)
+        self.plotter.add_key_event('u', self._unmask_selected)
+        self.plotter.add_key_event('r', self._refresh_plotter)
+
+    def _load_plotter(self):
+        self.plotter = PtPlotter(window_size=self._window_size)
+        self.plotter.enable_depth_peeling()
+        self._config_key_events()
+
+    def _clear_plotter(self):
+        self.plotter.clear_actors()
+        self._mesh_actor_pair = []
+
+    def _refresh_plotter(self):
+        self._clear_plotter()
+        self._plot_geo_and_trj()
+        self.plotter.update()
+        print(f"Plotter Reloaded!\n")
+
+    def _plot_geo_and_trj(self):
+        nosuccess = self.loadMesh(self._nSegments, self._doDumpMesh, self._mergeMesh, self._byMat, self._geoClip)
+        if nosuccess:
+            try:
+                self._load_plotter() # perform a reload, try again 
+                self.loadMesh(self._nSegments, self._doDumpMesh, self._mergeMesh, self._byMat, self._geoClip)
+            except Exception as e:
+                print(e)
+                print("Error: Failed to load mesh.")
+                sys.exit(1)
+            
+        if self._addLegend:
+            mesh_num = self.worldMesh.countFullTreeNode() + 1
+            s = min(mesh_num * 0.05, 1)
+            ss = s * 0.5
+            a = self.plotter.add_legend(loc='upper left', size=(s,ss))
+        self._viz_trj()
+        self.set_plotter_style()
+
+    def _pick_callback(self, mesh):
+        print(f'\nPicked volume info:')
+        self._selected_mesh = mesh
+        self._selected_actor = self._get_actor(self.selected_mesh)
+        for info in mesh['mesh_info']:
+            print(info)
+        # self.plotter.add_point_scalar_labels(mesh.cast_to_pointset(), 'mesh_name')
+
+    def _get_actor(self, mesh):
+        if self.mesh_actor_pair:
+            for m, a in self.mesh_actor_pair:
+                if m == mesh:
+                    return a
+        else:
+            return None
+    
+    def _mask_selected(self):
+        if self.selected_mesh:
+            if not self.selected_actor:
+                raise ValueError("Selected mesh has no actor.")
+            self.plotter.remove_actor(self.selected_actor)
+            self._hidden_meshes.append(self.selected_mesh)
+            self.plotter._clear_picking_representations()
+            self._selected_mesh = None
+            self.plotter.update()
+            print(f'Masked Physical Volumes:')
+            for hm in self._hidden_meshes:
+                print(f'\t- {hm["mesh_name"]}')
+    
+    def _unmask_selected(self):
+        if self._hidden_meshes:
+            for m in self._hidden_meshes:
+                self.plotter.add_actor(self._get_actor(m))
+            self._hidden_meshes = []
+            self.plotter.update()
+            print("\nAll masked Physical Volumes recovered")
 
     def set_plotter_style(self):
         self.plotter.show_bounds()
@@ -142,25 +199,74 @@ class Visualiser():
         #draw the first and last position as red dots
         if data.size>2:
             point_cloud = pv.PolyData(data[1:-1])
-            self.redpoints.append(point_cloud)
+            self._redpoints.append(point_cloud)
             point_cloud.add_field_data(['a neutron trajectory'], 'mesh_info')
-        self.trj.append(line)
+        self._trj.append(line)
 
-    def loadMesh(self, nSegments=30, dumpMesh=False, combineMesh=False, byMat=False, geoClip=False):
+    def loadMesh(self, nSegments=30, doDumpMesh=False, combineMesh=False, byMat=False, geoClip=False):
         if geoClip:
-            try:
-                from tetgen import TetGen
-            except:
-                raise ImportError("tetgen is required. Use 'pip install tetgen' to install. ")
-            
+            print('INFO: Visualizing geometry with a geoClipper')
+            self.blacklist = [] # clip plane is on world, do not mask, especially for the world mesh
+            if combineMesh:
+                print('WARNING: meaningless to combine mesh with geoClip. Meshes not combined.')
+                combineMesh = False
+
+        if byMat:
+            print('INFO: Visualizing geometry by material')
+            matColorMap = {}
+            if combineMesh:
+                print('WARNING: meaningless to use combineMesh with byMat. Meshes not combined.')
+                combineMesh = False
+
         if combineMesh:
-            self.loadCombinedMesh(nSegments, geoClip)
-        elif byMat:
-            self.loadMeshByMat(nSegments, geoClip)
-        else:
-            self.loadMeshDefault(nSegments,geoClip)
-        if dumpMesh:
+            print('INFO: Visualizing combined geometry')
+            combined_meshes_block = pv.MultiBlock()
+
+        for amesh in self.worldMesh:
+            mesh_name, mesh = self.loadOneMesh(amesh, nSegments)
+            matName = amesh.getMaterialName()
+            rcolor = random.choice(self.color)
+            mesh_label = mesh_name
+
+            if not mesh:
+                continue
+
+            if combineMesh:  # In this case, byMat and geoClip are both False
+                combined_meshes_block.append(mesh)
+            else: # byMat or geoClip may be True
+                sur_mesh = mesh
+                if byMat:
+                    if matName not in matColorMap.keys():
+                        matColorMap[matName] = rcolor
+                    else:
+                        rcolor = matColorMap[matName]
+                    mesh_label = f"{mesh_label}[{matName}]"
+
+                if geoClip:
+                    try:
+                        vol_mesh = generateVolumetricMesh(mesh)
+                        vol_mesh = self.plotter.addClipPlane([vol_mesh], not amesh.n, normal='x', opacity=0.5)
+                        actor = self.plotter.addClippedMesh(vol_mesh , label=mesh_label, color=rcolor, opacity=0.5)
+                    except Exception as e:
+                        print(e)
+                        print(f"Warning: Failed to visualize {mesh_name} with geoClip. Fall back without geoClip.")
+                        self._geoClip = False
+                        return 1
+                else:
+                    actor = self.plotter.add_mesh(sur_mesh, color=rcolor, opacity=0.3, label=mesh_label)
+                self._add_builtin_mesh_info(sur_mesh, mesh_name, matName)
+
+                self._mesh_actor_pair.append((mesh, actor))
+        if combineMesh:
+            mesh = combined_meshes_block.combine()
+            self._add_builtin_mesh_info(mesh, "Combined geometry", "Material not defined for a combined geometry")
+            actor = self.plotter.add_mesh(mesh, color=random.choice(self.color), opacity=0.3, label="Combined geometry")
+            self._mesh_actor_pair.append((mesh, actor))
+
+        if doDumpMesh:
             self.dumpMesh()
+
+        return 0
 
     def dumpMesh(self):
         self.plotter.export_html('exported.html')
@@ -170,113 +276,51 @@ class Visualiser():
         #     mesh.save(fn, False)
         # count+=1
 
-    def generateVolumetricMesh(self, mesh : pv.PolyData):
-        try:
-            from tetgen import TetGen
-        except:
-            raise ImportError("tetgen is required. Use 'pip install tetgen' to install. ")
-        mesh.triangulate(inplace=True)
-        tet = TetGen(mesh)
-        tet.make_manifold()
-        tet.tetrahedralize()
-        mesh = tet.grid
-        return mesh
-    
-    def loadMeshDefault(self, nSegments, geoClip=False):
-        count = 0
-        for am in self.worldMesh:
-            name = am.getMeshName()
-            name = f'{count}_{name}'
-            mesh = self.getValidMesh(am, nSegments)
-            rcolor = random.choice(self.color)
-            if not mesh:
-                continue
-            if geoClip:
-                mesh = self.generateVolumetricMesh(mesh)
-                clippedMesh = self.plotter.addClipPlane([mesh], not am.n, normal='x', opacity=0.5) 
-                self.plotter.addClippedMesh(clippedMesh, label=name , color=rcolor,opacity=0.5)
+    def add_mesh_metadata(self, mesh:pv.PolyData, field_data, field_name = 'mesh_info'):
+        mesh.add_field_data(field_data, field_name)
 
-                mesh.add_field_data([' Volume name: '+name, ' Infomation: '+am.getLogVolumeInfo()], 'mesh_info')
-            else:
-                self.plotter.add_mesh(mesh, color=rcolor, opacity=0.3, label=name)
-            count += 1
-
-    def loadCombinedMesh(self, nSegments, geoClip=False):
-        print('INFO: Visualizing combined geometry')
-        allmesh = pv.MultiBlock()
-        count = 0
-        for am in self.worldMesh:
-            mesh = self.getValidMesh(am, nSegments)
-            if not mesh:
-                continue
-            allmesh.append(mesh)
-            if geoClip:
-                mesh = self.generateVolumetricMesh(mesh)
-                clippedMesh = self.plotter.addClipPlane([mesh], not am.n, normal='x', opacity=0.5) # am.n = 0 if is world
-                if count == 0:
-                    label = 'Combined geometry'
-                else:
-                    label = None
-                self.plotter.addClippedMesh(clippedMesh, label=label ,opacity=0.5)
-                count = 1
-
-        if not geoClip:
-            g = allmesh.combine()
-            g.add_field_data(['Combined geometry'], 'mesh_info')
-            self.plotter.add_mesh(g, color=random.choice(self.color), opacity=0.3, label="Combined geometry")
-
-    def loadMeshByMat(self, nSegments, geoClip=False):
-        print('INFO: Visualizing geometry by materials')
-        matColorMap = {}
-        for am in self.worldMesh:
-            matName = am.getMaterialName()
-
-            if matName not in matColorMap.keys():
-                rcolor = random.choice(self.color)
-                matColorMap[matName] = rcolor
-            else:
-                rcolor = matColorMap[matName]
-                matName = None
-
-            mesh = self.getValidMesh(am, nSegments)
-            if not mesh:
-                continue
-
-            if not geoClip:
-                self.plotter.add_mesh(mesh, color=rcolor, opacity=0.3, label=matName)
-            else:
-                mesh = self.generateVolumetricMesh(mesh)
-                clippedMesh = self.plotter.addClipPlane([mesh], not am.n, normal='x', opacity=0.5)
-                self.plotter.addClippedMesh(clippedMesh , label=matName, color=rcolor, opacity=0.5)
+    def _add_builtin_mesh_info(self, mesh:pv.PolyData, name, mat_label):
+        self.add_mesh_metadata(mesh, [f"{name}"], 'mesh_name')
+        self.add_mesh_metadata(mesh, [f"{mat_label}"], 'material')
+        mesh_info = f"\t- Volume name: {name}\n\t- Material: {mat_label}\n"
+        self.add_mesh_metadata(mesh, [f"{mesh_info}"], 'mesh_info')
 
 
-    def getValidMesh(self, mesh : Mesh, nSegments, byMat=True):
-        name = mesh.getMeshName()
-        mat = mesh.getMaterialName()
+    def loadOneMesh(self, amesh : Mesh, nSegments):
+        name, mesh = self.getValidMesh(amesh, nSegments)
+        if not mesh:
+            print(f"Warning: Mesh {name} is empty, not abled to visualize.")
+            return name, None
+        return name, mesh
+
+    def getValidMesh(self, ptmesh : Mesh, nSegments, byMat=True):
+        # name = mesh.getMeshName()
+        name, mesh = ptmesh.getMesh(nSegments)
+        mat = ptmesh.getMaterialName()
         if self.blacklist is not None:
             if any(srchstr in name for srchstr in self.blacklist):
-                return None
+                return name, None
             if byMat:
                 if any(srchstr in mat for srchstr in self.blacklist):
-                    return None
-        name, mesh = mesh.getMesh(nSegments)
-        return mesh
+                    return name, None
+        return name, mesh
 
-    def callback(self, mesh):
-        print(f'\nPicked volume info:')
-        for info in mesh['mesh_info']:
-            print(info)
-        # self.plotter.add_point_scalar_labels(mesh.cast_to_pointset(), 'mesh_name')
+    def _viz_trj(self):
+        if self._trj.keys()!=[]:
+            mesh = self._trj.combine()
+            actor = self.plotter.add_mesh(mesh, color='blue', opacity=0.2, line_width=2 )
+            self._mesh_actor_pair.append((mesh, actor))
+            self._add_builtin_mesh_info(mesh, "Trajectory", "Not defined")
+
+        if self._redpoints.keys()!=[]:
+            crp = self._redpoints.combine()
+            if crp.points.size>0:
+                actor = self.plotter.add_mesh(crp, color='red', opacity=0.3, point_size=8 )
+                self._mesh_actor_pair.append((crp, actor))
+                self._add_builtin_mesh_info(crp, "Interections", "Not defined")
 
     def show(self):
-        if self.trj.keys()!=[]:
-            self.plotter.add_mesh(self.trj.combine(), color='blue', opacity=0.2, line_width=2 )
-
-        if self.redpoints.keys()!=[]:
-            crp = self.redpoints.combine()
-            if crp.points.size>0:
-                self.plotter.add_mesh(crp, color='red', opacity=0.3, point_size=8 )
-
+        self._plot_geo_and_trj()
         self.plotter.show(title='Cinema Visualiser')
 
 class PtPlotter(pv.Plotter):
@@ -354,4 +398,5 @@ class PtPlotter(pv.Plotter):
         function.SetNormal(1,0,0)
         function.SetOrigin(0,0,0)
         clippedMesh.SetClipFunction(function)  # the implicit function
-        self.add_mesh(clippedMesh, **kwargs)
+        actor = self.add_mesh(clippedMesh, **kwargs)
+        return actor

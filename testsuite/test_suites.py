@@ -5,6 +5,7 @@ import unittest
 
 skip_expr = "[PT_SKIP_TEST]"
 reasonNotCompiled = f"{skip_expr} Gidi is NOT compiled. Tests related skipped. Run 'cimbuild -t --enablegidi' to enable testing with Gidi."
+reasonVisualCheckRequired = f"{skip_expr} Visual check required. Tests related skipped."
 class GidiTest(unittest.TestCase):
 
     def test_gidi_compile(self):
@@ -22,3 +23,6 @@ def skip_test_gidi_not_compile():
     cdata = GidiSetting()
     if not cdata.isCompiled:
         skip_test(reasonNotCompiled)
+
+def skip_test_visual_check_required():
+    skip_test(reasonVisualCheckRequired)

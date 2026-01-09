@@ -30,6 +30,7 @@ namespace Prompt {
     ~GeoTree();
 
     void print(bool phys=true);
+    void printTree();
     std::shared_ptr<Node> getRoot();
     std::vector<std::shared_ptr<Node>> findNode(int num, bool physical=true);
     void makeTree();
@@ -49,6 +50,9 @@ namespace Prompt {
 
     std::vector<std::shared_ptr<Node>> findMotherNodeByPhysical(int num);
     void print(const std::shared_ptr<Node> &node, int layer, std::vector<std::vector<int>> &printArray, bool phys);
+    
+    void printTreeRecursive(const std::shared_ptr<Node>& node, const std::string& prefix, bool isLast);
+    std::string getNodeName(const std::shared_ptr<Node>& node);
 
   };
 

@@ -29,7 +29,6 @@ Cinema particle tracing framework. It includes:
 
 """
 
-from .solid import Box # why box here alone??? X.
 from .configstr import ConfigString
 from .launcher import Launcher
 
@@ -715,8 +714,6 @@ class DirectSqwHelper(ScorerHelper2D, MultiScatMixin2D):
 
 # fixme: what is the function followed used for??? x.
 def makePSD(name, vol, numbin_dim1=1, numbin_dim2=1, ptstate : str = 'ENTRY', type : str = 'XY'):
-    if not isinstance(vol.solid, Box):
-        raise TypeError('makePSD only used for "Box" type volume')
     det = PSD()
     det.cfg_name = name
     det.cfg_numbin_x = numbin_dim1 

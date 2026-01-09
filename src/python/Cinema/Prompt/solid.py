@@ -48,6 +48,7 @@ Classes:
 import numpy as np
 from ..Interface import *
 from typing import Union
+from .geo import Transformation3D
 
 # C extension function imports for all solid types
 _pt_Box_new = importFunc('pt_Box_new', type_voidp, [type_dbl, type_dbl, type_dbl])
@@ -143,7 +144,7 @@ class SolidIntersection(Solid):
         >>> intersection = SolidIntersection(box1, sphere1, transform)
     """
     
-    def __init__(self, left, right, right_transf3d):
+    def __init__(self, left, right, right_transf3d = Transformation3D()):
         self.cobj = _pt_solid_intersection(left.cobj, right.cobj, right_transf3d.cobj)
 
 class SolidUnion(Solid):
@@ -161,7 +162,7 @@ class SolidUnion(Solid):
         >>> union = SolidUnion(cylinder1, box1, transform)
     """
     
-    def __init__(self, left, right, right_transf3d):
+    def __init__(self, left, right, right_transf3d = Transformation3D()):
         self.cobj = _pt_solid_union(left.cobj, right.cobj, right_transf3d.cobj)
 
 class SolidSubtraction(Solid):
@@ -179,7 +180,7 @@ class SolidSubtraction(Solid):
         >>> subtraction = SolidSubtraction(sphere1, box1, transform)
     """
     
-    def __init__(self, left, right, right_transf3d):
+    def __init__(self, left, right, right_transf3d = Transformation3D()):
         self.cobj = _pt_solid_subtraction(left.cobj, right.cobj, right_transf3d.cobj)
 
 class Box(Solid):

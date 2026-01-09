@@ -57,9 +57,9 @@ Prompt::GeoTree::GeoTree()
 :m_root(std::make_shared<GeoTree::Node>())
 {
   makeTree();
-  printf("+++begin full tree node (physical)\n");
-  print();
-  printf("+++end full tree node (physical)\n");
+  printf("\n+++begin full tree node (physical)\n");
+  printTree();
+  printf("\n+++end full tree node (physical)\n\n");
 }
 
 Prompt::GeoTree::~GeoTree() {}
@@ -164,7 +164,6 @@ void Prompt::GeoTree::makeTree()
   {
     auto *vol = geoManager.Convert(i);
 
-    printf("volid %zu, adding physical volume \"%s\" into the tree\n", i, vol->GetLogicalVolume()->GetName());
 
     auto node = std::shared_ptr<Prompt::GeoTree::Node>(new Prompt::GeoTree::Node {vol->id(), vol->GetLogicalVolume()->id()});
     node->setMatrix(vol->GetTransformation());
@@ -188,6 +187,7 @@ void Prompt::GeoTree::makeTree()
     }
     for(auto m:mothers)
     {
+      printf("Physical volume ID %zu, \"%s\" added into the geometry tree\n", i, vol->GetName());
       m->addChild(node);
     }
   }
@@ -260,4 +260,63 @@ void Prompt::GeoTree::print(bool phys)
       cout << var << " ";
     cout << "\n";
   }
+}
+
+void Prompt::GeoTree::printTree()
+{
+  auto &geoManager = vecgeom::GeoManager::Instance();
+  cout << "." << endl;
+  printTreeRecursive(m_root, "", true);
+}
+
+void Prompt::GeoTree::printTreeRecursive(const shared_ptr<Node>& node, const string& prefix, bool isLast)
+{
+  if (!node) return;
+  
+  auto &geoManager = vecgeom::GeoManager::Instance();
+  
+  cout << prefix;
+  if (isLast) {
+    cout << "└── ";
+  } else {
+    cout << "├── ";
+  }
+  
+  cout << getNodeName(node) << endl;
+  
+  string newPrefix = prefix;
+  if (isLast) {
+    newPrefix += "    ";
+  } else {
+    newPrefix += "│   ";
+  }
+  
+  for (size_t i = 0; i < node->child.size(); ++i) {
+    bool lastChild = (i == node->child.size() - 1);
+    printTreeRecursive(node->child[i], newPrefix, lastChild);
+  }
+}
+
+string Prompt::GeoTree::getNodeName(const shared_ptr<Node>& node)
+{
+  auto &geoManager = vecgeom::GeoManager::Instance();
+  stringstream ss;
+  
+  try {
+    auto *vol = geoManager.Convert(node->physical);
+    if (vol) {
+      string volName = vol->GetName();
+      string logicalName = vol->GetLogicalVolume()->GetName();
+      
+      ss << "[" << node->physical << "] " << volName;
+      
+      if (!node->child.empty()) {
+        ss << " [" << node->child.size() << " sub-nodes]";
+      }
+    }
+  } catch (...) {
+    ss << "[Invalid physical ID " << node->physical << "]";
+  }
+  
+  return ss.str();
 }
