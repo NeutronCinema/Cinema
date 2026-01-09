@@ -124,7 +124,9 @@ class Visualiser():
     def _plot_geo_and_trj(self):
         self.loadMesh(self._nSegments, self._doDumpMesh, self._mergeMesh, self._byMat, self._geoClip)
         if self._addLegend:
-            self.plotter.add_legend(loc='upper left', size=(0.3,0.1))
+            s = min(len(self.plotter.meshes) * 0.05, 1)
+            ss = s * 0.3
+            a = self.plotter.add_legend(loc='upper left', size=(s,ss))
         self._viz_trj()
         self.set_plotter_style()
 
