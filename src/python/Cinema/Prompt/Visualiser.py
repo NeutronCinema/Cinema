@@ -217,6 +217,7 @@ class Visualiser():
             if combineMesh:  # In this case, byMat and geoClip are both False
                 combined_meshes_block.append(mesh)
             else: # byMat or geoClip may be True
+                sur_mesh = mesh
                 if byMat:
                     if matName not in matColorMap.keys():
                         matColorMap[matName] = rcolor
@@ -225,12 +226,11 @@ class Visualiser():
                     mesh_label = f"{mesh_label}[{matName}]"
 
                 if geoClip:
-                    sur_mesh = mesh
-                    mesh = generateVolumetricMesh(mesh)
-                    mesh = self.plotter.addClipPlane([mesh], not amesh.n, normal='x', opacity=0.5)
-                    actor = self.plotter.addClippedMesh(mesh , label=mesh_label, color=rcolor, opacity=0.5)
+                    vol_mesh = generateVolumetricMesh(mesh)
+                    vol_mesh = self.plotter.addClipPlane([vol_mesh], not amesh.n, normal='x', opacity=0.5)
+                    actor = self.plotter.addClippedMesh(vol_mesh , label=mesh_label, color=rcolor, opacity=0.5)
                 else:
-                    actor = self.plotter.add_mesh(mesh, color=rcolor, opacity=0.3, label=mesh_label)
+                    actor = self.plotter.add_mesh(sur_mesh, color=rcolor, opacity=0.3, label=mesh_label)
                 self._add_builtin_mesh_info(sur_mesh, mesh_name, matName)
 
                 self._mesh_actor_pair.append((mesh, actor))
