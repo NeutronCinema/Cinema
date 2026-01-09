@@ -244,12 +244,13 @@ void *pt_Ellipsoid_new(double dx, double dy, double dz, double zBottomCut, doubl
 // Volume 
 void* pt_Volume_new(const char* name, void *unplacedVolume)
 {
-    auto p = static_cast<void *>(new vg::LogicalVolume(name, static_cast<vg::VUnplacedVolume *>(unplacedVolume)));
-    const std::map<unsigned int, vg::LogicalVolume *> & vmap  = vg::GeoManager::Instance().GetLogicalVolumesMap();
-    for(auto it=vmap.begin(); it!=vmap.end(); ++it)
-    {
-        std::cout << "pt_Volume_new " << it->second->GetName() << ", vol id " << it->first << std::endl; 
-    }
+    auto logVol = new vg::LogicalVolume(name, static_cast<vg::VUnplacedVolume *>(unplacedVolume));
+    auto p = static_cast<void *>(logVol);
+    // const std::map<unsigned int, vg::LogicalVolume *> & vmap  = vg::GeoManager::Instance().GetLogicalVolumesMap();
+    // for(auto it=vmap.begin(); it!=vmap.end(); ++it)
+    // {
+    std::cout << "pt_Volume_new " << logVol->GetName() << ", vol id " << logVol->id() << std::endl; 
+    // }
     std::cout << "\n";
     return p;
 }
