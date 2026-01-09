@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-
+from Cinema.Prompt import PromptMPI
 from Cinema.Prompt.scorer import WlSpectrum, PSDHelper
+from Cinema.Prompt.geo import Volume, Transformation3D
+from Cinema.Prompt.solid import Box
 import numpy as np
-
-import Cinema.Prompt as cpt
 
 RANDOM_CHECK = [5.0, 5.0, 4.0, 5.0, 2.0, 3.0, 4.0, 3.0, 1.0, 2.0, 
                 2.0, 0.0, 1.0, 0.0, 2515.0, 2.0, 1.0, 0.0, 2.0, 1.0]
@@ -21,21 +21,21 @@ def nc_cfgs():
     ]
     return cfgs
 
-class MySim(cpt.PromptMPI):
+class MySim(PromptMPI):
     def __init__(self, seed, cfg) -> None:
         super().__init__(seed)
         self.sample = cfg
 
     def makeWorld(self):
-        world = cpt.geo.Volume('world', cpt.solid.Box(50, 50, 200))
-        sample = cpt.geo.Volume('sample', cpt.solid.Box(2, 2, 0.5), self.sample)
+        world = Volume('world', Box(50, 50, 200))
+        sample = Volume('sample', Box(2, 2, 0.5), self.sample)
         world.placeChild('entity', sample)
 
         dttx = 40
         dtty = 40
         dttz = 1
 
-        dtt = cpt.geo.Volume('detector', cpt.solid.Box(dttx, dtty, dttz))
+        dtt = Volume('detector', Box(dttx, dtty, dttz))
 
         scorerWl = WlSpectrum()
         scorerWl.cfg_name = 'WavelengthSp'
@@ -47,10 +47,10 @@ class MySim(cpt.PromptMPI):
         pos_bins = 100
         dtt_zpos = 20
         PSDHelper('psd', -dttx, dttx, pos_bins, -dtty, dtty, pos_bins).make(dtt)
-        world.placeChild('detectorPhy', dtt, cpt.geo.Transformation3D(0,0,dtt_zpos))
+        world.placeChild('detectorPhy', dtt, Transformation3D(0,0,dtt_zpos))
 
-        beamstop = cpt.geo.Volume('bs', cpt.solid.Box(0.1,0.1,1), 'solid::B4C/2.52gcm3/B_is_0.95_B10_0.05_B11')
-        world.placeChild('bsphy', beamstop, cpt.geo.Transformation3D(0,0,10))
+        beamstop = Volume('bs', Box(0.1,0.1,1), 'solid::B4C/2.52gcm3/B_is_0.95_B10_0.05_B11')
+        world.placeChild('bsphy', beamstop, Transformation3D(0,0,10))
 
         self.setWorld(world)
 
