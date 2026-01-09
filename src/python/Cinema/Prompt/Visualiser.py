@@ -115,8 +115,12 @@ class Visualiser():
         self.plotter.enable_depth_peeling()
         self._config_key_events()
 
+    def _clear_plotter(self):
+        self.plotter.clear_actors()
+        self._mesh_actor_pair = []
+
     def _refresh_plotter(self):
-        self._load_plotter()
+        self._clear_plotter()
         self._plot_geo_and_trj()
         self.plotter.update()
         print(f"Plotter Reloaded!\n")
@@ -125,7 +129,7 @@ class Visualiser():
         nosuccess = self.loadMesh(self._nSegments, self._doDumpMesh, self._mergeMesh, self._byMat, self._geoClip)
         if nosuccess:
             try:
-                self._load_plotter()
+                self._load_plotter() # perform a reload, try again 
                 self.loadMesh(self._nSegments, self._doDumpMesh, self._mergeMesh, self._byMat, self._geoClip)
             except Exception as e:
                 print(e)
@@ -133,8 +137,9 @@ class Visualiser():
                 sys.exit(1)
             
         if self._addLegend:
-            s = min(len(self.plotter.meshes) * 0.05, 1)
-            ss = s * 0.3
+            mesh_num = self.worldMesh.countFullTreeNode() + 1
+            s = min(mesh_num * 0.05, 1)
+            ss = s * 0.5
             a = self.plotter.add_legend(loc='upper left', size=(s,ss))
         self._viz_trj()
         self.set_plotter_style()
@@ -162,6 +167,7 @@ class Visualiser():
             self.plotter.remove_actor(self.selected_actor)
             self._hidden_meshes.append(self.selected_mesh)
             self.plotter._clear_picking_representations()
+            self._selected_mesh = None
             self.plotter.update()
             print(f'Masked Physical Volumes:')
             for hm in self._hidden_meshes:
