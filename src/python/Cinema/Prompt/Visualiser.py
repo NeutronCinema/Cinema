@@ -77,12 +77,6 @@ class Visualiser():
         self._mesh_actor_pair = []
         if printWorld:
             self.worldMesh.printMesh()
-
-        self.plotter = PtPlotter(window_size=window_size)
-        
-        # Enable depth peeling for better transparency handling
-        self.plotter.enable_depth_peeling()
-
         self._nSegments = nSegments
         self._mergeMesh = mergeMesh
         self._doDumpMesh = doDumpMesh
@@ -94,7 +88,8 @@ class Visualiser():
         self._trj=pv.MultiBlock()
         self._redpoints=pv.MultiBlock()
         self._hidden_meshes = []
-        self._config_key_events()
+        self._window_size = window_size
+        self._load_plotter()
 
     @property
     def selected_mesh(self):
@@ -115,14 +110,28 @@ class Visualiser():
         self.plotter.add_key_event('u', self._unmask_selected)
         self.plotter.add_key_event('r', self._refresh_plotter)
 
+    def _load_plotter(self):
+        self.plotter = PtPlotter(window_size=self._window_size)
+        self.plotter.enable_depth_peeling()
+        self._config_key_events()
+
     def _refresh_plotter(self):
-        self.plotter.clear_actors()
+        self._load_plotter()
         self._plot_geo_and_trj()
         self.plotter.update()
         print(f"Plotter Reloaded!\n")
 
     def _plot_geo_and_trj(self):
-        self.loadMesh(self._nSegments, self._doDumpMesh, self._mergeMesh, self._byMat, self._geoClip)
+        nosuccess = self.loadMesh(self._nSegments, self._doDumpMesh, self._mergeMesh, self._byMat, self._geoClip)
+        if nosuccess:
+            try:
+                self._load_plotter()
+                self.loadMesh(self._nSegments, self._doDumpMesh, self._mergeMesh, self._byMat, self._geoClip)
+            except Exception as e:
+                print(e)
+                print("Error: Failed to load mesh.")
+                sys.exit(1)
+            
         if self._addLegend:
             s = min(len(self.plotter.meshes) * 0.05, 1)
             ss = s * 0.3
@@ -235,7 +244,8 @@ class Visualiser():
                     except Exception as e:
                         print(e)
                         print(f"Warning: Failed to visualize {mesh_name} with geoClip. Fall back without geoClip.")
-                        actor = self.plotter.add_mesh(sur_mesh, color=rcolor, opacity=0.3, label=mesh_label)
+                        self._geoClip = False
+                        return 1
                 else:
                     actor = self.plotter.add_mesh(sur_mesh, color=rcolor, opacity=0.3, label=mesh_label)
                 self._add_builtin_mesh_info(sur_mesh, mesh_name, matName)
@@ -249,6 +259,8 @@ class Visualiser():
 
         if doDumpMesh:
             self.dumpMesh()
+
+        return 0
 
     def dumpMesh(self):
         self.plotter.export_html('exported.html')
