@@ -9,7 +9,7 @@ import numpy as np
 
 from Cinema.Prompt import Prompt
 from Cinema.Prompt.geo import Volume
-from testsuite import skip_test, get_skip_expr
+from testsuite import *
 
 skip_test(f"{get_skip_expr()} ISSUES EXIST")
 #TODO GOT ISSUE, TRACING NOT WORKING, FIX THE ISSUE BEFORE MAKING THIS TEST PASS
