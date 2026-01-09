@@ -226,9 +226,14 @@ class Visualiser():
                     mesh_label = f"{mesh_label}[{matName}]"
 
                 if geoClip:
-                    vol_mesh = generateVolumetricMesh(mesh)
-                    vol_mesh = self.plotter.addClipPlane([vol_mesh], not amesh.n, normal='x', opacity=0.5)
-                    actor = self.plotter.addClippedMesh(vol_mesh , label=mesh_label, color=rcolor, opacity=0.5)
+                    try:
+                        vol_mesh = generateVolumetricMesh(mesh)
+                        vol_mesh = self.plotter.addClipPlane([vol_mesh], not amesh.n, normal='x', opacity=0.5)
+                        actor = self.plotter.addClippedMesh(vol_mesh , label=mesh_label, color=rcolor, opacity=0.5)
+                    except Exception as e:
+                        print(e)
+                        print(f"Warning: Failed to visualize {mesh_name} with geoClip. Fall back without geoClip.")
+                        actor = self.plotter.add_mesh(sur_mesh, color=rcolor, opacity=0.3, label=mesh_label)
                 else:
                     actor = self.plotter.add_mesh(sur_mesh, color=rcolor, opacity=0.3, label=mesh_label)
                 self._add_builtin_mesh_info(sur_mesh, mesh_name, matName)
