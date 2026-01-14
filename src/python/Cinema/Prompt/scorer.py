@@ -739,7 +739,7 @@ def makePSD(name, vol, numbin_dim1=1, numbin_dim2=1, ptstate : str = 'ENTRY', ty
 
         
 class MCPLOutHelper(MultiScatMixin1D):
-    def __init__(self, name, pdg : int = 0, groupID : int = 0, kill : bool = False, compress : bool = True) -> None:
+    def __init__(self, name, pdg : int = 2112, groupID : int = 0, kill : bool = False, compress : bool = True) -> None:
         def get_rank_id():
             try:
                 # Initialize the MPI environment
