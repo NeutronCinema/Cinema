@@ -218,11 +218,9 @@ class Hist1D(HistBase):
         
         _pt_Hist1D_fill_many(self.cobj, x.size, np.ascontiguousarray(x.astype(np.float64)), np.ascontiguousarray(weight.astype(np.float64)) )
 
-    def plot(self, show=False, label=None, title=None, log=False, sigma=1, ax=None):
+    def plot(self, show=False, label=None, title=None, log=False, sigma=1, ax=None, *args, **kwargs):
         try:
             import matplotlib.pyplot as plt
-            from Cinema.Interface import plotStyle
-            plotStyle()
             
             center = self.getCentre()
             w = self.getWeight()
@@ -231,10 +229,12 @@ class Hist1D(HistBase):
             if ax is None:
                 fig, ax = plt.subplots()
                 created_new_figure = True
+                from Cinema.Interface import plotStyle
+                plotStyle()
             else:
                 created_new_figure = False
             
-            ax.errorbar(center, w, yerr=err*sigma, fmt='s-', label=f'Weight {w.sum()}' if label is None else f'{label} {w.sum()}')
+            ax.errorbar(center, w, yerr=err*sigma, fmt='s-', label=f'Weight {w.sum()}' if label is None else f'{label}, Weight {w.sum()}', *args, **kwargs)
             
             if isinstance(log, list):
                 if list[0]:
@@ -252,19 +252,10 @@ class Hist1D(HistBase):
             if show:                
                 plt.show()
             else:
-                if created_new_figure:
-                    return fig
-                else:
-                    return ax
+                return ax
         except Exception as e:
             print (e)
 
-            if show:                
-                plt.show()
-            else: 
-                return plt
-        except Exception as e:
-            print (e)
     
     def savefig(self, fname, title="Histogram", log = False):
         plt = self.plot(False, title=title, log = log)
