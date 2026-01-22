@@ -122,7 +122,7 @@ void Prompt::MCPLBinaryWrite::write(const Particle &p, int scatterNumber)
     // use polarisation to store scatter number info
     m_particleInFile->polarisation[0] = p.getSurviveP();
     m_particleInFile->polarisation[1] = static_cast<double>(scatterNumber);
-    m_particleInFile->polarisation[2] = (p.getEKin0()-p.getEKin()); // energy loss in MeV
+    m_particleInFile->polarisation[2] = (p.getEKin0()-p.getEKin()); // energy loss in eV
   }
 
 

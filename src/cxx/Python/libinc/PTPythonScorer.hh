@@ -60,6 +60,8 @@ void pt_addMultiScatter2D(void* scatter, void* espScorer, int scatNumReq);
 
 void* pt_KillerMCPL_new(const char* name, unsigned pdg, int groupid, bool kill, bool compress);
 
+void* pt_H5PL_new(const char* name, unsigned pdg, int groupid, bool kill, bool compress);
+
 #ifdef __cplusplus
 }
 #endif

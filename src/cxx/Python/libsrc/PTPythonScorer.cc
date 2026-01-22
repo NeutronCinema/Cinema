@@ -30,6 +30,7 @@
 #include "PTScorer2D.hh"
 #include "PTScorerPSD.hh"
 #include "PTKillerMCPL.hh"
+#include "PTH5PL.hh"
 namespace pt = Prompt;
 
 
@@ -128,4 +129,9 @@ void pt_addMultiScatter2D(void* scatter, void* scorer, int scatNumReq=-1)
 void* pt_KillerMCPL_new(const char* name, unsigned pdg, int groupid, bool kill, bool compress)
 {
   return static_cast<void *>(new pt::KillerMCPL(name, pdg, groupid, kill, compress));
+}
+
+void* pt_H5PL_new(const char* name, unsigned pdg, int groupid, bool kill, bool compress)
+{
+  return static_cast<void *>(new pt::H5PL(name, pdg, groupid, kill, compress));
 }

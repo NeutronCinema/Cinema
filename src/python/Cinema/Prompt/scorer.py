@@ -138,6 +138,8 @@ _pt_addMultiScatter1D = importFunc('pt_addMultiScatter1D', None, [type_voidp, ty
 _pt_addMultiScatter2D = importFunc('pt_addMultiScatter2D', None, [type_voidp, type_voidp, type_int])
 
 _pt_KillerMCPL_new = importFunc('pt_KillerMCPL_new', type_voidp, [type_cstr, type_uint, type_int, type_bool, type_bool])
+_pt_H5PL_new = importFunc('pt_H5PL_new', type_voidp, [type_cstr, type_uint, type_int, type_bool, type_bool])
+
 class ScorerHelper:
     def __init__(self, name, min, max, numbin, pdg = 2112, ptstate=None, groupID=0) -> None:
         self.name = name
@@ -418,9 +420,6 @@ class ESpectrumHelper(ScorerHelper, MultiScatMixin1D):
                                         )
         vol.addScorer(self, cobj)
         self.cobj = cobj
-
-     
-    
 class WlSpectrumHelper(ScorerHelper, MultiScatMixin1D):
     def __init__(self, name, min=0.1, max=10, numbin = 100, pdg : int = 2112, 
                  ptstate : str = 'ENTRY', groupID : int = 0, linear = False) -> None:
@@ -738,6 +737,83 @@ def makePSD(name, vol, numbin_dim1=1, numbin_dim2=1, ptstate : str = 'ENTRY', ty
     vol.addScorer(det.cfg)
 
         
+class H5OutputHelper(MultiScatMixin1D):
+    """
+    HDF5 particle logger helper for creating H5PL scorers.
+    
+    This class creates HDF5-based particle logging scorers that record particle data
+    with custom fields including survival probability, scattering number, and energy loss.
+    
+    Parameters:
+        name (str): Unique identifier for the scorer
+        pdg (int, optional): Particle Data Group code, defaults to 2112 (neutron)
+        groupID (int, optional): Group identifier for organizing scorers, defaults to 0
+        kill (bool, optional): Whether to kill particles after scoring, defaults to False
+        compress (bool, optional): Whether to compress HDF5 output, defaults to True
+    
+    Attributes:
+        name (str): Scorer identifier
+        pdg (int): Particle type code
+        groupID (int): Group identifier
+        kill (bool): Kill flag
+        compress (bool): Compression flag
+        use_mpi (bool): MPI support flag
+        name_mpi (str): MPI-aware name (if MPI is available)
+    
+    Methods:
+        make: Creates and adds the H5PL scorer to a volume
+    
+    Example Usage:
+        # Create an HDF5 particle logger
+        h5_logger = H5OutputHelper("particle_logger", pdg=2112, kill=False)
+        volume.addScorer(h5_logger, h5_logger.make(volume))
+    """
+    def __init__(self, name, pdg : int = 2112, groupID : int = 0, kill : bool = False, compress : bool = True) -> None:
+        def get_rank_id():
+            try:
+                # Initialize the MPI environment
+                from mpi4py import MPI
+                comm = MPI.COMM_WORLD
+                rank = comm.Get_rank()
+                return rank
+            except:
+                return None
+        
+        process_id = get_rank_id()
+
+        if process_id is None:
+            self.use_mpi=False
+        else:
+            self.use_mpi=True
+            self.name_mpi = name+f'_pro{process_id}' 
+
+        self.name = name
+        self.pdg = pdg 
+        self.groupID = groupID
+        self.kill = kill
+        self.compress = compress
+
+    def make(self, vol):
+        """
+        Create and add the H5PL scorer to the specified volume.
+        
+        Parameters:
+            vol: The volume to which the scorer will be added
+            
+        Returns:
+            The created C++ scorer object
+        """
+        cobj = _pt_H5PL_new(self.name_mpi.encode('utf-8') if self.use_mpi else self.name.encode('utf-8'), 
+                                        self.pdg,
+                                        self.groupID,
+                                        self.kill,
+                                        self.compress
+                                        )
+        vol.addScorer(self, cobj)
+        self.cobj = cobj
+        return cobj
+
+
 class MCPLOutHelper(MultiScatMixin1D):
     def __init__(self, name, pdg : int = 2112, groupID : int = 0, kill : bool = False, compress : bool = True) -> None:
         def get_rank_id():
