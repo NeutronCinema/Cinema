@@ -33,13 +33,9 @@ cimbuild -r
 
 Use `conda` cml to manage prerequisites:
 ```
-<<<<<<< HEAD
-conda create -n tmp python=3.10 cxx-compiler=1.10 cmake make=4.3 fftw unzip openmpi libxml2 xerces-c=3.2.4 mpi4py hdf5=1.12 matplotlib pyvista vtkbool vtk=*=qt*
-=======
 conda create -n pt python=3.10 
 conda activate pt
-conda install cxx-compiler=1.10 cmake make=4.3 fftw unzip openmpi libxml2=2.9.3 xerces-c=3.2.4 mpi4py hdf5=1.12
->>>>>>> 4b787a5e3548c9ac9bdc0a9ce535de853db692a6
+conda install cxx-compiler=1.10 cmake make=4.3 fftw unzip openmpi libxml2 xerces-c=3.2.4 mpi4py hdf5=1.12 matplotlib pyvista vtkbool vtk=*=qt*
 ```
 
 Then source `env.sh`
