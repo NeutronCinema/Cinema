@@ -5,9 +5,10 @@
 ncrystal
 ncrystal-pypluginmgr
 git+https://code.ihep.ac.cn/cinema-developers/ncplugin-bzscope
-mpi4py
-pyvista
-matplotlib
+git+https://github.com/highness-eu/ncplugin-SANSND.git
+# mpi4py
+# pyvista
+# matplotlib
 mcpl
 scipy
 h5py
