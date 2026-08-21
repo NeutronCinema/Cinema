@@ -66,6 +66,9 @@ def main():
             test_cpu_count = cpu_count // 2
         print(f"Running tests with {test_cpu_count} CPUs")
         run_command(f'ctest -j{test_cpu_count}')
+
+        # Python tests tree detail
+        subprocess.run([sys.executable, os.path.join(cinema_path, 'scripts', 'pytest_tree.py')])
     else:
         print("Skipped unittest")
 
