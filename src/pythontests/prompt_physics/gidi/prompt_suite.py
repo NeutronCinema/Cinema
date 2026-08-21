@@ -15,8 +15,18 @@ import numpy as np
 from testsuite import *
 
 
-CDATA=GidiSetting()
-isCompiled = CDATA.isCompiled
+# lazy initialization
+_CDATA = None
+
+
+def _get_cdata():
+    global _CDATA
+    if _CDATA is None:
+        _CDATA = GidiSetting()
+    return _CDATA
+
+
+isCompiled = GidiSetting().isCompiled
     
 # plotStyle()
 def promptRun(cfg, energy, gidiThreshold = -5, popsPath = None,
@@ -24,12 +34,12 @@ def promptRun(cfg, energy, gidiThreshold = -5, popsPath = None,
               isGammaTransport=False, partnum = 1e5, setGidi= True,
               plot=False):
     skip_test_gidi_not_compile()
-    CDATA.setEnableGidi(True)
-    CDATA.setGidiThreshold(gidiThreshold)
-    CDATA.setEnableGidiPowerIteration(False)
-    CDATA.setGammaTransport(isGammaTransport)
+    _get_cdata().setEnableGidi(True)
+    _get_cdata().setGidiThreshold(gidiThreshold)
+    _get_cdata().setEnableGidiPowerIteration(False)
+    _get_cdata().setGammaTransport(isGammaTransport)
     if not popsPath:
-        CDATA.setGidiPops(popsPath)
+        _get_cdata().setGidiPops(popsPath)
 
     numbin_mu=10
 

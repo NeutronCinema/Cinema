@@ -1,22 +1,41 @@
 #!/usr/bin/env python3
 
+from Cinema.Prompt import Prompt, PromptMPI
+from Cinema.Prompt.geo import Volume, Transformation3D
+from Cinema.Prompt.solid import Box, Sphere, Tube
+from Cinema.Prompt.gun import PythonGun
+from Cinema.Prompt.scorer import WlSpectrum
+from Cinema.Prompt.physics import Material
 import numpy as np
-import os
-from Cinema.Prompt import PromptFileReader
-
-f1='ScorerPSD_Monitor2_seed836213.mcpl.gz'
-os.system(f'rm {f1}')
-os.system('prompt -g guide.gdml -n 1e4 -s 836213')
 
 
-f = PromptFileReader(f1)
+def test_simulation():
+    expected_wl = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
-hist_weight = f.getData('content').sum()
-hist_hit = f.getData('hit').sum()
-hist_edge = f.getData('xedge').sum()
+    class MySim(Prompt):
+        def __init__(self, seed) -> None:
+            super().__init__(seed)
 
-np.set_printoptions(precision=16)
+        def makeWorld(self):
+            world = Volume('world', Box(50, 50, 200))
 
-res = np.array([hist_edge, hist_weight, hist_hit])
-print(res)
-np.testing.assert_allclose(res, [0.,1893.289934745695, 2062.], rtol=1e-15)
+            mirror = Volume('mirror', Box(2, 2, 0.0001), 'mirror=Al;substrate=Al')
+            world.placeChild('mirror', mirror, Transformation3D(0,0,20))
+
+            dtt = Volume('detector', Box(10, 10, 1))
+            scorerWl = WlSpectrum()
+            scorerWl.cfg_name = 'WavelengthSp'
+            scorerWl.cfg_min = 1
+            scorerWl.cfg_max = 2
+            scorerWl.cfg_numbin = 20
+            dtt.addScorer(scorerWl)
+            world.placeChild('detectorPhy', dtt, Transformation3D(0,0,99))
+
+            self.setWorld(world)
+
+    sim = MySim(seed=4096)
+    sim.makeWorld()
+    gunCfg = "gun=MaxwellianGun;src_w=2;src_h=2;src_z=-100;slit_w=2;slit_h=2;slit_z=1e99;temperature=293;"
+    sim.simulate(gunCfg, 1e4)
+    wlhist = sim.gatherHistData('WavelengthSp')
+    np.testing.assert_allclose(wlhist.getHit(), expected_wl)

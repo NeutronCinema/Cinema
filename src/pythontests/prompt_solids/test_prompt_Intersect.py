@@ -13,58 +13,59 @@ import numpy as np
 from Cinema.Prompt.GidiSetting import GidiSetting 
 from testsuite import skip_test_gidi_not_compile
 
-skip_test_gidi_not_compile()
-cdata=GidiSetting()
-cdata.setGidiThreshold(5)
-cdata.setEnableGidi(True)
-cdata.setEnableGidiPowerIteration(False)
-cdata.setGammaTransport(False)
 
-class MySim(Prompt):
-    def __init__(self, seed=4096, test_geo=False) -> None:
-        super().__init__(seed)   
-        self.test_geo = test_geo
+def test_simulation():
+    skip_test_gidi_not_compile()
+    cdata=GidiSetting()
+    cdata.setGidiThreshold(5)
+    cdata.setEnableGidi(True)
+    cdata.setEnableGidiPowerIteration(False)
+    cdata.setGammaTransport(False)
 
-    def makeWorld(self):
-        self.clear()
-        world = Volume("world", Box(400, 400, 400))
+    class MySim(Prompt):
+        def __init__(self, seed=4096, test_geo=False) -> None:
+            super().__init__(seed)   
+            self.test_geo = test_geo
 
-        lw = Material("'LiquidWaterH2O_T293.6K.ncmat;density=1gcm3'") 
-        if self.test_geo:
-            ssphere = Sphere(0, 300)
-            sbox = Box(100, 100, 100)
-            solid = SolidIntersection(ssphere, sbox, Transformation3D(0,0,0,0,0,0))
-        else:
-            solid = Box(100, 100, 100)     
-        
-        vwater = Volume("water", solid, matCfg=lw)
-        world.placeChild('water', vwater)
+        def makeWorld(self):
+            self.clear()
+            world = Volume("world", Box(400, 400, 400))
 
-        VolFluenceHelper('spct', max=20, numbin=300 ).make(vwater)
-        self.setWorld(world)
+            lw = Material("'LiquidWaterH2O_T293.6K.ncmat;density=1gcm3'") 
+            if self.test_geo:
+                ssphere = Sphere(0, 300)
+                sbox = Box(100, 100, 100)
+                solid = SolidIntersection(ssphere, sbox, Transformation3D(0,0,0,0,0,0))
+            else:
+                solid = Box(100, 100, 100)     
 
-gun = IsotropicGun()
-gun.setEnergy(1)
+            vwater = Volume("water", solid, matCfg=lw)
+            world.placeChild('water', vwater)
 
-# geo under test
-sim = MySim(test_geo=True)
-sim.makeWorld()
+            VolFluenceHelper('spct', max=20, numbin=300 ).make(vwater)
+            self.setWorld(world)
 
-partnum = 1e3
-sim.simulate(gun, partnum)
-spct = sim.gatherHistData('spct')
-sum1 = spct.getWeight().sum()
-np.testing.assert_allclose(sum1, 0.05853522444914256)
+    gun = IsotropicGun()
+    gun.setEnergy(1)
 
-# geo reference
-sim.clear()
-sim.test_geo=False
-sim.makeWorld()
+    # geo under test
+    sim = MySim(test_geo=True)
+    sim.makeWorld()
 
-sim.simulate(gun, partnum)
-spct = sim.gatherHistData('spct')
-sumref = spct.getWeight().sum()
-np.testing.assert_allclose(sumref, 0.06053628305891873)
+    partnum = 1e3
+    sim.simulate(gun, partnum)
+    spct = sim.gatherHistData('spct')
+    sum1 = spct.getWeight().sum()
+    np.testing.assert_allclose(sum1, 0.05853522444914256)
 
-print(sum1, sumref)
+    # geo reference
+    sim.clear()
+    sim.test_geo=False
+    sim.makeWorld()
 
+    sim.simulate(gun, partnum)
+    spct = sim.gatherHistData('spct')
+    sumref = spct.getWeight().sum()
+    np.testing.assert_allclose(sumref, 0.06053628305891873)
+
+    print(sum1, sumref)

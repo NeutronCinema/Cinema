@@ -45,7 +45,7 @@ def err_exp(a, sa):
 def test_add_sub():
     """Test addition and subtraction error propagation"""
     # Use smaller dataset, ensure unique values
-    data = np.arange(1, 21)  # 20 values 
+    data = np.arange(1, 21)  # 20 values
     a = CinemaArray.from_counts(data)
     b = CinemaArray.from_sdev(data, np.sqrt(data))
 
@@ -54,7 +54,7 @@ def test_add_sub():
     np.testing.assert_allclose(c.mean, a.mean + b.mean, rtol=1e-12)
     np.testing.assert_allclose(c.sdev, err_add_sub(a.sdev, b.sdev), rtol=1e-12)
 
-    # Test subtraction 
+    # Test subtraction
     d = a - b
     np.testing.assert_allclose(d.mean, a.mean - b.mean, rtol=1e-12)
     np.testing.assert_allclose(d.sdev, err_add_sub(a.sdev, b.sdev), rtol=1e-12)
@@ -64,7 +64,7 @@ def test_multiply():
     """Test multiplication error propagation"""
     data1 = np.arange(1, 21)
     data2 = np.arange(2, 22)
-    
+
     a = CinemaArray.from_counts(data1)
     b = CinemaArray.from_sdev(data2, np.sqrt(data2))
 
@@ -77,7 +77,7 @@ def test_divide():
     """Test division error propagation"""
     data1 = np.arange(1, 21)
     data2 = np.arange(10, 30)  # Larger numbers for division denominator
-    
+
     a = CinemaArray.from_counts(data1)
     b = CinemaArray.from_sdev(data2, np.sqrt(data2))
 
@@ -108,7 +108,7 @@ def test_power():
     data = np.arange(1, 6)  # Small positive integers
     a = CinemaArray.from_counts(data)
     n = 2  # Square
-    
+
     try:
         # Try direct power operation
         b = a ** n
@@ -123,11 +123,11 @@ def test_power():
         except Exception as e:
             print(f"SKIP power: neither operation worked: {e}")
             return 0
-    
+
     # Compare results using raw arrays
     np.testing.assert_allclose(
-        np.asarray(b.mean), 
-        np.power(np.asarray(a.mean), n), 
+        np.asarray(b.mean),
+        np.power(np.asarray(a.mean), n),
         rtol=1e-12
     )
     np.testing.assert_allclose(
@@ -141,7 +141,7 @@ def test_exponential():
     """Test exponential operation"""
     data = np.array([0.1, 0.2, 0.3, 0.4, 0.5])  # Small values
     a = CinemaArray.from_counts(data)
-    
+
     try:
         # Try numpy exp
         b = np.exp(a)
@@ -156,7 +156,7 @@ def test_exponential():
         except Exception as e:
             print(f"SKIP exponential: neither operation worked: {e}")
             return 0
-    
+
     # Compare results using raw arrays
     np.testing.assert_allclose(
         np.asarray(b.mean),
@@ -204,5 +204,9 @@ def main():
 
 
 if __name__ == "__main__":
-    import sys
     sys.exit(main())
+
+
+def test_cinema_array_ops():
+    import sys
+

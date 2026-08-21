@@ -90,15 +90,8 @@ set(Python_FIND_STRATEGY LOCATION)
 set(Python_ROOT_DIR ${PROJECT_SOURCE_DIR}/cinemavirenv/bin/python)
 find_package(Python REQUIRED COMPONENTS Interpreter)
 
-file(GLOB_RECURSE TESTFILES "${CMAKE_CURRENT_SOURCE_DIR}/src/pythontests/test_*.py")
-foreach(TS ${TESTFILES})
-	# message(STATUS "Running ${Python_EXECUTABLE} ${TS}")
-	get_filename_component(EXCNAME  ${TS}  NAME_WE)
-	add_test (NAME python-${EXCNAME}
-	  COMMAND ${Python_EXECUTABLE} ${TS}
-	  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cinemabin #fixme find a temp dir defined in the enviroment
-	)
-  set_tests_properties(
-    python-${EXCNAME} PROPERTIES SKIP_REGULAR_EXPRESSION "PT_SKIP_TEST"
-  )
-endforeach(TS ${TESTFILES})
+# Python tests via pytest (auto-discovers test_*.py in src/pythontests/)
+add_test(NAME python-tests
+  COMMAND ${Python_EXECUTABLE} -m pytest ${PROJECT_SOURCE_DIR}/src/pythontests/ -v --forked
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cinemabin
+)

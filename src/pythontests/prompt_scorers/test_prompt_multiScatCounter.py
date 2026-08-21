@@ -6,191 +6,189 @@ from Cinema.Prompt.solid import Box, Tube, Sphere
 from Cinema.Prompt.scorer import ESpectrumHelper, MultiScatCounter
 from Cinema.Prompt.physics import Material
 from Cinema.Prompt.gun import SimpleThermalGun
-from Cinema.Prompt.GidiSetting import GidiSetting 
+from Cinema.Prompt.GidiSetting import GidiSetting
 import numpy as np
 
-cdata=GidiSetting()
-cdata.setEnableGidi(False)
-cdata.setGammaTransport(False)
 
-def test_direct_exit():
-    class MySim(PromptMPI):
-        def __init__(self, seed=4096) -> None:
-            super().__init__(seed)   
+def test_prompt_multiScatCounter():
+    cdata=GidiSetting()
+    cdata.setEnableGidi(False)
+    cdata.setGammaTransport(False)
 
-        def makeWorld(self):
-            length = 1e6
-            world = Volume('world', Box(50, 50, length * 2 + 100))
+    def test_direct_exit():
+        class MySim(PromptMPI):
+            def __init__(self, seed=4096) -> None:
+                super().__init__(seed)   
 
-            sample_mat = "void.ncmat"
+            def makeWorld(self):
+                length = 1e6
+                world = Volume('world', Box(50, 50, length * 2 + 100))
 
-            pensil = Volume('pensil', Tube(0,1e-9,length,), sample_mat)
-            scatterCounter = MultiScatCounter()
-            scatterCounter.make(pensil)
-            
-            world.placeChild('physicalSample', pensil, Transformation3D(z=length))
+                sample_mat = "void.ncmat"
 
-            self.setWorld(world)
+                pensil = Volume('pensil', Tube(0,1e-9,length,), sample_mat)
+                scatterCounter = MultiScatCounter()
+                scatterCounter.make(pensil)
 
-    sim = MySim(seed=1010)
-    sim.makeWorld()
+                world.placeChild('physicalSample', pensil, Transformation3D(z=length))
 
-    gun = SimpleThermalGun()
-    gun.setEnergy(0.05)
-    gun.setPosition([0,0,-150])
+                self.setWorld(world)
 
+        sim = MySim(seed=1010)
+        sim.makeWorld()
 
-    if 0:
-        partnum = 100
-        sim.show(gun, partnum)
-    else:
-        partnum = 100
-        sim.simulate(gun, partnum)
-
-    dtt0 = sim.gatherHistData("ScatterCounter")
-    score = dtt0.getWeight()
-    print(score)
-    np.testing.assert_allclose(score[2], 100.)
-    sim.clear()
+        gun = SimpleThermalGun()
+        gun.setEnergy(0.05)
+        gun.setPosition([0,0,-150])
 
 
-def test_scatter_once():
-    """Use a pensil model, all particle scatter once and exit"""
-    g_scatNum = 1
+        if 0:
+            partnum = 100
+            sim.show(gun, partnum)
+        else:
+            partnum = 100
+            sim.simulate(gun, partnum)
 
-    class MySim(PromptMPI):
-        def __init__(self, seed=4096) -> None:
-            super().__init__(seed)   
-
-        def makeWorld(self):
-            length = 1e6
-            world = Volume('world', Box(50, 50, length * 2 + 100))
-
-            sample_mat = 'physics=idealElaScat;xs_barn=1;density_per_aa3=0.01;energy_transfer_eV=0.01'
-
-            pensil = Volume('pensil', Tube(0,1e-9,length,), sample_mat)
-            scatterCounter = MultiScatCounter()
-            scatterCounter.make(pensil)
-            
-            world.placeChild('physicalSample', pensil, Transformation3D(z=length))
-
-            self.setWorld(world)
-
-    sim = MySim(seed=1010)
-    sim.makeWorld()
-
-    gun = SimpleThermalGun()
-    gun.setEnergy(0.05)
-    gun.setPosition([0,0,-150])
+        dtt0 = sim.gatherHistData("ScatterCounter")
+        score = dtt0.getWeight()
+        print(score)
+        np.testing.assert_allclose(score[2], 100.)
+        sim.clear()
 
 
-    if 0:
-        partnum = 100
-        sim.show(gun, partnum)
-    else:
-        partnum = 100
-        sim.simulate(gun, partnum)
+    def test_scatter_once():
+        """Use a pensil model, all particle scatter once and exit"""
+        g_scatNum = 1
 
-    dtt0 = sim.gatherHistData("ScatterCounter")
-    score = dtt0.getWeight()
-    print(score)
-    np.testing.assert_allclose(score[3], 100.)
-    sim.clear()
+        class MySim(PromptMPI):
+            def __init__(self, seed=4096) -> None:
+                super().__init__(seed)   
 
-def test_scatter_twice():
-    """Use a perfect scatter and a reflector model, all particle must scatter twice to exit"""
-    g_scatNum = 1
-    class MySim(PromptMPI):
-        def __init__(self, seed=4096) -> None:
-            super().__init__(seed)   
+            def makeWorld(self):
+                length = 1e6
+                world = Volume('world', Box(50, 50, length * 2 + 100))
 
-        def makeWorld(self):
-            length = 20000
-            world = Volume('world', Box(10000, 10000, length * 2 + 10000))
+                sample_mat = 'physics=idealElaScat;xs_barn=1;density_per_aa3=0.01;energy_transfer_eV=0.01'
 
-            sample_mat = 'physics=idealElaScat;xs_barn=100000;density_per_aa3=10000;energy_transfer_eV=0.01'
-            surf_cfg = "physics=EnergyReflector;ekin=0.031;islessthan=0" # reflect particles whose energy > 0.031
+                pensil = Volume('pensil', Tube(0,1e-9,length,), sample_mat)
+                scatterCounter = MultiScatCounter()
+                scatterCounter.make(pensil)
 
-            sample = Volume('samplebox', Tube(1000,1000,1000), sample_mat)
-            reflector = Volume('reflector', Sphere(2000,2000+1e-6,0, 360, 0, 180-0.001), "void.ncmat", surf_cfg)
-            reflector2 = Volume('reflector2', Box(1,1,1e-3), "void.ncmat", surf_cfg)
+                world.placeChild('physicalSample', pensil, Transformation3D(z=length))
 
-            scatterCounter = MultiScatCounter()
-            scatterCounter.make(sample)
-            
-            world.placeChild('sample', sample)
-            world.placeChild('reflector', reflector, Transformation3D(z=0))
-            world.placeChild('reflector2', reflector2, Transformation3D(z=1800).applyRotX(45))
-            
-            self.setWorld(world)
+                self.setWorld(world)
 
-    sim = MySim(seed=1010)
-    sim.makeWorld()
+        sim = MySim(seed=1010)
+        sim.makeWorld()
 
-    gun = SimpleThermalGun()
-    gun.setEnergy(0.05)
-    gun.setPosition([0,0,-150])
+        gun = SimpleThermalGun()
+        gun.setEnergy(0.05)
+        gun.setPosition([0,0,-150])
 
 
-    if 0:
-        partnum = 1
-        sim.show(gun, partnum)
-    else:
-        partnum = 10 # keep it small to avoid long simulation
-        sim.simulate(gun, partnum)
+        if 0:
+            partnum = 100
+            sim.show(gun, partnum)
+        else:
+            partnum = 100
+            sim.simulate(gun, partnum)
 
-    dtt0 = sim.gatherHistData("ScatterCounter")
-    score = dtt0.getWeight()
-    print(score)
+        dtt0 = sim.gatherHistData("ScatterCounter")
+        score = dtt0.getWeight()
+        print(score)
+        np.testing.assert_allclose(score[3], 100.)
+        sim.clear()
 
-    # must scatter twice
-    np.testing.assert_allclose(score[4], 10.)
-    # when a particle scatter twice, it must scatter once before
-    np.testing.assert_allclose(score[3], 10.)
-    sim.clear()
+    def test_scatter_twice():
+        """Use a perfect scatter and a reflector model, all particle must scatter twice to exit"""
+        g_scatNum = 1
+        class MySim(PromptMPI):
+            def __init__(self, seed=4096) -> None:
+                super().__init__(seed)   
 
-def test_direct_absorb():
-    class MySim(PromptMPI):
-        def __init__(self, seed=4096) -> None:
-            super().__init__(seed)   
+            def makeWorld(self):
+                length = 20000
+                world = Volume('world', Box(10000, 10000, length * 2 + 10000))
 
-        def makeWorld(self):
-            length = 5
-            world = Volume('world', Box(50, 50, length * 2 + 100))
+                sample_mat = 'physics=idealElaScat;xs_barn=100000;density_per_aa3=10000;energy_transfer_eV=0.01'
+                surf_cfg = "physics=EnergyReflector;ekin=0.031;islessthan=0" # reflect particles whose energy > 0.031
 
-            sample_mat = "B4C_sg166_BoronCarbide.ncmat"
+                sample = Volume('samplebox', Tube(1000,1000,1000), sample_mat)
+                reflector = Volume('reflector', Sphere(2000,2000+1e-6,0, 360, 0, 180-0.001), "void.ncmat", surf_cfg)
+                reflector2 = Volume('reflector2', Box(1,1,1e-3), "void.ncmat", surf_cfg)
 
-            sample = Volume('sample', Tube(0,5,length,), sample_mat)
-            scatterCounter = MultiScatCounter()
-            scatterCounter.make(sample)
-            
-            world.placeChild('physicalSample', sample, Transformation3D(z=length))
+                scatterCounter = MultiScatCounter()
+                scatterCounter.make(sample)
 
-            self.setWorld(world)
+                world.placeChild('sample', sample)
+                world.placeChild('reflector', reflector, Transformation3D(z=0))
+                world.placeChild('reflector2', reflector2, Transformation3D(z=1800).applyRotX(45))
 
-    sim = MySim(seed=1010)
-    sim.makeWorld()
+                self.setWorld(world)
 
-    gun = SimpleThermalGun()
-    gun.setWavelength(8)
-    gun.setPosition([0,0,-100])
+        sim = MySim(seed=1010)
+        sim.makeWorld()
+
+        gun = SimpleThermalGun()
+        gun.setEnergy(0.05)
+        gun.setPosition([0,0,-150])
 
 
-    if 0:
-        partnum = 100
-        sim.show(gun, partnum)
-    else:
-        partnum = 100
-        sim.simulate(gun, partnum)
+        if 0:
+            partnum = 1
+            sim.show(gun, partnum)
+        else:
+            partnum = 10 # keep it small to avoid long simulation
+            sim.simulate(gun, partnum)
 
-    dtt0 = sim.gatherHistData("ScatterCounter")
-    score = dtt0.getWeight()
-    print(score)
-    np.testing.assert_allclose(score[2], 100.)
-    sim.clear()
+        dtt0 = sim.gatherHistData("ScatterCounter")
+        score = dtt0.getWeight()
+        print(score)
 
-if __name__ == '__main__':
-    test_direct_exit()
-    test_scatter_once()
-    test_scatter_twice()
-    test_direct_absorb()
+        # must scatter twice
+        np.testing.assert_allclose(score[4], 10.)
+        # when a particle scatter twice, it must scatter once before
+        np.testing.assert_allclose(score[3], 10.)
+        sim.clear()
+
+    def test_direct_absorb():
+        class MySim(PromptMPI):
+            def __init__(self, seed=4096) -> None:
+                super().__init__(seed)   
+
+            def makeWorld(self):
+                length = 5
+                world = Volume('world', Box(50, 50, length * 2 + 100))
+
+                sample_mat = "B4C_sg166_BoronCarbide.ncmat"
+
+                sample = Volume('sample', Tube(0,5,length,), sample_mat)
+                scatterCounter = MultiScatCounter()
+                scatterCounter.make(sample)
+
+                world.placeChild('physicalSample', sample, Transformation3D(z=length))
+
+                self.setWorld(world)
+
+        sim = MySim(seed=1010)
+        sim.makeWorld()
+
+        gun = SimpleThermalGun()
+        gun.setWavelength(8)
+        gun.setPosition([0,0,-100])
+
+
+        if 0:
+            partnum = 100
+            sim.show(gun, partnum)
+        else:
+            partnum = 100
+            sim.simulate(gun, partnum)
+
+        dtt0 = sim.gatherHistData("ScatterCounter")
+        score = dtt0.getWeight()
+        print(score)
+        np.testing.assert_allclose(score[2], 100.)
+        sim.clear()
+
+

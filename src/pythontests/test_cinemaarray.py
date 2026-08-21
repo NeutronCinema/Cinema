@@ -48,4 +48,6 @@ def test_add():
     np.testing.assert_array_equal((a+b).sdev, err_add_sub(a.sdev, b.sdev))
 
 
-test_add()
+def test_cinemaarray():
+    test_add()
+
