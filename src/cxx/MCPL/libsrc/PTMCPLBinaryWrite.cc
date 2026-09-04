@@ -86,6 +86,11 @@ void Prompt::MCPLBinaryWrite::write(const mcpl_particle_t &p)
   mcpl_add_particle(m_file, m_particleInFile);
 }
 
+//fixme: this overload writes time in seconds (p.getTime()), violating the MCPL
+//millisecond convention - the write(const Particle&) overload below converts
+//correctly (*1e3). Kept as-is because existing output files and downstream
+//scripts interpret the stored value as seconds. Use write(const Particle&)
+//for spec-compliant mcpl output.
 void Prompt::MCPLBinaryWrite::write(const Particle &p, int scatterNumber)
 {
   if(m_fileCreated) init();
