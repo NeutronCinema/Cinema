@@ -21,8 +21,8 @@
 #include "PTKillerMCPL.hh"
 #include "PTMCPLBinaryWrite.hh"
 
-Prompt::KillerMCPL::KillerMCPL(const std::string &name, unsigned int pdg, int groupid, bool kill, bool compress)
-:Scorer1D("KillerMCPL_"+name, Scorer::ScorerType::ENTRY, std::make_unique<Hist1D>("KillerMCPL_"+name, -2.5, 100.5, 103, true), pdg=pdg, groupid=groupid),
+Prompt::KillerMCPL::KillerMCPL(const std::string &name, unsigned int pdg, int groupid, bool kill, bool compress, ScorerType type)
+:Scorer1D("KillerMCPL_"+name, type, std::make_unique<Hist1D>("KillerMCPL_"+name, -2.5, 100.5, 103, true), pdg=pdg, groupid=groupid),
 m_writer(new MCPLBinaryWrite(name+".mcpl", false, true, true, compress)),
 m_kill(kill)
 {

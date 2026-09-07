@@ -29,7 +29,7 @@ namespace Prompt {
 
   class KillerMCPL  : public Scorer1D {
   public:
-    KillerMCPL(const std::string &name, unsigned int pdg, int groupid, bool kill=false, bool compress=true);
+    KillerMCPL(const std::string &name, unsigned int pdg, int groupid, bool kill=false, bool compress=true, ScorerType type=ScorerType::ENTRY);
     virtual ~KillerMCPL();
     virtual void score(Particle &particle) override;
   private:

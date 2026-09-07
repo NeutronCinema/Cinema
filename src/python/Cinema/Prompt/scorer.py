@@ -94,7 +94,10 @@ class ParticleTracingState(Enum):
             'PEA_POST': cls.PEA_POST,
             'ABSORB': cls.ABSORB
         }
-        return mapping.get(state_str.upper(), cls.ENTRY)
+        key = state_str.upper()
+        if key not in mapping:
+            raise ValueError(f"Unknown ptstate '{state_str}'. Valid states: {sorted(mapping)}")
+        return mapping[key]
 
     def to_string(self):
         """Convert enum instance to string representation"""
@@ -137,7 +140,7 @@ _pt_ScorerPSD_new = importFunc('pt_ScorerPSD_new', type_voidp, [type_cstr, type_
 _pt_addMultiScatter1D = importFunc('pt_addMultiScatter1D', None, [type_voidp, type_voidp, type_int])
 _pt_addMultiScatter2D = importFunc('pt_addMultiScatter2D', None, [type_voidp, type_voidp, type_int])
 
-_pt_KillerMCPL_new = importFunc('pt_KillerMCPL_new', type_voidp, [type_cstr, type_uint, type_int, type_bool, type_bool])
+_pt_KillerMCPL_new = importFunc('pt_KillerMCPL_new', type_voidp, [type_cstr, type_uint, type_int, type_bool, type_bool, type_int])
 class ScorerHelper:
     def __init__(self, name, min, max, numbin, pdg = 2112, ptstate=None, groupID=0) -> None:
         self.name = name
@@ -739,7 +742,7 @@ def makePSD(name, vol, numbin_dim1=1, numbin_dim2=1, ptstate : str = 'ENTRY', ty
 
         
 class MCPLOutHelper(MultiScatMixin1D):
-    def __init__(self, name, pdg : int = 2112, groupID : int = 0, kill : bool = False, compress : bool = True) -> None:
+    def __init__(self, name, pdg : int = 2112, groupID : int = 0, kill : bool = False, compress : bool = True, ptstate='ENTRY') -> None:
         def get_rank_id():
             try:
                 # Initialize the MPI environment
@@ -759,17 +762,25 @@ class MCPLOutHelper(MultiScatMixin1D):
             self.name_mpi = name+f'_pro{process_id}' 
 
         self.name = name
-        self.pdg = pdg 
+        self.pdg = pdg
         self.groupID = groupID
         self.kill = kill
         self.compress = compress
 
+        if isinstance(ptstate, ParticleTracingState):
+            ptstate = ptstate.to_string()
+        self.ptstate = ptstate
+        self.ptsNum = ParticleTracingState.from_string(ptstate).value_num
+        if self.kill and self.ptsNum != ParticleTracingState.ENTRY.value_num:
+            raise ValueError("kill=True only makes sense with ENTRY: PEA_POST/PROPAGATE_POST scores at every collision and would kill the particle at the first one")
+
     def make(self, vol):
-        cobj = _pt_KillerMCPL_new(self.name_mpi.encode('utf-8') if self.use_mpi else self.name.encode('utf-8'), 
+        cobj = _pt_KillerMCPL_new(self.name_mpi.encode('utf-8') if self.use_mpi else self.name.encode('utf-8'),
                                         self.pdg,
                                         self.groupID,
                                         self.kill,
-                                        self.compress
+                                        self.compress,
+                                        self.ptsNum
                                         )
         vol.addScorer(self, cobj)
         self.cobj = cobj
