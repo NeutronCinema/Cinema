@@ -43,12 +43,18 @@ Classes:
     Tetrahedron - Tetrahedral solid from 4 vertices
     GenTrapezoid - Generalized trapezoid with complex parameters
     Ellipsoid - Ellipsoidal solid with optional cuts
+
+Every Solid also carries the mesh & boolean handling mixed in from
+Mesh.BoolSolidMeshHandlerMixin (to_polydata / capacity / to_tessellated /
+roundtrip_report on instances; boolean engine + clean_for_tessellated +
+structured_cylinder as statics).
 """
 
 import numpy as np
 from ..Interface import *
 from typing import Union
 from .geo import Transformation3D
+from .Mesh import BoolSolidMeshHandlerMixin
 
 # C extension function imports for all solid types
 _pt_Box_new = importFunc('pt_Box_new', type_voidp, [type_dbl, type_dbl, type_dbl])
@@ -76,13 +82,18 @@ _pt_solid_intersection = importFunc('pt_solid_intersection', type_voidp, [type_v
 _pt_solid_union = importFunc('pt_solid_union', type_voidp, [type_voidp, type_voidp, type_voidp])
 _pt_solid_subtraction = importFunc('pt_solid_subtraction', type_voidp, [type_voidp, type_voidp, type_voidp])
 
-class Solid:
+class Solid(BoolSolidMeshHandlerMixin):
     """
     Base class for all geometric solids.
-    
+
     Provides common validation methods and serves as the foundation for
-    all specific geometric shapes
-    
+    all specific geometric shapes.  Every Solid inherits the mesh/boolean
+    handling of :class:`~Cinema.Prompt.Mesh.BoolSolidMeshHandlerMixin`:
+    ``to_polydata()`` / ``capacity()`` / ``to_tessellated()`` /
+    ``roundtrip_report()`` on instances, the trimesh/manifold3d boolean
+    engine and mesh conditioning (``boolean`` / ``clean_for_tessellated``
+    / ``structured_cylinder``) as statics.
+
     """
 
     def _sanityCheckPositive(self, *args: Union[float, int, np.ndarray]):
@@ -336,9 +347,15 @@ class Tessellated(Solid):
             import pyvista
         except:
             raise ImportError("pyvista is required to visualize.")
-        super().__init__()
         if not isinstance(polydata, pyvista.core.pointset.PolyData):
             raise RuntimeError('Tessellated solid only supports pyvista.core.pointset.PolyData')
+        # the C++ binding silently drops faces with more than 4 vertices,
+        # which would punch holes into the volume
+        sizes = self._face_sizes(polydata)
+        if sizes.size and sizes.max() > 4:
+            raise ValueError(f'mesh has faces with up to {sizes.max()} vertices; '
+                             'the C++ binding silently drops them. Triangulate '
+                             'first (clean_for_tessellated does).')
         points = polydata.points.astype(float)
         faces = polydata.faces
         if tranMat is not None:
@@ -528,7 +545,6 @@ class PolyCone(Solid):
 
 class Tetrahedron(Solid):
     def __init__(self, p1, p2, p3, p4) -> None:
-        super().__init__()
         ps = self._arrayCheck(p1, p2, p3, p4)
         self.cobj = _pt_Tet_new(ps[0], ps[1], ps[2], ps[3])
     

@@ -55,11 +55,47 @@ const char* pt_getPhysicalVolumeName(size_t pvolID);
 const char* pt_getMeshName(size_t pvolID);
 void pt_getLogVolumeInfo(size_t pvolID, char* cp);
 const char* pt_getLogicalVolumeMaterialName(size_t pvolID);
+const char* pt_getLogicalVolumeSurfaceProcessName(size_t pvolID);
 void pt_meshInfo(size_t pvolID, size_t nSegments, size_t &npoints, size_t &nPlolygen, size_t &faceSize,
                   int &leftvolID, int &rightvolID, size_t &boolOp);
 void pt_generatePointCloud(size_t pvolID, size_t nPoint, double *points, double *normals);
 void pt_getMesh(size_t nodeID, size_t nSegments, float *points, size_t *NumPolygonPoints, size_t *faces, size_t pvolID);
 void pt_printMesh();
+
+// solid -> mesh extraction from a bare Solid (its own cobj), no
+// GeoTree/world required. Unlike pt_getMesh above (GeoTree based, global
+// frame, float), these output the solid's LOCAL frame in double precision,
+// as required by UnplacedTessellated::Close (1e-9 mm vertex dedup).
+// Two-phase protocol: query the sizes, allocate on the python side, then fill.
+//   status 0 = ok, 1 = CreateMesh3D not implemented for this solid
+//   (boolean solids return nullptr -> mesh on the pyvista/trimesh side instead),
+//   2 = empty mesh.
+// faces is the flat VTK layout [n, i1..in, ...]; faceSize counts n as well.
+int pt_solid_meshInfo(void* unplaced, size_t nSegments,
+                      size_t* npoints, size_t* npolygons, size_t* faceSize);
+int pt_solid_getMesh(void* unplaced, size_t nSegments,
+                     double* points, size_t* faces);
+// Analytic capacity of a bare solid, mm^3 (works without a world/Volume).
+double pt_solid_capacity(void* unplaced);
+
+// Unpack a boolean solid so python can mesh its operands on the pyvista side:
+//   status 0 = it is a boolean (outputs filled), 1 = not a boolean solid.
+// left/right receive the operand VUnplacedVolume*, left_trans/right_trans
+// their placement vg::Transformation3D* (members of the placed operand
+// volumes, which live as long as the solid; pt_solid_* never deletes them).
+// op uses the BooleanOp_t codes above (Union=1, Subtraction=2,
+// Intersection=3); the left operand sits at identity by construction
+// (pt_solid_* and the GDML loader both Place() it bare).
+int pt_solid_boolInfo(void* unplaced, unsigned* op,
+                      void** left, void** left_trans,
+                      void** right, void** right_trans);
+
+// Apply the INVERSE of a vg::Transformation3D to a point batch
+// (local->master direction - what baking a placement into mesh points
+// needs; Transformation3D::Transform is master->local, see
+// SolidMesh::TransformVertices for the VecGeom-internal precedent).
+void pt_Transformation3D_inverseTransform(void* trfm, size_t numPt,
+                                          double* in, double* out);
 
 #ifdef __cplusplus
 }

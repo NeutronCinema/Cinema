@@ -53,6 +53,7 @@ run_moderator.py                       pod_denoise.py                sample_sour
 | [03-python-core.md](03-python-core.md) | Phase 2–4：包内核心模块（podfield / pod / mcplout / sourcesampler）API 草案 |
 | [04-drivers-tests.md](04-drivers-tests.md) | Phase 5–6：驱动脚本、pytest 测试、端到端验证 |
 | [05-facts-risks.md](05-facts-risks.md) | 已核实关键事实（单位/ABI/MPI/测试模式）与风险对策 |
+| [06-mesh-transport.md](06-mesh-transport.md) | 独立能力：Solid → pyvista 网格 → `Tessellated` 回输运（并入 Mesh.py；含 Solid 级布尔 × Transformation3D，2026-09-07 立项） |
 
 ## 5. 新增文件地图
 

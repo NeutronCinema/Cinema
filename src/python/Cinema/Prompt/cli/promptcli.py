@@ -280,6 +280,8 @@ class PromptPyScriptParser(PromptBaseParser):
                 arg_kwargs['required'] = True
             
             if info['type'] is bool:
+                # store_true/store_false actions take no type= converter
+                arg_kwargs.pop('type', None)
                 if info['default'] is True:
                     group.add_argument(f"--no-{param_name}", action='store_false', **arg_kwargs)
                 else:

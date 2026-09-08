@@ -238,6 +238,16 @@ const char* pt_getLogicalVolumeMaterialName(size_t pvolID)
   return resman.getLogicalVolumeMaterialName(node->logical);
 }
 
+const char* pt_getLogicalVolumeSurfaceProcessName(size_t pvolID)
+{
+  auto tree = Prompt::Singleton<Prompt::GeoTree>::getInstance();
+  const auto node = tree.m_fullTreeNode[pvolID];
+  auto &resman = Prompt::Singleton<Prompt::ResourceManager>::getInstance();
+  
+  return resman.getLogicalVolumeSurfaceProcessName(node->logical);
+}
+
+
 void pt_getLogVolumeInfo(size_t pvolID, char* cp)
 {
   auto tree = Prompt::Singleton<Prompt::GeoTree>::getInstance();
@@ -330,5 +340,120 @@ void pt_printMesh()
         std::cout << v << std::endl;
       }
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// solid -> mesh extraction on a bare solid (local frame, double).  Declared
+// in this header (not PTVecGeom) because it is the mesh-helper domain; the
+// python side wraps these in the BoolSolidMeshHandlerMixin class (Mesh.py),
+// mixed into the Cinema Solid base class.
+// Boolean solids do not implement CreateMesh3D (nullptr) -> status 1, the
+// python side unpacks the operands via pt_solid_boolInfo instead.
+// ---------------------------------------------------------------------------
+int pt_solid_meshInfo(void *unplaced, size_t nSegments,
+                      size_t *npoints, size_t *npolygons, size_t *faceSize)
+{
+  auto *solid = static_cast<vecgeom::VUnplacedVolume *>(unplaced);
+  vecgeom::Transformation3D identity;
+  auto *mesh = solid->CreateMesh3D(identity, nSegments);
+  if (!mesh) {
+    *npoints = *npolygons = *faceSize = 0;
+    return 1;
+  }
+  auto &polygons = mesh->GetPolygons();
+  if (polygons.empty()) {
+    delete mesh;
+    *npoints = *npolygons = *faceSize = 0;
+    return 2;
+  }
+  *npolygons = polygons.size();
+  // fVert is the vertex pool shared by every polygon (Utils3D.h)
+  *npoints = polygons[0].fVert.size();
+  *faceSize = 0;
+  for (const auto &poly : polygons)
+    *faceSize += poly.fInd.size() + 1; // vertex indices + leading count
+
+  delete mesh;
+  return 0;
+}
+
+int pt_solid_getMesh(void *unplaced, size_t nSegments,
+                     double *points, size_t *faces)
+{
+  auto *solid = static_cast<vecgeom::VUnplacedVolume *>(unplaced);
+  vecgeom::Transformation3D identity;
+  auto *mesh = solid->CreateMesh3D(identity, nSegments);
+  if (!mesh)
+    return 1;
+  auto &polygons = mesh->GetPolygons();
+  if (polygons.empty()) {
+    delete mesh;
+    return 2;
+  }
+  for (const auto &vert : polygons[0].fVert) {
+    *(points++) = vert[0];
+    *(points++) = vert[1];
+    *(points++) = vert[2];
+  }
+  for (const auto &poly : polygons) {
+    *(faces++) = poly.fN;
+    for (auto idx : poly.fInd)
+      *(faces++) = idx;
+  }
+  delete mesh;
+  return 0;
+}
+
+double pt_solid_capacity(void *unplaced)
+{
+  return static_cast<vecgeom::VUnplacedVolume *>(unplaced)->Capacity();
+}
+
+int pt_solid_boolInfo(void *unplaced, unsigned *op,
+                      void **left, void **left_trans,
+                      void **right, void **right_trans)
+{
+  auto *solid = static_cast<vecgeom::VUnplacedVolume *>(unplaced);
+  // same dynamic_cast dispatch as pt_meshInfo's boolean branch
+  vecgeom::VPlacedVolume const *lvol = nullptr;
+  vecgeom::VPlacedVolume const *rvol = nullptr;
+  if (auto u = dynamic_cast<vecgeom::UnplacedBooleanVolume<vecgeom::kUnion> const *>(solid)) {
+    *op = BooleanOp_t::Union;
+    lvol = u->GetLeft();
+    rvol = u->GetRight();
+  } else if (auto s = dynamic_cast<vecgeom::UnplacedBooleanVolume<vecgeom::kSubtraction> const *>(solid)) {
+    *op = BooleanOp_t::Subtraction;
+    lvol = s->GetLeft();
+    rvol = s->GetRight();
+  } else if (auto i = dynamic_cast<vecgeom::UnplacedBooleanVolume<vecgeom::kIntersection> const *>(solid)) {
+    *op = BooleanOp_t::Intersection;
+    lvol = i->GetLeft();
+    rvol = i->GetRight();
+  } else {
+    *op = 0;
+    *left = *left_trans = *right = *right_trans = nullptr;
+    return 1;
+  }
+  // the operand unplaced solids are the caller's originals (non-const);
+  // the transforms are members of the placed operand volumes
+  *left = const_cast<vecgeom::VUnplacedVolume *>(lvol->GetLogicalVolume()->GetUnplacedVolume());
+  *left_trans = const_cast<vecgeom::Transformation3D *>(lvol->GetTransformation());
+  *right = const_cast<vecgeom::VUnplacedVolume *>(rvol->GetLogicalVolume()->GetUnplacedVolume());
+  *right_trans = const_cast<vecgeom::Transformation3D *>(rvol->GetTransformation());
+  return 0;
+}
+
+void pt_Transformation3D_inverseTransform(void *trfm, size_t numPt,
+                                          double *in, double *out)
+{
+  auto mat = static_cast<const vecgeom::Transformation3D *>(trfm);
+  for (size_t i = 0; i < numPt; ++i)
+  {
+    auto vert = *reinterpret_cast<const vecgeom::Vector3D<vecgeom::Precision> *>(in + i * 3);
+    auto vertTransformed = mat->InverseTransform(vert);
+    *(out + i * 3) = vertTransformed.x();
+    *(out + i * 3 + 1) = vertTransformed.y();
+    *(out + i * 3 + 2) = vertTransformed.z();
   }
 }
