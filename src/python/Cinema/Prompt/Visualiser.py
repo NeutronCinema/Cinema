@@ -33,6 +33,71 @@ except Exception as e:
     print(e)
     sys.exit(1)
 
+
+class VizTheme:
+    """Render settings for one display style of the geometry visualiser.
+
+    Bundles everything that distinguishes one look from another: mesh
+    opacity and shading, shadows, anti-aliasing, depth peeling and the
+    background gradient.  VTK shadow mapping only supports opaque
+    actors, so translucent themes must keep it off; layered transparency
+    is ordered by depth peeling instead.
+    """
+
+    def __init__(self, *, opacity=1.0, clip_opacity=0.85, shadows=False,
+                 depth_peeling=False, anti_aliasing='msaa',
+                 background=('#fbfcfe', '#e2e8f0'), silhouette=False,
+                 specular=0.0, specular_power=15.0, ambient=0.25,
+                 diffuse=0.8, smooth_shading=True):
+        self.opacity = opacity
+        # geoClip deliberately stays slightly translucent so the cut-open
+        # interior remains visible
+        self.clip_opacity = clip_opacity
+        self.shadows = shadows
+        self.depth_peeling = depth_peeling
+        self.anti_aliasing = anti_aliasing
+        self.background = background
+        self.silhouette = silhouette
+        self.specular = specular
+        self.specular_power = specular_power
+        self.ambient = ambient
+        self.diffuse = diffuse
+        self.smooth_shading = smooth_shading
+
+    def mesh_kwargs(self):
+        """Keyword arguments for ``Plotter.add_mesh`` under this theme."""
+        return dict(opacity=self.opacity, smooth_shading=self.smooth_shading,
+                    specular=self.specular, specular_power=self.specular_power,
+                    ambient=self.ambient, diffuse=self.diffuse,
+                    silhouette=self.silhouette)
+
+    def apply(self, plotter):
+        """Set the plotter-level state (background, passes) of this theme."""
+        plotter.set_background(self.background[0], top=self.background[1])
+        if self.depth_peeling:
+            plotter.enable_depth_peeling()
+        if self.shadows:
+            plotter.enable_shadows()
+        if self.anti_aliasing:
+            plotter.enable_anti_aliasing(self.anti_aliasing)
+
+
+# 'solid': opaque surfaces, VTK shadow mapping, studio-light background.
+# 'ghost' (default): depth-peeled translucent volumes, no shadows (VTK
+# shadow map does not support translucent actors).
+VIZ_THEMES = {
+    'solid': VizTheme(opacity=1.0, clip_opacity=0.9, shadows=True,
+                      depth_peeling=False, anti_aliasing='msaa',
+                      background=('#fbfcfe', '#e2e8f0'), silhouette=True,
+                      specular=0.25, specular_power=20.0, ambient=0.28,
+                      diffuse=0.82),
+    'ghost': VizTheme(opacity=0.25, clip_opacity=0.5, shadows=False,
+                      depth_peeling=True, anti_aliasing='msaa',
+                      background=('#eef2f7', '#cdd9e5'), silhouette=False,
+                      specular=0.1, specular_power=15.0, ambient=0.3,
+                      diffuse=0.85),
+}
+
 high_contrast_colors = ["#FF0000","#FF4500","#FF8C00","#FFD700","#FFFF00","#FF6347","#CD5C5C",
     "#0000FF","#1E90FF","#00BFFF","#00FFFF","#00FF00","#32CD32","#2E8B57","#20B2AA",
     "#800080","#9370DB","#8A2BE2","#DA70D6","#FF00FF","#00FF7F","#4B0082","#7FFF00","#FF1493",
@@ -67,9 +132,15 @@ def is_jupyterlab_session() -> bool:
     return False
 
 class Visualiser():
-    def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, doDumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=True, geoClip=False):
+    def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, doDumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=True, geoClip=False, theme='ghost'):
         if is_jupyterlab_session():
-            pv.set_jupyter_backend('trame')  
+            pv.set_jupyter_backend('trame')
+        if isinstance(theme, VizTheme):
+            self._theme = theme
+        elif theme in VIZ_THEMES:
+            self._theme = VIZ_THEMES[theme]
+        else:
+            raise ValueError(f"unknown visualiser theme '{theme}', available: {sorted(VIZ_THEMES)}")
         # self.color =  list(mcolors.CSS4_COLORS.keys())
         self.color = high_contrast_colors
         self.worldMesh = Mesh()
@@ -112,7 +183,7 @@ class Visualiser():
 
     def _load_plotter(self):
         self.plotter = PtPlotter(window_size=self._window_size)
-        self.plotter.enable_depth_peeling()
+        self._theme.apply(self.plotter)
         self._config_key_events()
 
     def _clear_plotter(self):
@@ -245,22 +316,22 @@ class Visualiser():
                 if geoClip:
                     try:
                         vol_mesh = generateVolumetricMesh(mesh)
-                        vol_mesh = self.plotter.addClipPlane([vol_mesh], not amesh.n, normal='x', opacity=0.5)
-                        actor = self.plotter.addClippedMesh(vol_mesh , label=mesh_label, color=rcolor, opacity=0.5)
+                        vol_mesh = self.plotter.addClipPlane([vol_mesh], not amesh.n, normal='x', opacity=self._theme.clip_opacity)
+                        actor = self.plotter.addClippedMesh(vol_mesh , label=mesh_label, color=rcolor, opacity=self._theme.clip_opacity)
                     except Exception as e:
                         print(e)
                         print(f"Warning: Failed to visualize {mesh_name} with geoClip. Fall back without geoClip.")
                         self._geoClip = False
                         return 1
                 else:
-                    actor = self.plotter.add_mesh(sur_mesh, color=rcolor, opacity=0.3, label=mesh_label)
+                    actor = self.plotter.add_mesh(sur_mesh, color=rcolor, label=mesh_label, **self._theme.mesh_kwargs())
                 self._add_builtin_mesh_info(sur_mesh, mesh_name, matName)
 
                 self._mesh_actor_pair.append((mesh, actor))
         if combineMesh:
             mesh = combined_meshes_block.combine()
             self._add_builtin_mesh_info(mesh, "Combined geometry", "Material not defined for a combined geometry")
-            actor = self.plotter.add_mesh(mesh, color=random.choice(self.color), opacity=0.3, label="Combined geometry")
+            actor = self.plotter.add_mesh(mesh, color=random.choice(self.color), label="Combined geometry", **self._theme.mesh_kwargs())
             self._mesh_actor_pair.append((mesh, actor))
 
         if doDumpMesh:
