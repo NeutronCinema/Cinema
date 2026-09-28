@@ -2,6 +2,10 @@
 """
 Script to load multiple HDF5 files using CinemaXY.from_hdf5 method and create plots
 Supports individual plots and combined plots using "+" notation
+
+Alternatively, a whole figure set can be described in a JSON spec and rendered
+with ``--config spec.json`` (persistable: relative paths resolve against the
+spec file, every plot gets an explicit output path) - see ``load_json_config``.
 """
 
 import sys
@@ -9,6 +13,7 @@ import os
 import argparse
 import numpy as np
 import glob
+import json
 import matplotlib.pyplot as plt  # Add global import
 from Cinema.Interface import plotStyle
 from Cinema.analysis import ParticleParameter
@@ -400,7 +405,11 @@ def create_plot(cinema_data_list : list[CinemaXY], file_basenames, xlabel=None, 
             # Individual plot: handle directory vs file path
             if os.path.isdir(output_image):
                 output_dir = output_image
-                output_filename = file_basenames[0].replace('.h5', '.png')
+                # '.mcpl.gz' must go in one strip, splitext only eats '.gz'
+                name = file_basenames[0]
+                if name.lower().endswith('.mcpl.gz'):
+                    name = name[:-len('.mcpl.gz')]
+                output_filename = os.path.splitext(name)[0] + '.png'
                 output_path = os.path.join(output_dir, output_filename)
             else:
                 output_path = output_image
@@ -592,7 +601,113 @@ def load_and_plot_files(file_patterns, output_dir=None, show_plot=True, downbinn
     print(f"\nSuccessfully processed {success_count}/{len(file_dicts)} file groups")
     return success_count == len(file_dicts)
 
-def main():
+_PLOT_KEYS = {'files', 'output', 'ylin', 'downbinning'}
+
+
+def _cfg_pattern(file_entry, base_dir, index):
+    """Validate one JSON file entry and rebuild the ``path;key=value;...``
+    cfg string that the existing string parser consumes (single source of
+    cfg semantics - the JSON layer only freezes the spec)."""
+    if not isinstance(file_entry, dict):
+        raise ValueError(f"plot {index}: file entries must be objects")
+    path = file_entry.get('path')
+    if not isinstance(path, str) or not path:
+        raise ValueError(f"plot {index}: file entry needs a string 'path'")
+    if ';' in path or '+' in path:
+        raise ValueError(f"plot {index}: path must not contain ';' or '+': {path!r}")
+    path = os.path.normpath(os.path.join(base_dir, path))
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"plot {index}: file does not exist: {path}")
+    parts = [path]
+    for k, v in file_entry.items():
+        if k == 'path':
+            continue
+        if not isinstance(k, str) or not k or v is None \
+                or isinstance(v, (bool, list, dict)):
+            raise ValueError(f"plot {index}: bad parameter {k}={v!r} "
+                             f"(str/int/float values only)")
+        parts.append(f'{k}={v}')
+    return ';'.join(parts)
+
+
+def load_json_config(config_path):
+    """Read a persistable plot spec (JSON) into per-plot argument dicts.
+
+    Schema (one entry per figure; all files of one entry are overlaid)::
+
+        {"plots": [{"files": [{"path": "a.mcpl.gz", "para": "wavelength",
+                               "unit": "AA", "binmin": 0.2, "binmax": 2.8,
+                               "binnum": 26},
+                              {"path": "b.h5"}],
+                    "output": "figs/compare.png",
+                    "ylin": false, "downbinning": 0}]}
+
+    - ``path``/``output`` resolve against the spec file's directory (the spec
+      is relocatable); globs are rejected - a frozen spec lists exact files;
+    - parameter keys outside ``path`` are the mcpl cfg-string keys, passed
+      through the existing parser verbatim;
+    - ``output`` is the exact png path (parent directory is created);
+    - validation fails loudly (unknown keys, missing files, wrong types).
+    """
+    with open(config_path) as f:
+        try:
+            spec = json.load(f)
+        except json.JSONDecodeError as e:
+            raise ValueError(f'{config_path}: invalid JSON: {e}') from None
+    if (not isinstance(spec, dict) or not isinstance(spec.get('plots'), list)
+            or not spec['plots']):
+        raise ValueError(f'{config_path}: expected a top-level object with '
+                         f'a non-empty "plots" list')
+    base_dir = os.path.dirname(os.path.abspath(config_path))
+    plots = []
+    for i, plot in enumerate(spec['plots'], 1):
+        if not isinstance(plot, dict):
+            raise ValueError(f'plot {i}: must be an object')
+        unknown = set(plot) - _PLOT_KEYS
+        if unknown:
+            raise ValueError(f'plot {i}: unknown keys {sorted(unknown)}; '
+                             f'allowed {sorted(_PLOT_KEYS)}')
+        files = plot.get('files')
+        output = plot.get('output')
+        ylin = plot.get('ylin', False)
+        downbinning = plot.get('downbinning', 0)
+        if not isinstance(files, list) or not files:
+            raise ValueError(f'plot {i}: "files" must be a non-empty list')
+        if not isinstance(output, str) or not output:
+            raise ValueError(f'plot {i}: "output" must be a non-empty string')
+        if not isinstance(ylin, bool):
+            raise ValueError(f'plot {i}: "ylin" must be a boolean')
+        if not isinstance(downbinning, int) or isinstance(downbinning, bool) \
+                or downbinning < 0:
+            raise ValueError(f'plot {i}: "downbinning" must be an integer >= 0')
+        # files of one plot are overlaid in ONE combined pattern ('+' is
+        # the existing overlay mechanism; separate patterns = separate
+        # figures).  Paths were validated free of '+' so the join is safe.
+        plots.append({'patterns': ['+'.join(_cfg_pattern(fe, base_dir, i)
+                                            for fe in files)],
+                      'output': os.path.normpath(os.path.join(base_dir, output)),
+                      'ylog': not ylin,
+                      'downbinning_level': downbinning})
+    return plots
+
+
+def run_json_config(config_path, show_plot=True):
+    """Render every plot in the JSON spec; True when all plots succeed."""
+    plots = load_json_config(config_path)
+    ok = True
+    for i, plot in enumerate(plots, 1):
+        print(f'\n=== config plot {i}/{len(plots)} -> {plot["output"]} ===')
+        os.makedirs(os.path.dirname(plot['output']) or '.', exist_ok=True)
+        ok &= load_and_plot_files(plot['patterns'], output_dir=plot['output'],
+                                  show_plot=False,
+                                  downbinning_level=plot['downbinning_level'],
+                                  ylog=plot['ylog'])
+    if show_plot:
+        plt.show()
+    return ok
+
+
+def main(argv=None):
     """Main function"""
     # Create the argument parser with usage examples in the epilog
     parser = argparse.ArgumentParser(
@@ -605,12 +720,19 @@ Examples:
   ptplot data/*.h5 -o plots/
   ptplot "monitor*_MCPL.mcpl;para=time;binmin=0;binmax=10;binnum=100+"
   ptplot "detMCPL_scat_*_pro0.mcpl;para=scattering_angle;unit=deg;binmin=0;binmax=180;binnum=1800;incident_params=[incident_wavelength_A=4;incident_direction=(0,0,1);sample_position=(0.0,0.0,0.0)]"
+  ptplot --config plots.json
+    plots.json = {"plots": [{"files": [{"path": "a.mcpl.gz",
+        "para": "wavelength", "unit": "AA", "binmin": 0.2,
+        "binmax": 2.8, "binnum": 26}], "output": "figs/a.png",
+        "ylin": false, "downbinning": 0}]}
   ptplot --help
         ''',
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument('input_files', nargs='+', 
+    parser.add_argument('input_files', nargs='*',
                        help='Input HDF5 file paths, glob patterns, or combined groups using "+" notation')
+    parser.add_argument('--config',
+                       help='JSON plot spec (one figure per entry, exact output paths); mutually exclusive with input files')
     parser.add_argument('-o', '--output', help='Output directory for saving plots (optional)')
     parser.add_argument('--no-show', action='store_true', help='Do not display plot windows')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
@@ -619,23 +741,31 @@ Examples:
     parser.add_argument('--ylin', action='store_true', help='Set y-axis to linear scale')
     parser.add_argument('-s', '--show', action='store_true', help='Show available units for particle parameters')
 
-    args = parser.parse_args()
-    
+    args = parser.parse_args(argv)
+
     # Show available units for particle parameters
     if args.show:
         _show_para_units()
         return
 
+    if args.config and args.input_files:
+        parser.error('--config cannot be combined with input files')
+    if not args.config and not args.input_files:
+        parser.error('either --config or input files are required')
+
     # Run main function
     success = False
     try:
-        success = load_and_plot_files(
-            args.input_files,
-            output_dir=args.output,
-            show_plot=not args.no_show,
-            downbinning_level=args.downbinning,
-            ylog=not args.ylin
-        )
+        if args.config:
+            success = run_json_config(args.config, show_plot=not args.no_show)
+        else:
+            success = load_and_plot_files(
+                args.input_files,
+                output_dir=args.output,
+                show_plot=not args.no_show,
+                downbinning_level=args.downbinning,
+                ylog=not args.ylin
+            )
     except Exception as e:
         print(f"\nError message: {e}")
         if args.debug:
