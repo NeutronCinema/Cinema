@@ -411,3 +411,22 @@ export NCRYSTAL_DATA_PATH="$CINEMAPATH/ncmat"
 export PATH="$CINEMAPATH/src/python/ptgeo/examples:$PATH"
 export PYTHONPATH="$CINEMAPATH:$PYTHONPATH"
 echo "Added the ptgeo example directory into environment"
+
+# NCrystal C++ plugins installed as pip packages (e.g. ncrystal-plugin-SasCSNS)
+# are discovered by the NCrystal library via the "ncrystal-pluginmanager"
+# command of the python environment they were installed into (e.g. a conda env).
+# Cinema's python environment deliberately does not contain NCrystal anymore
+# (NCrystal is unified on the conda environment), so if that command is not on
+# PATH, resolve the plugin list here and hand it over explicitly. Note that a
+# non-empty NCRYSTAL_PLUGIN_LIST replaces (not extends) automatic discovery, so
+# it must contain ALL plugin libraries (colon-separated):
+if ! command -v ncrystal-pluginmanager > /dev/null 2>&1 ; then
+  if [ -x /data/caixx/miniconda3/envs/pt/bin/ncrystal-pluginmanager ]; then
+    NCRYSTAL_PLUGINMANAGER=/data/caixx/miniconda3/envs/pt/bin/ncrystal-pluginmanager
+  fi
+else
+  NCRYSTAL_PLUGINMANAGER=ncrystal-pluginmanager
+fi
+if [ -n "${NCRYSTAL_PLUGINMANAGER:-}" ] && [ -z "${NCRYSTAL_PLUGIN_LIST:-}" ]; then
+  export NCRYSTAL_PLUGIN_LIST="$($NCRYSTAL_PLUGINMANAGER 2>/dev/null | grep -v ':DATA:' | paste -sd ':' -)"
+fi
