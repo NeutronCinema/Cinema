@@ -25,7 +25,12 @@ from .launcher import Launcher, _WORLD_EXIST_MSG
 from .geo import Volume
 from ..Interface import importFunc
 import warnings
-from mpi4py import MPI
+try:
+    from mpi4py import MPI
+except ImportError:
+    # mpi4py is optional: only the PromptMPI subclass needs it. Serial Prompt
+    # runs (including promptcli) must work without it.
+    MPI = None
 
 _pt_ResourceManager_clear = importFunc('pt_ResourceManager_clear', None, [])
 __all__ = ["Prompt", "PromptMPI"]
@@ -229,20 +234,22 @@ class Prompt:
     def save_all_scorers(self, savepdf=False):
         """
         Save data for all scorers.
-        
+
         Args:
             savepdf: Whether to also save PDF format images, defaults to False
-            
+
         Note:
-            Only executed on rank 0 process, other processes skip.
+            gatherHistData is called by every rank (it is collective under
+            MPI, so gating it would deadlock); only the file writes are
+            done on rank 0. Works on plain Prompt (serial) too.
         """
-        for sc in self.scorer.values():
-            sc_value = self.gatherHistData(sc)
-            if savepdf:
-                if self.rank == 0:
-                    sc_value.savefig(f"{sc}.pdf", log=False)
-            if self.rank == 0:
-                sc_value.save(f"{sc}.h5")
+        rank = getattr(self, 'rank', 0)
+        for scname in self.scorer:
+            sc_value = self.gatherHistData(scname)
+            if rank == 0:
+                if savepdf:
+                    sc_value.savefig(f"{scname}.pdf", log=False)
+                sc_value.save(f"{scname}.h5")
                 
 class PromptMPI(Prompt):
     """
@@ -259,10 +266,19 @@ class PromptMPI(Prompt):
     def __init__(self, seed=4096) -> None:
         """
         Initialize MPI version of Prompt instance.
-        
+
         Args:
             seed: Initial random seed, each process gets different seed (seed + rank)
+
+        Raises:
+            ImportError: If mpi4py is not available in this environment
         """
+        if MPI is None:
+            raise ImportError(
+                'PromptMPI requires the mpi4py package, which is not installed '
+                'in this python environment; install mpi4py (it needs MPI headers, '
+                'e.g. the libopenmpi-dev apt package or conda openmpi/mpi4py) or '
+                'use the serial Prompt class instead')
         self._comm = MPI.COMM_WORLD
         self._rank = self._comm.Get_rank()
         self._size = self._comm.Get_size()

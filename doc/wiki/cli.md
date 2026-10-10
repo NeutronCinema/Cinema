@@ -160,9 +160,9 @@ interactive window appears.
 |---|---|---|
 | `int`, `float` | `--wl_mean 2.0`, `-n 1e6` | parsed as the annotated type |
 | `str` | `--label det7` or `--label "'lab X'"` | bare strings pass through; wrap in double *and* single quotes for values with spaces (the quotes are stripped). Numeric-looking strings are converted to `float` — a string option `--tag 12.5` arrives as the number `12.5` |
-| `list` | `--src_whz "[20, 20, -300]"` | parsed as a Python literal. **The hint must be exactly `list` with a non-`None` default** — see section 6 |
-| `dict` | `--tags "{'k': 2}"` | parsed as a Python literal; same caveat as `list` for `= None` defaults |
-| `bool` | — | **breaks the CLI on the supported Python** (argparse rejects the generated flag). Do not annotate constructor parameters `bool`; use `int` (0/1) or a `str` flag instead — see section 6 |
+| `list` | `--src_whz "[20, 20, -300]"` | parsed as a Python literal; `Optional[list]`, `list | None` and un-annotated `= None` list defaults all work (see section 6) |
+| `dict` | `--tags "{'k': 2}"` | parsed as a Python literal; `= None` defaults work for `Optional[dict]` too (see section 6) |
+| `bool` | `--verbose` | generated as a plain flag (present = true); usable on the supported Python (see section 6) |
 | no default | — | option is required; missing it aborts with an argparse `the following arguments are required: --param` error |
 
 Constructor parameters whose names collide with the built-ins (`seed`, `neutronNum`,
@@ -323,26 +323,33 @@ with code 1.
 
 ## 6. Known sharp edges
 
-1. **A list-typed constructor parameter annotated `= None` aborts the run with SIGABRT and
-   no traceback.** The type hint `list = None` degrades to `Optional[list]` before the CLI
-   sees it, so no literal-parsing conversion is attached: with the default, the gun
-   config ends up missing keys (`Prompt::Error::BadInput: cfg is missing the key "src_w"`);
-   with an override, the raw *string* reaches the gun and its first character is used
-   (`ptstod failed to convert a double from the input string [`). Both are uncatchable C++
-   aborts (exit code 134). The same happens when overriding a list parameter that has **no
-   annotation at all**. Keep list parameters annotated exactly `list` with explicit
-   non-`None` defaults — the section-2.1 script does this.
-2. **A `bool`-annotated constructor parameter breaks the CLI entirely.** The generated
-   flag is rejected by argparse (`_StoreTrueAction.__init__() got an unexpected keyword
-   argument 'type'`), so any script containing a `bool` hint fails before parsing —
-   verified on the supported Python (3.10). The `--param`/`--no-param` switch visible in
-   the source never gets the chance to work. Use `int` (0/1) or `str` flags instead. This
-   failure is a Python exception, so `--debug` does show its traceback.
+1. **List constructor parameters now parse as literals — previously a SIGABRT with no
+   traceback.** Older releases attached a literal-parsing conversion only when the hint
+   was exactly `list`, so `Optional[list] = None` (or a list parameter with **no
+   annotation at all**) went unparsed: with an override, the raw *string* reached the gun
+   and its first character was used (`ptstod failed to convert a double from the input
+   string [`); left at the `None` default, the source/slit keys went missing
+   (`Prompt::Error::BadInput: cfg is missing the key "src_w"`). Both were uncatchable C++
+   aborts (exit code 134). Fixed: `Optional[list]`, `list | None` and un-annotated
+   list/dict parameters (the kind is inferred from the default value) now parse
+   `--opt "[1, 2, 3]"` as Python literals, and a malformed literal fails cleanly (argparse reports
+   `argument --opt: invalid literal ...` with usage and exit 2; the `--opt expects a
+   list, got ...` wording appears when the parser layer is bypassed) instead of aborting. The old advice to annotate
+   exactly `list` with explicit non-`None` defaults is no longer needed — the
+   section-2.1 script style still works unchanged.
+2. **`bool`-annotated constructor parameters now work as `--param`/`--no-param` switches.**
+   An older release passed a `type=` keyword into the `store_true`/`store_false` actions,
+   which argparse rejects (`_StoreTrueAction.__init__() got an unexpected keyword
+   argument 'type'`), so any script containing a `bool` hint failed before parsing —
+   verified on the supported Python (3.10). Fixed: the flag actions are built without
+   `type`, so `bool` parameters (including the `--no-param` variant for `= True` defaults)
+   can be used directly instead of the former `int` (0/1) or `str` workaround.
 3. **`--debug` prints tracebacks for Python exceptions only.** By default any exception
    prints one line (`PromptCLI Error: <message>`), the help text, and exits 1; with
    `--debug` the full traceback is printed — including errors raised while importing your
-   script. It cannot help with C++ aborts (edge 1): those kill the process before Python
-   can intervene. Debug by running the script directly with `python3`.
+   script. It cannot help with hard C++ aborts (e.g. raised inside the transport kernel):
+   those kill the process before Python can intervene. Debug by running the script
+   directly with `python3`.
 4. **`-v` and output saving work best with `PromptMPI`.** The CLI calls
    `sim.show(gun, n, zscale=...)` — the axis-scaling keywords exist on both `Prompt.show`
    and `PromptMPI.show` now — but it ends with `sim.save_all_scorers()`, and that method

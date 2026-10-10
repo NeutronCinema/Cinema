@@ -2,9 +2,9 @@
 # Placement operations of the component.py Anchor/Array/EntityArray helpers.
 #
 # EntityArray(None) is used for the pure-python cases so that no Volume and
-# no physics is configured (members are plain Anchor objects); only the two
-# factory cases build real volumes. All bodies are microsecond-level except
-# the factories (~10 ms of C++ physics configuration each).
+# no physics is configured (members are plain Anchor objects); the two factory
+# cases and the FlatAnalyser rect-plane cases build real volumes. All bodies
+# are microsecond-level except those (~10 ms of C++ geometry each).
 
 import math
 import warnings
@@ -13,9 +13,10 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation as scipyRot
 
-from Cinema.Prompt.component import Anchor, Array, EntityArray
+from Cinema.Prompt.component import Anchor, Array, EntityArray, FlatAnalyser
 from Cinema.Prompt.component import makeDiskChopper, makeTrapezoidGuide
-from Cinema.Prompt.geo import Transformation3D
+from Cinema.Prompt.geo import Transformation3D, Volume
+from Cinema.Prompt.solid import Box
 
 
 def _zArray(zPositions):
@@ -60,14 +61,69 @@ def test_repeat_three_members_two_gaps():
     assert _memberZs(ea) == pytest.approx([0., 100., 200.])
 
 
-@pytest.mark.xfail(strict=True, reason='EntityArray.repeat multiplies the gap '
-                      'cumulatively inside the placement loop (gap *= i_num), '
-                      'so num=4 lands at 100/200/600 instead of 100/200/300; '
-                      'remove this marker when the spacing is fixed')
 def test_repeat_four_members_evenly_spaced():
     ea = _zArray([0.])
     ea.repeat(direction=[0., 0., 1.], gap=100., num=4)
     assert _memberZs(ea) == pytest.approx([0., 100., 200., 300.])
+
+
+@pytest.mark.parametrize('num', [1, 2, 3, 4, 5])
+def test_repeat_exact_positions_num_1_to_5(num):
+    ea = _zArray([0.])
+    ea.repeat(direction=[0., 0., 1.], gap=100., num=num)
+    assert _memberZs(ea) == pytest.approx([100. * k for k in range(num)])
+
+
+def test_repeat_multi_member_each_member_gets_uniform_gaps():
+    # every pre-existing member spawns its own uniformly spaced copies; in
+    # particular the base gap must not leak across members
+    ea = _zArray([0., 7.])
+    ea.repeat(direction=[0., 0., 1.], gap=100., num=4)
+    assert _memberZs(ea) == pytest.approx(
+        [0., 7., 100., 107., 200., 207., 300., 307.])
+
+
+# ------------------------------------------------- rect plane (FlatAnalyser)
+
+def _flatAnalyser(spacing=(10., 5.)):
+    """A FlatAnalyser carrying a real (tiny) Box volume for the plane paths."""
+    plate = Volume('plate', Box(1., 1., 1.), matCfg='freegas::H1/1e-26kgm3')
+    return FlatAnalyser(plate, spacings=list(spacing))
+
+
+def test_set_rect_position_3x2_returns_six_exact_points():
+    ana = _flatAnalyser(spacing=(10., 5.))
+    pts = ana.set_rect_position(3, 2)
+    # num_v rows along y, each holding num_h points along x, centred on the
+    # grid middle: 2 rows x 3 columns
+    assert len(pts) == 2
+    assert all(len(row) == 3 for row in pts)
+    flat = [p for row in pts for p in row]
+    wants = [(-10., -2.5), (0., -2.5), (10., -2.5),
+             (-10.,  2.5), (0.,  2.5), (10.,  2.5)]
+    for point, want in zip(flat, wants):
+        assert point[0] == pytest.approx(want[0])
+        assert point[1] == pytest.approx(want[1])
+
+
+def test_set_rect_position_rejects_nonpositive_counts():
+    ana = _flatAnalyser()
+    with pytest.raises(ValueError, match='num_h'):
+        ana.set_rect_position(0, 2)
+    with pytest.raises(ValueError, match='num_v'):
+        ana.set_rect_position(3, 0)
+
+
+def test_make_plane_consumes_rect_grid():
+    ana = _flatAnalyser(spacing=(10., 5.))
+    ana.make_rect_plane(3, 2)
+    assert len(ana.members) == 6
+    # placements follow the row-major point order, z stays 0
+    assert ana.members[0].refFrame.getTranslation() == pytest.approx([-10., -2.5, 0.])
+    assert ana.members[-1].refFrame.getTranslation() == pytest.approx([10., 2.5, 0.])
+    # rows/columns are labelled 1-indexed in the member markers
+    assert ana.members[0].marker.endswith('_r1c1')
+    assert ana.members[-1].marker.endswith('_r2c3')
 
 
 # -------------------------------------------------------------------- reflect

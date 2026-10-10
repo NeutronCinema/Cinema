@@ -131,12 +131,14 @@ wiki) — and then it sources `install.sh` from the repo root. Sourcing it has t
    dependencies (mcpl, scipy, h5py, gvar, psutil, tqdm); **Cinema itself is
    not pip-installed there** — it is found via `PYTHONPATH`. Note that the
    `requirement` file has its NCrystal and visualisation lines commented out on
-   purpose (section 6), and its `mpi4py` line is commented out too. That omission
-   matters: `promptCore.py` imports mpi4py at module level, so a venv created this
-   way cannot import `Cinema.Prompt` at all until mpi4py is installed (`pip install
-   mpi4py` — the apt route's `libopenmpi-dev` prerequisite supplies what it needs —
-   or take mpi4py from conda). The existing `cinemavirenv` on the development
-   machine this wiki was written on carries mpi4py 4.1.1.
+   purpose (section 6). Its `mpi4py` line is active, but mpi4py is an *optional*
+   dependency of the Python layer: a plain serial `Prompt` runs fine without it,
+   and only `PromptMPI` (mpirun-launched runs) requires it — constructing
+   `PromptMPI` in an env without mpi4py raises a clear `ImportError` saying so.
+   If pip's mpi4py build fails (it needs MPI headers — the apt route's
+   `libopenmpi-dev` or conda `openmpi`/`mpi4py` supply them), serial work can
+   continue while mpi4py is sorted out; the existing `cinemavirenv` on the
+   development machine this wiki was written on carries mpi4py 4.1.1.
 4. **Builds missing C++ externals into `<cinema-checkout>/external/`** (skipped when
    already present): MCPL, libxml2 **2.9.3** (pinned for KDSource), KDSource
    (default branch, currently `master`), xerces-c **v3.2.3** (shared libs, GDML parser dependency), VecGeom (branch

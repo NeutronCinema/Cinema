@@ -249,7 +249,7 @@ satisfy this.
 | Event split | `PromptMPI.simulate(gun, num)` computes `batchSize = int(num / self.size)`. Ranks 1..n-1 run `batchSize` events each (progress timer and `save2Disk` off); **rank 0 runs the remainder** `num - batchSize*(size-1)`, with the timer on and, if requested, the `save2Disk` dump. The sum over ranks equals `num`. |
 | `gatherHistData(cfg, raw=False, dst=0)` | **Collective.** After fetching the local histogram it prints `Scorer <name> rank <r>: weight ..., hit ...` per rank, then performs three `comm.Reduce` (sum) operations over the weight, hit and Σw² arrays to root `dst` (default 0). Every rank must call it, in the same order. The returned histogram holds the merged data **only on rank `dst`**; on other ranks ignore the returned arrays. |
 | `show(...)` | Rank 0 renders the window and then all ranks barrier — no MPI-deadlocked windows, but do not call it in batch jobs. |
-| `save_all_scorers()` | Writes files on **rank 0 only** (guarded internally with `self.rank == 0`). |
+| `save_all_scorers()` | Writes files on **rank 0 only** under MPI (internally `rank = getattr(self, 'rank', 0)`, so plain serial `Prompt` runs write too). |
 | Console | Rank 0 owns progress printing; `gatherHistData` prints one weight/hit line per rank. |
 
 Plot and save only where the data is valid:
@@ -376,9 +376,8 @@ A full option reference lives on [The command line](cli).
 | Symptom | Cause and remedy |
 |---|---|
 | `RuntimeError: World exist already: only one world can be set per process` | `setWorld` is one-shot per process: a second `setWorld` without `clear()` raises this (catchable) error. The `Launcher` is a process singleton, so a second `Simulation()` in the same process trips it too — run each world in its own process or `clear()` first ([section 8](#8-clear-and-rebuild-parameter-scans-in-one-process)). |
-| `AttributeError: 'Prompt' object has no attribute 'rank'` from `save_all_scorers` | `save_all_scorers` is **MPI-only**: it references `self.rank`, which plain `Prompt` does not define. Derive from `PromptMPI`. |
-| Exceptions under `prompt -g ... --debug` print no traceback | Known defect: the `--debug` flag is effectively ignored by the error handler. Debug by running the script directly with `python3 myscript.py`. |
-| Scorer returns another scorer's data / results missing | Duplicate scorer names alias in `Volume.scorer_dict`. The rename helper `scorerNameConfig` is dead code — keep scorer names unique. Also check the scorer helper was actually `.make(vol)`-ed. |
+| Where is the traceback? | Without `--debug` the CLI prints a one-line error and exits 1; pass `--debug` to get the full Python traceback. Uncatchable C++ aborts (SIGABRT/SIGSEGV) by nature print no traceback — reproduce them with `python3 myscript.py`. |
+| Scorer results missing | Duplicate scorer names now raise `ValueError` at `.make(vol)` instead of silently aliasing — give each scorer a unique name. Also check the scorer helper was actually `.make(vol)`-ed. |
 | Run finishes, no output files | Python-API default is `save2Disk=False`; files appear only via `save_all_scorers()` (`.h5`) or `simulate(..., save2Disk=True)` (`.mcpl.gz`). |
 | Reproducibility: "same seed, different histogram" | Check that nothing stochastic happens before `setWorld` (the seed is applied there), and that under MPI you compare merged rank-0 results. Same seed ⇒ identical results only for an identical script and event split. |
 | Old output silently replaced | Histogram MCPL file names embed the RNG seed current at scorer creation (`<name>_seed<seed>.mcpl.gz` — the library default 5489 on the first build, not your constructor seed); a rerun overwrites regardless of seed. |
