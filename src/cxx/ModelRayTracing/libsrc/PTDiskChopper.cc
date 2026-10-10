@@ -26,7 +26,7 @@ Prompt::DiskChopper::DiskChopper(double theta0_deg, double r_mm, double phase_de
       m_angularSpeed(2*M_PI*rotFreq_Hz), m_angularPeriod(2*M_PI/n)
 {
     if(m_angularPeriod < m_theta0)
-        PROMPT_THROW(CalcError, "m_angularPeriod > m_theta0");
+        PROMPT_THROW(CalcError, "m_angularPeriod < m_theta0");
 }
 
 
@@ -38,7 +38,11 @@ bool Prompt::DiskChopper::canSurvive(double x, double y, double time) const
 
     // calculate the angular positon of the opening edge
     double angEdge = m_angularSpeed*time + m_phase - m_theta0/2;
-    angEdge = fmod(angEdge, m_angularPeriod);
+    // C fmod keeps the sign of the dividend, so normalise into
+    // [0, m_angularPeriod) before the interval test below; the
+    // wrap-around clause then accepts openings crossing the period
+    // boundary uniformly (e.g. shortly after T0 for a phaseless chopper).
+    angEdge = fmod(fmod(angEdge, m_angularPeriod) + m_angularPeriod, m_angularPeriod);
 
     double hitAngle = atan2(x, y);  
     if(hitAngle < 0) // so the range are between (0, 2pi)

@@ -75,6 +75,12 @@ def test_simulation():
     x=hist1.getCentre().sum()
     wx=(hist1.getWeight()*hist1.getCentre()).sum()
     print(f'{w, x, wx}')
-    np.testing.assert_allclose([w, x, wx], [796.1124588280122, 500.00000000000006, 1264.0639561959943], rtol=1e-15, atol=1e-15)
+    # Reference re-calibrated 2026-10-11 (one sim per process, seed=4096) after the
+    # PEA_PRE absorb double-count fix + the Mirror loss-branch kill: guide wall hits
+    # losing the reflectivity roulette (R(Q) < 1e-3) are now absorbed at the wall
+    # instead of being transmitted through the Cd with weight 1; the 18.67 weight
+    # that used to leak through and reach the detector is gone (the PEA_PRE fix
+    # itself does not affect these ENTRY scorers).
+    np.testing.assert_allclose([w, x, wx], [777.4419711542337, 500.00000000000006, 1235.6859800633026], rtol=1e-15, atol=1e-15)
 
     # hist1.plot(show=True)

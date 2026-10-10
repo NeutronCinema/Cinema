@@ -55,6 +55,13 @@ void Prompt::Mirror::sampleFinalState(Prompt::Particle &particle) const
   double Q = neutronAngleCosine2Q(angleCos, ekin, ekin); // elastic reflection
   m_wAtQ = Q<m_Qc ? m_R0 : 0.5*m_R0*(1-tanh(( Q-m_m*m_Qc)*m_i_W))*(1-m_alpha*( Q-m_Qc));
 
+  // the McStas factor (1-m_alpha*(Q-m_Qc)) turns negative beyond Qc+1/alpha,
+  // where the tanh factor is already rounded to zero, leaving m_wAtQ at -0.0.
+  // A negative reflectivity would let the roulette below always lose and the
+  // neutron would leak through the mirror wall, so clamp it at zero.
+  if(!(m_wAtQ > 0.))
+    m_wAtQ = 0.;
+
   // std::cout << "Q " << Q << " scale " << m_wAtQ  << " " << particle.getPosition() << std::endl;
   if(m_wcut > m_wAtQ)
   {
@@ -65,9 +72,9 @@ void Prompt::Mirror::sampleFinalState(Prompt::Particle &particle) const
     }
     else
     {
-      // fixme: add m_raytracing to kill particle in the raytracing mode
-      // if(m_raytracing)
-      //   particle.kill(Particle::KillType::BIAS);
+      // russian roulette loser: absorb the neutron instead of letting it
+      // pass through the wall with weight 1
+      particle.kill(Particle::KillType::ABSORB);
       return;
     }
   }

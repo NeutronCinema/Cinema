@@ -291,7 +291,7 @@ std::shared_ptr<Prompt::SurfaceProcess> Prompt::PhysicsFactory::createSurfacePro
       int parCount = 3;
 
       // optional parameters
-      double m = 0;
+      double m = 1;
       if(!cfg.getDoubleIfExist("m", m))
         parCount--;
 

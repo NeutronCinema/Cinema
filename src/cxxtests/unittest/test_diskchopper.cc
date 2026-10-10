@@ -149,10 +149,9 @@ TEST_CASE("test_diskchopper_pinned_point_table_t0_phase0")
 
   // Reference booleans generated with an independent python
   // reimplementation of the fmod/atan2 bookkeeping. At t=0, phase=0 the
-  // opening edge angle is -theta0/2 < 0 and the current implementation
-  // then only credits the opening sector [0, theta0/2] (mod the slot
-  // spacing), dropping the wrapped sector; points are therefore chosen
-  // outside the ambiguous (spacing - theta0/2, spacing) sector.
+  // opening spans [-theta0/2, +theta0/2] and crosses the slot spacing
+  // boundary; the probe points below stay clear of the wrapped sector,
+  // so the table holds regardless of how that sector is credited.
   struct Entry
   {
     double x, y;
@@ -218,4 +217,57 @@ TEST_CASE("test_diskchopper_zero_opening_edge_angles_only")
   }
   // The radial invariant is unaffected by the opening width.
   CHECK_FALSE(chop.canSurvive(10.0, 10.0, 0.0));
+}
+
+TEST_CASE("test_diskchopper_opening_wrapped_across_zero_t0")
+{
+  // Single-slit phaseless chopper at T0: the opening spans
+  // [-theta0/2, +theta0/2], i.e. it crosses the angular period boundary
+  // and its wrapped part sits just below 2pi. The opening-edge angle is
+  // negative before normalisation (C fmod keeps the dividend sign), and
+  // the pre-fix code then absorbed neutrons inside that wrapped part.
+  const pt::DiskChopper chop(20.0, 50.0, 0.0, 96.0, 1);
+  constexpr double r = 80.0; // outside the disk radius
+
+  // Audit case 1: inside the opening, non-wrapped side, passes.
+  CHECK(chop.canSurvive(probeX(r, 5.0), probeY(r, 5.0), 0.0));
+  // Audit case 2: inside the wrapped part of the opening (355 deg =
+  // -5 deg); was wrongly absorbed before the edge normalisation.
+  CHECK(chop.canSurvive(probeX(r, 355.0), probeY(r, 355.0), 0.0));
+  // Audit case 3: just outside the wrapped edge (345 deg = -15 deg).
+  CHECK_FALSE(chop.canSurvive(probeX(r, 345.0), probeY(r, 345.0), 0.0));
+  // Deep inside the absorbing sector, far from every edge.
+  CHECK_FALSE(chop.canSurvive(probeX(r, 175.0), probeY(r, 175.0), 0.0));
+}
+
+TEST_CASE("test_diskchopper_opening_wrap_early_source_time")
+{
+  // While t < (theta0/2 - phase)/omega the raw opening-edge angle stays
+  // negative; at omega*t = 5 deg the normalised edge is 355 deg and the
+  // opening is [355, 360) u [0, 15) deg.
+  const pt::DiskChopper chop(20.0, 50.0, 0.0, 96.0, 1);
+  constexpr double r = 80.0;
+  const double tEdge = (5.0 * pt::const_deg2rad) / (2.0 * M_PI * 96.0);
+
+  CHECK(chop.canSurvive(probeX(r, 0.0), probeY(r, 0.0), tEdge));
+  CHECK(chop.canSurvive(probeX(r, 10.0), probeY(r, 10.0), tEdge));
+  CHECK(chop.canSurvive(probeX(r, 356.0), probeY(r, 356.0), tEdge));
+  CHECK_FALSE(chop.canSurvive(probeX(r, 350.0), probeY(r, 350.0), tEdge));
+}
+
+TEST_CASE("test_diskchopper_phase15_controls_unaffected")
+{
+  // With phase=15 deg the opening edge at T0 is +5 deg (opening
+  // [5, 25] deg): no wrap is involved, so acceptance is identical before
+  // and after the edge normalisation.
+  const pt::DiskChopper chop(20.0, 50.0, 15.0, 96.0, 1);
+  constexpr double r = 80.0;
+
+  // Audit cases 4-5: phase-shifted controls behave as before the fix.
+  CHECK(chop.canSurvive(probeX(r, 15.0), probeY(r, 15.0), 0.0));
+  CHECK_FALSE(chop.canSurvive(probeX(r, 355.0), probeY(r, 355.0), 0.0));
+  // Interior and exterior points of the shifted opening.
+  CHECK(chop.canSurvive(probeX(r, 10.0), probeY(r, 10.0), 0.0));
+  CHECK_FALSE(chop.canSurvive(probeX(r, 0.0), probeY(r, 0.0), 0.0));
+  CHECK_FALSE(chop.canSurvive(probeX(r, 30.0), probeY(r, 30.0), 0.0));
 }

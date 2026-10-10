@@ -144,8 +144,21 @@ Prompt::SampledResult& Prompt::ModelCollection::pickAndSample(double ekin, const
     if(p > r1)
       break;
   }
+  if(i >= m_models.size()) //guard: the draw rounded past the summed probability
+    i = m_models.size()-1;
 
-  m_res = m_models[i]->sampleReaction(ekin, dir);
+  //oriented models sample in the local (crystal) frame: convert the incident
+  //direction like totalCrossSection does, the sampled outgoing direction is
+  //mapped back to the global frame below
+  const Vector *sampledir = &dir;
+  if(m_models[i]->isOriented())
+  {
+    auto &activeVolume = Singleton<ActiveVolume>::getInstance();
+    m_localdir =  activeVolume.getGeoTranslator().global2Local_direction(dir);
+    sampledir = &m_localdir;
+  }
+
+  m_res = m_models[i]->sampleReaction(ekin, *sampledir);
 
   if(m_models[i]->isOriented())
   {
