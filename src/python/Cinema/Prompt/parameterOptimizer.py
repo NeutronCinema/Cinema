@@ -20,6 +20,8 @@
 ##                                                                            ##
 ################################################################################
 
+import warnings
+
 
 class Parameter:
     def __init__(self, name : str, lower, upper, promptval) -> None:
@@ -109,19 +111,50 @@ class Optimiser:
         self.sim.show(int(num))
 
 
-    def optimize(self, name, n_trials, localhost=False, storage='mysql://prompt:csnsPrompt_2023@da07.csns.ihep.ac.cn/optuna'):
+    def optimize(self, name, n_trials, localhost=False, storage=None):
+        """
+        Run the optuna study.
+
+        Args:
+            name: Study name
+            n_trials: Number of optimization trials
+            localhost: Deprecated. With no storage URL it selects the
+                in-memory study; an explicit storage URL always wins and the
+                flag only triggers the deprecation warning.
+            storage: Optuna storage URL (e.g. 'sqlite:///optuna_study.db') for
+                a persistent study. Required unless localhost=True (deprecated)
+                selects a process-local in-memory study.
+
+        Returns:
+            optuna.Study: The finished study
+        """
         import optuna
         if localhost:
-            self.study = optuna.create_study(study_name=name, 
+            warnings.warn('localhost is deprecated; pass a storage URL such as '
+                          '"sqlite:///optuna_study.db" for a persistent study '
+                          '(the in-memory study selected by localhost=True dies '
+                          'with the process)',
+                          FutureWarning, stacklevel=2)
+        elif storage is None:
+            raise ValueError('no optuna storage given: the former remote-MySQL '
+                             'default was removed for security reasons. Pass '
+                             'storage="sqlite:///optuna_study.db" (or any optuna '
+                             'storage URL) to persist the study; a process-local '
+                             'in-memory study is only available via the '
+                             'deprecated localhost=True')
+
+        if storage is None:
+            # in-memory study, dies with the process
+            self.study = optuna.create_study(study_name=name,
                                     directions=self.directions
                                     )
         else:
-            self.study = optuna.create_study(study_name=name, 
-                                            storage=storage, 
+            self.study = optuna.create_study(study_name=name,
+                                            storage=storage,
                                             directions=self.directions,
                                             load_if_exists=True
                                             )
-        
+
 
         self.study.optimize(self.objective, n_trials)
 
@@ -131,7 +164,7 @@ class Optimiser:
         analysisdb(self.study)
     
 
-    def optimize_botorch(self, name, n_trials, localhost=False, storage='mysql://prompt:csnsPrompt_2023@da07.csns.ihep.ac.cn/optuna'):
+    def optimize_botorch(self, name, n_trials, localhost=False, storage=None):
         from botorch.settings import validate_input_scaling
         import optuna
 
@@ -143,14 +176,29 @@ class Optimiser:
         )
 
         if localhost:
-            self.study = optuna.create_study(study_name=name, 
+            warnings.warn('localhost is deprecated; pass a storage URL such as '
+                          '"sqlite:///optuna_study.db" for a persistent study '
+                          '(the in-memory study selected by localhost=True dies '
+                          'with the process)',
+                          FutureWarning, stacklevel=2)
+        elif storage is None:
+            raise ValueError('no optuna storage given: the former remote-MySQL '
+                             'default was removed for security reasons. Pass '
+                             'storage="sqlite:///optuna_study.db" (or any optuna '
+                             'storage URL) to persist the study; a process-local '
+                             'in-memory study is only available via the '
+                             'deprecated localhost=True')
+
+        if storage is None:
+            # in-memory study, dies with the process
+            self.study = optuna.create_study(study_name=name,
                                     directions=self.directions,
                                     sampler=sampler
                                     )
         else:
             self.study = optuna.create_study(
-                study_name=name, 
-                storage=storage, 
+                study_name=name,
+                storage=storage,
                 directions=self.directions,
                 sampler=sampler,
                 load_if_exists=True

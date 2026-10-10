@@ -202,7 +202,7 @@ if do_optimization:
             return self.get_std()
     
     opt = SampleOpt(sim)
-    opt.optimize(name='sampleRadius_test', n_trials=10, localhost=False)
+    opt.optimize(name='sampleRadius_test', n_trials=10, storage='sqlite:///optuna_study.db')
     print(opt.study.best_params, opt.study.best_value)
     opt.analysis()
 else:

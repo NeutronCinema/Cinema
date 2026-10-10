@@ -506,7 +506,7 @@ else: # optimization
 
     opt = CurveOpt(sim)
     # opt.visInitialGeometry()
-    opt.optimize(name = 'BL6_detPos_anaCuv', n_trials = 2, localhost=False)
+    opt.optimize(name = 'BL6_detPos_anaCuv', n_trials = 2, storage='sqlite:///optuna_study.db')
     # print(opt.study.best_params, opt.study.best_value)
     # opt.analysis()
 

@@ -357,15 +357,15 @@ When a scan becomes a search — fitting simulation free parameters against meas
 module `Cinema.Prompt.parameterOptimizer` provides an Optuna-based `Optimiser`: subclass it,
 implement `objective(trial)` (inside it: `self.sim.clear()`, `makeWorld(params)` from
 `self.getParameters(trial)`, `simulate`, return a score), register search ranges with
-`addParameter(name, lower, upper)`, and call `optimize(name, n_trials, localhost=True)` —
+`addParameter(name, lower, upper)`, and call `optimize(name, n_trials, storage="sqlite:///optuna_study.db")` —
 `optimize_botorch` swaps in a Bayesian sampler. Two things to know: the class is **not**
 exported from `Cinema.Prompt` — import it as
 `from Cinema.Prompt.parameterOptimizer import Optimiser` (several in-repo scripts still use the
-broken shorter import) — and `optimize` defaults to a hardcoded remote study-storage location
-with embedded credentials; **always configure local storage**. Note `localhost=True` alone gives
-an Optuna *in-memory* study that dies with the process — fine for a quick scan, but for anything
-worth keeping pass a durable `storage=` URL (e.g. a sqlite file path such as
-`storage="sqlite:///optuna_study.db"`). A fuller treatment is planned as its own page (see the planned-pages list
+broken shorter import) — and `optimize` requires an explicit `storage=` URL for anything worth keeping (the former
+hardcoded remote study-storage default with embedded credentials was removed for security;
+calls without one raise a `ValueError` pointing at `sqlite:///optuna_study.db`). The deprecated
+`localhost=True` still selects an Optuna *in-memory* study that dies with the process — fine for
+a quick scan, not for results you want to keep. A fuller treatment is planned as its own page (see the planned-pages list
 on [home](home)); everything needed to use the class safely is in this section.
 
 ---
