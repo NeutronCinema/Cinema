@@ -60,47 +60,46 @@ histograms speak mm.
 
 ### 2.1 MCPL particle files
 
-The MCPL standard fixes the particle fields to **cm / MeV / ms**, and the *reading* side of
-Cinema honours that: `MCPLGun` multiplies `ekin` by `Unit::MeV`, positions by `Unit::cm` and
-times by `Unit::ms` when sampling, and `Cinema.analysis` treats on-disk energies as MeV.
-The *writing* side does not: the `MCPLOutHelper` scorer (C++ `KillerMCPL`) calls the writer
-overload that stores the fields **unconverted** (`write(const Particle&, int)` in
-`PTMCPLBinaryWrite.cc` — a second overload with the x0.1/x1e-6/x1e3 conversions exists but
-is not the one the scorer calls), so its files carry the internal mm / eV / s numbers even
-though the code comments around the write call claim cm/MeV/ms — the file header itself
-says nothing about units (`MCPLFile.comments` is an empty list on a fresh output). Measured
-with a 200-particle run (seed
-4096, a 1e-3 eV beam onto a detector volume centred at +100 mm, read back with the `mcpl`
-package):
+The MCPL standard fixes the particle fields to **cm / MeV / ms**, and Cinema honours that on
+both sides: the *reading* side (`MCPLGun`) multiplies `ekin` by `Unit::MeV`, positions by
+`Unit::cm` and times by `Unit::ms` when sampling, and the *writing* side (`MCPLOutHelper`,
+C++ `KillerMCPL`) applies the inverse conversions on write — position x0.1, `ekin` x1e-6,
+time x1e3, and the same x1e-6 for the ΔE stored in `polarisation[2]`. Verified by round
+trip (pinned by `src/pythontests/test_mcpl_units.py` and the `mcpl_roundtrip_*` C++ cases):
+a 1e-3 eV beam killed on a detector entered 95 mm from the gun produces a file that the
+`mcpl` package reads back as `ekin=1e-9 MeV, z=9.5 cm, t=0.217 ms`. The file header itself
+says nothing about units (`MCPLFile.comments` is an empty list on a fresh output), but
+Cinema-written files need no manual conversion:
 
-| Quantity | Inside Cinema | MCPL standard (readers assume) | `MCPLOutHelper` writes (measured) |
+| Quantity | Inside Cinema | On disk (MCPL standard) | Standard reader sees |
 |:---|:---|:---|:---|
-| position | mm | cm | **mm** (z = 99.95 — the ENTRY plane at 99.95 mm; in cm it would read 9.995) |
-| kinetic energy | eV | MeV | **eV** (1e-3, not 1e-9) |
-| time | s | ms | **s** (4.57e-4 for the 200 mm flight, not 0.457) |
+| position | mm | cm | mm |
+| kinetic energy | eV | MeV | eV |
+| time | s | ms | s |
 | direction, weight, pdgcode | — | unchanged | unchanged |
 | `userflags` | — | event ID | event ID |
-| polarisation triple | — | survival probability, scattering number, ΔE (MeV) | same fields, ΔE in **eV** |
+| polarisation triple | — | survival probability, scattering number, ΔE (MeV) | same fields |
 
-Consequences and workarounds:
+Two cases still need manual attention:
 
-- Feeding an `MCPLOutHelper` file to `MCPLGun`, to `MCPL_Analyzer_1D/2D`, or to any external
-  MCPL tool rescales the data (energies x1e6, positions x10, times x1e-3). Check a known
-  energy against the file before trusting a downstream analysis.
-- To produce MCPL-standard files, convert with Cinema's own writer: the `MCPLParticle`
-  struct of `Cinema.Prompt.files.MCPLBinaryWrite` is memcpy-copied into the file with no
-  conversion (the write call lands on the passthrough `write(const mcpl_particle_t&)`
-  overload), so fill it in MeV / cm / ms yourself. The `mcpl` python package cannot do this
-  for you — it is read-only (its particle objects reject attribute assignment), so
-  post-processing has to go through `MCPLBinaryWrite`. The recipe below (verified
-  end-to-end: `mcpl.MCPLFile` reads the result back as 200 particles with
-  `ekin=1e-9 MeV, z=9.99 cm, t=0.457 ms`) converts a scorer file in a second process:
+- **Files written by Cinema v2.0.1a1 through v2.1.0** stored the internal mm / eV / s numbers
+  unconverted — energies x1e6, positions x10, times x1e-3 too large for any standard-unit
+  reader (`MCPLGun`, `MCPL_Analyzer_1D/2D`, the `mcpl` tools). Re-simulate, or convert them
+  with the passthrough recipe below.
+- The passthrough write path is unit-blind: the `MCPLParticle` struct of
+  `Cinema.Prompt.files.MCPLBinaryWrite` is memcpy-copied into the file with no conversion
+  (the write call lands on the passthrough `write(const mcpl_particle_t&)` overload), so
+  fill it in MeV / cm / ms yourself. The `mcpl` python package cannot do this for you — it
+  is read-only (its particle objects reject attribute assignment), so post-processing has
+  to go through `MCPLBinaryWrite`. The recipe below (verified end-to-end: `mcpl.MCPLFile`
+  reads the result back as 200 particles with `ekin=1e-9 MeV, z=9.99 cm, t=0.457 ms`)
+  converts a scorer file in a second process:
 
   ```python
   from Cinema.Prompt import PTMCPL
   from Cinema.Prompt.files import MCPLBinaryWrite, MCPLParticle
 
-  src = PTMCPL('det_pro0.mcpl.gz')      # MCPLOutHelper output: internal units on disk
+  src = PTMCPL('det_pro0.mcpl.gz')      # pre-2.1.0 output: internal units on disk
   out = MCPLBinaryWrite('det_std.mcpl', enable_double=True,
                         enable_extra3double=True, enable_extraUnsigned=True)
   for pb in src.particle_blocks:
@@ -122,8 +121,8 @@ Consequences and workarounds:
 
   Timing note: the scorer gzips only when it is destroyed, i.e. at process exit — while the
   producing run is still alive the file is `det_pro0.mcpl`, afterwards `det_pro0.mcpl.gz`.
-- When reading an `MCPLOutHelper` file directly with `PTMCPL` (`Cinema.Prompt.mcpl`) or the
-  `mcpl` package, treat the fields as mm / eV / s.
+- `PTMCPL` (`Cinema.Prompt.mcpl`) and the `mcpl` package hand you the raw stored fields —
+  cm / MeV / ms for current files, internal mm / eV / s for the 2.1.0-and-earlier ones.
 
 Histogram-in-MCPL output (`<name>_seed<seed>.mcpl.gz`) is a different container: its blobs
 (`edge`, `content`, ...) are plain arrays in internal units (section 1).
@@ -402,11 +401,10 @@ the workaround from [Installation](install) first.
     `v = ekin2v*sqrt(E)` (Å/s) and the power-of-ten factors (the correct ones — see
     gotcha 14), which are plain Python multiplication and array-native.
 12. **Three unit conventions, one workflow.** Histograms come back in internal units
-    (s, eV, Å, mm, Å⁻¹), `MCPLOutHelper` files on disk carry internal mm/eV/s (section 2.1,
-    measured), the MCPL standard assumed by readers is cm/MeV/ms, and `Cinema.analysis`
-    defaults to MeV/ms/cm. `MCPL_Analyzer_1D/2D` convert from the MCPL standard for you;
-    they are wrong by x1e6 on energies for `MCPLOutHelper` files as currently written.
-    `PTMCPL` never converts anything.
+    (s, eV, Å, mm, Å⁻¹), `MCPLOutHelper` files on disk are in the MCPL standard cm/MeV/ms
+    (section 2.1 — files written by v2.0.1a1 through v2.1.0 carry internal mm/eV/s instead), and
+    `Cinema.analysis` defaults to MeV/ms/cm. `MCPL_Analyzer_1D/2D` convert from the MCPL
+    standard for you and are correct for current files. `PTMCPL` never converts anything.
 13. **`nccalNumDensity` returns atoms/mm³** — the internal-unit form used by Σ = N·σ.
     Multiply by 1e-21 to get atoms/Å³ (the unit NCrystal itself reports).
 14. **`meV2eV`/`eV2meV` were inverted — fixed in 2.1.0.** The factors used to be each

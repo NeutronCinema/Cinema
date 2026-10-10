@@ -72,6 +72,23 @@ bool contains(const char *haystack, uint32_t len, const char *needle)
   return false;
 }
 
+// Same construction as KillerMCPL: single precision on disk, polarisation triple
+// and userflags enabled, no gzip so the reader can reopen exactly this path.
+void writeKillerParticles()
+{
+  pt::MCPLBinaryWrite w(testFileName(), /*enable_double=*/false, /*enable_extra3double=*/true,
+                        /*enable_extraUnsigned=*/true, /*compress=*/false);
+  pt::Particle p1(2.5e-2, pt::Vector(0, 0, 1), pt::Vector(1, 2, 3)); // eV, mm
+  p1.setTime(1e-4); // s
+  w.write(p1, -3);
+  // second particle carries an energy loss for the polarisation triple
+  pt::Particle p2(2.5e-2, pt::Vector(0, 0, 1), pt::Vector(0, 0, 0));
+  p2.setEKin(1.5e-2); // 1e-2 eV lost
+  p2.setTime(1e-4);   // s
+  w.write(p2, 7);
+  w.close();
+}
+
 // removes the round-trip file when the test binary exits
 struct TempFileCleanup
 {
@@ -206,5 +223,50 @@ TEST_CASE("mcpl_roundtrip_no_repeat_eof_and_numpy_blobs")
   double last = 0.0;
   std::memcpy(&last, data + len - 8, 8);
   CHECK(pt::floateq(last, 2.0, 1e-12, 1e-15));
+  mcpl_close_file(f);
+}
+
+TEST_CASE("mcpl_roundtrip_scatter_overload_units")
+{
+  // the overload KillerMCPL calls must store MCPL-standard units (cm/MeV/ms)
+  // so the repo reader recovers the internal eV/s/mm; values on disk are
+  // single precision, hence the 1e-6 relative window
+  writeKillerParticles();
+  pt::MCPLParticleReader r(testFileName());
+  CHECK(r.particleCount() == 2u);
+  CHECK(r.readOneParticle());
+  CHECK(pt::floateq(r.getEnergy(), 2.5e-2, 1e-6, 1e-14)); // eV
+  pt::Vector pos, dir;
+  r.getPosition(pos);
+  CHECK(pt::floateq(pos.x(), 1.0, 1e-6, 1e-9)); // mm
+  CHECK(pt::floateq(pos.y(), 2.0, 1e-6, 1e-9));
+  CHECK(pt::floateq(pos.z(), 3.0, 1e-6, 1e-9));
+  r.getDirection(dir);
+  CHECK(pt::floateq(dir.mag2(), 1.0, 1e-6, 1e-9));
+  CHECK(pt::floateq(r.getTime(), 1e-4, 1e-6, 1e-12)); // s
+  CHECK(pt::floateq(r.getWeight(), 1.0, 1e-6, 1e-12));
+  CHECK(r.getPDG() == pt::const_neutron_pgd);
+  // second particle: reduced ekin survives the round trip as well
+  CHECK(r.readOneParticle());
+  CHECK(pt::floateq(r.getEnergy(), 1.5e-2, 1e-6, 1e-14));
+}
+
+TEST_CASE("mcpl_roundtrip_polarisation_fields")
+{
+  writeKillerParticles();
+  mcpl_file_t f = mcpl_open_file(testFileName().c_str());
+  REQUIRE(f.internal != 0);
+  CHECK(mcpl_hdr_has_polarisation(f) != 0);
+  const mcpl_particle_t *p = mcpl_read(f);
+  REQUIRE(p != nullptr);
+  // survive probability in [0], scatter number in [1], energy loss in [2] in MeV
+  CHECK(pt::floateq(p->polarisation[0], 1.0, 1e-6, 1e-9));
+  CHECK(pt::floateq(p->polarisation[1], -3.0, 1e-6, 1e-9));
+  CHECK(pt::floateq(p->polarisation[2], 0.0, 1e-6, 1e-12));
+  p = mcpl_read(f);
+  REQUIRE(p != nullptr);
+  CHECK(pt::floateq(p->polarisation[1], 7.0, 1e-6, 1e-9));
+  // 1e-2 eV loss stored as 1e-8 MeV
+  CHECK(pt::floateq(p->polarisation[2], 1e-8, 1e-6, 1e-12));
   mcpl_close_file(f);
 }

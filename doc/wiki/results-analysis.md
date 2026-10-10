@@ -204,31 +204,31 @@ The helper also owns an internal counter histogram which `save_all_scorers()` wr
 `det.h5` — counts scored particles, not a spectrum.
 
 **Field reuse.** MCPL has no place for Cinema's biasing bookkeeping, so spare standard fields
-carry it. What is *actually* on disk (verified against the writer source and by reading a
-file back) differs from the MCPL standard header, which claims cm/MeV/ms — the writer passes
-the internal values through unchanged:
+carry it. The particle fields themselves are stored in the MCPL standard units the metadata
+claims (cm/MeV/ms — the writer applies the x0.1/x1e-6/x1e3 conversions; files written by
+Cinema v2.0.1a1 through v2.1.0 carried the internal eV/s/mm unconverted):
 
 | MCPL field | Stored quantity | Units on disk |
 |---|---|---|
 | `userflags` | event ID | — |
 | `polarisation[0]` | survival probability | — |
 | `polarisation[1]` | scattering number | count; **−3 when no `MultiScatCounter` is attached** |
-| `polarisation[2]` | energy loss ΔE = E₀ − E | eV |
-| `ekin` | kinetic energy | **eV** |
-| `time` | time of flight | **s** |
-| `position` | position | **mm** |
+| `polarisation[2]` | energy loss ΔE = E₀ − E | MeV |
+| `ekin` | kinetic energy | MeV |
+| `time` | time of flight | ms |
+| `position` | position | cm |
 
 Measured (2000 events, seed 4096, 1 meV neutrons flying 999 mm through void to the scorer):
-`ekin 0.001`, `time 0.00228`, `z −1.0`, `pol (1.0, −3.0, 0.0)`, `userflags` 1, 2, 3, ...
-The MCPL metadata (and every standard-conforming reader — the `mcpl` tools, `MCPLGun`,
-`Cinema.analysis`) interprets those numbers as cm/MeV/ms — see section 7. `PTMCPL` (exported
-from `Cinema.Prompt`) decodes the reused fields for you:
+`ekin 1e-9`, `time 2.28`, `z −0.1`, `pol (1.0, −3.0, 0.0)`, `userflags` 1, 2, 3, ...
+so every standard-conforming reader — the `mcpl` tools, `MCPLGun`, `Cinema.analysis` —
+sees the same numbers the simulation held (section 7 covers the pre-2.1.0 exception).
+`PTMCPL` (exported from `Cinema.Prompt`) decodes the reused fields for you:
 
 ```python
 from Cinema.Prompt import PTMCPL
 from Cinema.Prompt.histogram import Hist1D
 file = PTMCPL('det_pro0.mcpl.gz')
-hist = Hist1D(1e-6, 4e-2, 500)             # eV axis: values on disk are eV
+hist = Hist1D(1e-12, 4e-8, 500)            # MeV axis: values on disk are MeV
 for pb in file.particle_blocks:
     hist.fill(pb.differential_energy, pb.survival_probability * pb.weight)
 ```
@@ -341,22 +341,24 @@ ana.plot(show=True)
 ```
 
 **The MCPL boundary-unit trap.** Every unit conversion in `Cinema.analysis` — and in the
-`MCPLGun` source, [Guns](guns) — assumes the file is in MCPL standard units (cm/MeV/ms).
-Files written by `MCPLOutHelper` are **not** (section 5): the numbers on disk are eV/s/mm.
-Measured with the 1 meV / 999 mm particle of section 5: `MCPL_Analyzer_1D(para='velocity')`
-lands in the ≈4.5×10⁸ mm/s bin — as if the particle had 1 keV; the 10⁶ energy misread
-becomes a 10³ velocity error (v ∝ √E; true ≈4.4×10² m/s) — and `para='time'` compresses the
-true 2.28 ms flight into the µs range. `auto_range_file` picks up the misread scale, and
+`MCPLGun` source, [Guns](guns) — assumes the file is in MCPL standard units (cm/MeV/ms),
+and current `MCPLOutHelper` files are (section 5): the writer applies the conversions, so
+no action is needed for files written by this release. The trap remains for **files written
+by Cinema v2.0.1a1 through v2.1.0**: their numbers on disk are eV/s/mm while the metadata claims
+cm/MeV/ms, so `MCPL_Analyzer_1D(para='velocity')` lands the 1 meV / 999 mm particle of
+section 5 in the ≈4.5×10⁸ mm/s bin — as if the particle had 1 keV; the 10⁶ energy misread
+becomes a 10³ velocity error (v ∝ √E; true ≈4.4×10² m/s) — and `para='time'` stretches the
+true 2.28 ms flight a thousandfold. `auto_range_file` picks up the misread scale, and
 `ptplot`'s MCPL mode inherits the same assumption. Workarounds, in order of preference:
 
-1. Read with `PTMCPL` and convert explicitly — the values are already in Cinema units
+1. Read with `PTMCPL` and convert explicitly — old-file values are already in Cinema units
    (eV/s/mm), so usually *no* conversion is needed before filling your own histogram.
-2. To use `MCPL_Analyzer_*` (or `ptplot`'s MCPL mode) on a Cinema-written file, convert it
-   into standard units first — the `PTMCPL` + `MCPLBinaryWrite` recipe on the
-   [Units](units) page does exactly that (`ekin × 1e-6` eV→MeV, `time × 1e3` s→ms,
-   `position × 0.1` mm→cm) and is verified end-to-end.
-3. Files from *other* codes (or genuine standard-unit MCPL files) need none of this —
-   `Cinema.analysis` is correct for them as documented.
+2. To use `MCPL_Analyzer_*` (or `ptplot`'s MCPL mode) on an old file, convert it into
+   standard units first — the `PTMCPL` + `MCPLBinaryWrite` recipe on the [Units](units)
+   page does exactly that (`ekin × 1e-6` eV→MeV, `time × 1e3` s→ms, `position × 0.1`
+   mm→cm) and is verified end-to-end.
+3. Files from this release, or genuine standard-unit files from other codes, need none of
+   this — `Cinema.analysis` is correct for them as documented.
 
 ---
 
@@ -448,9 +450,10 @@ fine = xy.interpolate(np.linspace(xmin, xmax, 200))   # needs an ARRAY of x valu
    decodes an *older* polarisation convention (`q`→polx, `scatNum`→pdgcode, ...) that
    contradicts section 5's encoding. For particles use `PTMCPL`; `PromptFileReader`
    remains the tool for histogram blobs.
-9. **Cinema-written MCPL particle files carry internal units** (eV/s/mm) despite the
-   standard-unit metadata; convert before feeding them to `MCPLGun`, `Cinema.analysis`,
-   `ptplot`'s MCPL mode or any standard-unit reader (section 7). Without a
+9. **MCPL particle files written by Cinema v2.0.1a1 through v2.1.0 carry internal units**
+   (eV/s/mm) despite the standard-unit metadata; convert before feeding them to `MCPLGun`,
+   `Cinema.analysis`, `ptplot`'s MCPL mode or any standard-unit reader (section 7). Files
+   written by this release are in MCPL standard units and need no conversion. Without a
    `MultiScatCounter` the scattering-number field is the sentinel −3: single/multiple
    flags and weight accessors return zero; the ΔE==0 elastic/inelastic split still works.
 10. **`McplAnalysor.getHist`/`getHistMany` results plot wrong out of the box** — `xcentre`
