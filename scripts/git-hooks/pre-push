@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Cinema pre-push hook: run the test suite before every push.
+#
+# Activate once per clone:   git config core.hooksPath scripts/git-hooks
+# Skip for a single push:    git push --no-verify
+#
+# Runs the same checks as `cimbuild -t`, minus the rebuild:
+#   1. ctest  - C++ unit tests (build tree in cinemabin/)
+#   2. pytest - python suite in src/pythontests (--forked)
+# The four python entries excluded by src/pythontests/conftest.py (missing
+# numba/makeChopper deps, broken API) are excluded from ctest too; see the
+# wiki, install.md "Running the test suite".
+# NOTE: no `set -u` here - sourcing env.sh pulls in install.sh, which reads
+# variables it never defines and would abort the hook under nounset.
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# the tests only run in a sourced environment (PYTHONPATH/LD_LIBRARY_PATH)
+# shellcheck disable=SC1091
+if ! source "$ROOT/env.sh" >/dev/null 2>&1; then
+    echo "pre-push: cannot source env.sh - bootstrap once with '. env.sh', then retry." >&2
+    exit 1
+fi
+
+# env.sh exports NCRYSTAL_PLUGIN_LIST with a trailing ';' and NCrystal aborts
+# on it (install.md section 6); normalise before anything loads NCrystal.
+export NCRYSTAL_PLUGIN_LIST="${NCRYSTAL_PLUGIN_LIST%;}"
+
+status=0
+
+if [ -f "$ROOT/cinemabin/CTestTestfile.cmake" ]; then
+    echo "==> ctest (C++ unit tests)"
+    excl='^(python-test_cinema_array_ops|python-test_prompt_chopper|python-test_tak_parfft|python-test_tak_trj)$'
+    ( cd "$ROOT/cinemabin" && ctest -j"$(( $(nproc 2>/dev/null || echo 4) / 2 ))" -E "$excl" --output-on-failure ) || status=1
+else
+    echo "==> ctest skipped (no build tree in cinemabin/ - run 'cimbuild -r' first)"
+fi
+
+PY="$ROOT/cinemavirenv/bin/python3"
+if [ -x "$PY" ]; then
+    if "$PY" -c 'import pytest, pytest_forked' >/dev/null 2>&1; then
+        echo "==> pytest src/pythontests"
+        ( cd "$ROOT/cinemabin" && "$PY" -m pytest "$ROOT/src/pythontests" --forked --tb=line -q ) || status=1
+    else
+        echo "pre-push: pytest is missing from cinemavirenv - install it with:" >&2
+        echo "    $PY -m pip install pytest pytest-forked" >&2
+        exit 1
+    fi
+else
+    echo "==> pytest skipped (no cinemavirenv - conda install?)"
+fi
+
+if [ "$status" -ne 0 ]; then
+    echo ""
+    echo "pre-push: tests FAILED - push aborted."
+    echo "          bypass this once with: git push --no-verify"
+    exit 1
+fi
+echo "pre-push: all tests passed."
+exit 0

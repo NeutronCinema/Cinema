@@ -75,7 +75,9 @@ Prompt::CfgParser::StringCfg Prompt::CfgParser::parse(const std::string& cfgstri
   {
     auto p = split(s, '=');
     if(p.size()!=2)
-        PROMPT_THROW2(BadInput, " cfg section \""<< s << "\" is ill-defined" );
+        PROMPT_THROW2(BadInput, " cfg section \""<< s << "\" is ill-defined (expected "
+                      "key=value sections separated by ';'; if this is a gun definition, "
+                      "the first section must be gun=<GunName>)" );
     cfg.parameters[p[0]] = p[1];
     // std::cout << s << std::endl;
   }

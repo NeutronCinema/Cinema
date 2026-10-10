@@ -1,3 +1,0 @@
-92a93,94
->   const vecgeom::VECGEOM_IMPL_NAMESPACE::VUnplacedVolume *processEllipsoid(
->       XERCES_CPP_NAMESPACE_QUALIFIER DOMNode const *aDOMNode);

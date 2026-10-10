@@ -25,6 +25,7 @@ from ..Interface import *
 
 import random
 import matplotlib.colors as mcolors
+from .launcher import ensureDisplayUsable
 from .Mesh import Mesh, generateVolumetricMesh
 
 try:
@@ -321,6 +322,8 @@ class Visualiser():
 
     def show(self):
         self._plot_geo_and_trj()
+        if not ensureDisplayUsable():
+            self.plotter.off_screen = True # no usable X server, render off-screen
         self.plotter.show(title='Cinema Visualiser')
 
 class PtPlotter(pv.Plotter):

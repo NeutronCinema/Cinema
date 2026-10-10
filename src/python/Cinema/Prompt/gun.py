@@ -27,6 +27,19 @@ _pt_PythonGun_delete = importFunc('pt_PythonGun_delete', None, [type_voidp])
 _pt_PythonGun_pushToStack = importFunc('pt_PythonGun_pushToStack', None, [type_voidp, type_npdbl1d])
 _pt_PythonGun_pushToStackMany = importFunc('pt_PythonGun_pushToStackMany', None, [type_voidp, type_npdbl1d, type_uint])
 
+# Memory layout of one particle as handed over ctypes to the C++ backend: 9
+# packed float64 values which PTPythonGun.cc reads at fixed offsets and a
+# stride of 9 doubles. Any other dtype would be read as garbage particles (or
+# overread the buffer) without an error, so PythonGun validates pdata against
+# this layout before every push.
+_canonical_particle_dtype = np.dtype([
+    ('ekin', np.float64),  # energy
+    ('w', np.float64),     # weight
+    ('t', np.float64),     # time
+    ('pos', np.float64, 3), # position (x, y, z)
+    ('dir', np.float64, 3)  # direction (dx, dy, dz)
+])
+
 
 class Gun():
     """
@@ -52,6 +65,9 @@ class PythonGun(Gun):
     Attributes:
         pdg (int): Particle Data Group code
         cobj (void*): Pointer to C++ gun object
+        particle_dtype (numpy.dtype): Packed layout of one particle: 9 float64
+            values (ekin, w, t, pos[3], dir[3]). The C++ backend reads it at
+            fixed offsets, so it must not be changed.
     """
     def __init__(self, pdg: int =2112, vectorized: int = 1):
         """
@@ -63,19 +79,36 @@ class PythonGun(Gun):
         self.pdg = pdg
         self.vectorized = vectorized
         self.cobj = _pt_PythonGun_new(int(self.pdg))
-        self.particle_dtype = np.dtype([
-            ('ekin', np.float64),  # energy
-            ('w', np.float64),     # weight
-            ('t', np.float64),     # time
-            ('pos', np.float64, 3), # position (x, y, z)
-            ('dir', np.float64, 3)  # direction (dx, dy, dz)
-        ])
+        self.particle_dtype = _canonical_particle_dtype
         if self.vectorized < 1:
-            raise RuntimeError('')
+            raise RuntimeError(f'vectorized must be a positive integer, got {self.vectorized}')
         self.pdata = np.zeros(self.vectorized, dtype=self.particle_dtype)
+        self._validate_pdata(self.vectorized)
         
     def __del__(self):
         _pt_PythonGun_delete(self.cobj)
+
+    def _validate_pdata(self, num):
+        """
+        Check self.pdata against the layout expected by the C++ backend.
+
+        C++ reads each particle as 9 packed float64 values at fixed offsets
+        (src/cxx/Gun/libsrc/PTPythonGun.cc). Any other dtype would be read as
+        garbage particles or overread the buffer silently, so reject it here,
+        in Python, while a proper error can still be raised.
+
+        Args:
+            num (int): Number of particles about to be pushed to C++
+        """
+        if self.pdata.dtype != _canonical_particle_dtype:
+            raise ValueError(
+                f'PythonGun.pdata must have the packed float64 layout {_canonical_particle_dtype} '
+                f'(9 doubles per particle, read by C++ at fixed offsets), got {self.pdata.dtype}. '
+                f'Do not override particle_dtype or change the field order/types of pdata.')
+        if self.pdata.ndim != 1:
+            raise ValueError(f'PythonGun.pdata must be a 1D array, got {self.pdata.ndim} dimensions.')
+        if self.pdata.size < num:
+            raise ValueError(f'PythonGun.pdata holds {self.pdata.size} particles, but {num} are requested.')
 
     def generate(self, num=None):
         """
@@ -83,11 +116,13 @@ class PythonGun(Gun):
         
         Raises:
             RuntimeError: If sampled direction vector has zero magnitude
+            ValueError: If pdata does not match the particle layout expected by the C++ backend
         """
         if num is not None and num != self.vectorized:
             if num<1:
                 raise RuntimeError('num should be an integer')
             self.pdata = np.zeros(num, dtype=self.particle_dtype)
+        self._validate_pdata(self.vectorized if num is None else num)
 
         # sample a parameters and norm
         self.sample(self.vectorized if num is None else num)  
@@ -327,7 +362,7 @@ class UniModeratorGun(SurfaceSource):
         """
         self.cfg_range_wl = wl_range
 
-class MCPLGun(ConfigString):
+class MCPLGun(Gun, ConfigString):
     """
     Gun that reads particles from MCPL (Monte Carlo Particle List) files.
     
@@ -355,7 +390,12 @@ class MCPLGun(ConfigString):
         
         Args:
             mcplfile (str): Path to MCPL file
+
+        Raises:
+            FileNotFoundError: If mcplfile does not exist
         """
+        if not os.path.isfile(mcplfile):
+            raise FileNotFoundError(f'MCPL input file not found: {mcplfile}')
         self.cfg_mcplfile = mcplfile
 
 class MPIGun(SurfaceSource):

@@ -117,11 +117,21 @@ def parser_factory():
     args, unknown = parser.parse_known_args()
 
     if len(sys.argv) <= 1:
-        raise ValueError("Not enough arguments!")
+        parser = PromptBaseParser(parents=[parser])
+        parser.print_help()
+        sys.exit(1)
     elif args.geo == '':
-        parser = PromptBaseParser()
+        parser = PromptBaseParser(parents=[parser])
         raise ValueError("Prompt simulation can not run without a geometry file!")
     elif args.geo.endswith('.py'):
+        if any(a in ('-h', '--help') for a in sys.argv):
+            # loading the script is unavoidable here: the per-class command line
+            # options are parsed from the classes it defines, so -h is not
+            # import-safe. Warn before the side effect instead of hiding it.
+            print("NOTE: with a `.py` geometry file, -h/--help first executes the "
+                  "script's module level (per-class options are parsed from the "
+                  "loaded classes). Keep makeWorld in the simulation constructor, "
+                  "not at module level, if the script is imported elsewhere.")
         parser = PromptPyScriptParser(add_help = False, parents = [parser])
     elif args.geo.endswith('.gdml'):
         parser = PromptGdmlParser(add_help = False, parents = [parser])
@@ -155,6 +165,7 @@ class PromptBaseParser(argparse.ArgumentParser):
         """ + des
         super().__init__(*args, **kwargs, description=description, formatter_class=RawNoMetavarFormatter)
         self.general_arguments = self.set_general_arguments()
+        self.debug = getattr(self.general_arguments, 'debug', False)
 
     def set_visualize_arguments(self):
         g = self.add_argument_group('Visualization Arguments')
@@ -209,7 +220,7 @@ class PromptGdmlParser(PromptBaseParser):
         if args.visualize is True:
             v = Visualiser(args.blacklist, printWorld=False, nSegments=args.nSegments, mergeMesh=args.mergemesh, dumpMesh=args.dumpmesh)
             for i in range(int(args.neutronNum)):
-                myLcher.go(1, recordTrj=True, timer=False, save2Dis=False)
+                myLcher.go(1, recordTrj=True, timer=False, save2Disk=False)
                 trj = myLcher.getTrajectory()
                 try:
                     v.addTrj(trj)
@@ -339,17 +350,21 @@ class PromptPyScriptParser(PromptBaseParser):
             sim.save_all_scorers()
     
 def main():
-    parser = parser_factory()
+    parser = None
     try:
+        parser = parser_factory()
         parser.simulate()
     except Exception as e:
-        parser.print_help()
-        print()
         print(f'PromptCLI Error: {e}')
-        if hasattr(parser, 'debug') and parser.debug:
+        # `parser` is None when parser_factory() itself failed (e.g. the user
+        # script raised at module level); fall back to the raw flag in argv.
+        if getattr(parser, 'debug', False) or (parser is None and '--debug' in sys.argv):
             import traceback
             traceback.print_exc()
-            exit(1)
+        if parser is not None:
+            print()
+            parser.print_help()
+        sys.exit(1)
 
 if __name__ == '__main__':
 

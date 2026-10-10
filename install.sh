@@ -428,5 +428,7 @@ else
   NCRYSTAL_PLUGINMANAGER=ncrystal-pluginmanager
 fi
 if [ -n "${NCRYSTAL_PLUGINMANAGER:-}" ] && [ -z "${NCRYSTAL_PLUGIN_LIST:-}" ]; then
-  export NCRYSTAL_PLUGIN_LIST="$($NCRYSTAL_PLUGINMANAGER 2>/dev/null | grep -v ':DATA:' | paste -sd ':' -)"
+  # strip trailing ';' the pluginmanager appends to each path: a trailing ';'
+  # in NCRYSTAL_PLUGIN_LIST makes NCrystal abort on the first plugin load
+  export NCRYSTAL_PLUGIN_LIST="$($NCRYSTAL_PLUGINMANAGER 2>/dev/null | grep -v ':DATA:' | sed 's/;[[:space:]]*$//' | paste -sd ':' -)"
 fi

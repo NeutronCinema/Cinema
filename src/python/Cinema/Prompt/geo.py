@@ -18,6 +18,7 @@
 ##                                                                            ##
 ################################################################################
 
+import warnings
 from typing import Union
 
 from scipy.spatial.transform import Rotation as scipyRot
@@ -25,6 +26,7 @@ from ..Interface import *
 from .Mesh import _pt_Transformation3D_transform
 from copy import deepcopy
 from .scorer import Scorer
+from .physics import _validateNccfgFiles, _validateMatCfg, wrapRawNccfg
 
 __all__ = ['Volume', 'Transformation3D']
 
@@ -77,7 +79,25 @@ class Transformation3D:
             rot_new_x (float, optional): X rotation angle. Default: 0.0
             rot_new_z (float, optional): Second Z rotation angle. Default: 0.0
             degrees (bool, optional): Whether angles are in degrees. Default: True
+
+        Raises:
+            TypeError: If any positional argument is not a number (e.g. a
+                vector or None). To build a frame from a position vector,
+                unpack it first: Transformation3D(*pos)
         """
+        # validate/coerce before any ctypes call: a vector or None passed by
+        # mistake used to surface as a raw ctypes.ArgumentError from the
+        # binding, followed by a confusing __del__ traceback on the
+        # half-initialized object
+        try:
+            x, y, z = float(x), float(y), float(z)
+            rot_z, rot_new_x, rot_new_z = float(rot_z), float(rot_new_x), float(rot_new_z)
+        except (TypeError, ValueError):
+            raise TypeError(
+                "Transformation3D expects 6 numbers "
+                "(x, y, z, rot_z, rot_new_x, rot_new_z), got an argument of "
+                f"type {type(x).__name__}. To build a frame from a position "
+                "vector, unpack it first: Transformation3D(*pos)") from None
         # Rotation follows ZXZ convention in vecgeom backend
         self.cobj = _pt_Transformation3D_newfromdata(x, y, z, rot_z, rot_new_x, rot_new_z, 1, 1, 1)
         self.__sciRot = scipyRot.from_euler('ZXZ', [rot_z, rot_new_x, rot_new_z], degrees)
@@ -109,28 +129,39 @@ class Transformation3D:
         return obj
 
     @classmethod
-    def from_alignement(cls, x=0., y=0., z=0., rotated:np.ndarray=None, original:np.ndarray=None):
+    def from_alignment(cls, x=0., y=0., z=0., rotated:np.ndarray=None, original:np.ndarray=None):
         """
         Create transformation by aligning vectors.
-        
+
         Args:
             x (float, optional): X translation. Default: 0.0
             y (float, optional): Y translation. Default: 0.0
             z (float, optional): Z translation. Default: 0.0
-            rotated (ndarray): Target vectors after rotation
-            original (ndarray): Original vectors before rotation
-            
+            rotated (ndarray): Target vectors after rotation (Nx3)
+            original (ndarray): Original vectors before rotation (Nx3)
+
         Returns:
             Transformation3D: New transformation object
-            
+
         Raises:
             RuntimeError: If rotated or original vectors are not provided
         """
-        if rotated or original is None:
-            raise RuntimeError('Rotated and original should be provided')
+        # guard must test each argument separately: "if rotated or original
+        # is None" is parsed as "(rotated) or (original is None)" and made
+        # this constructor fail for every array input
+        if rotated is None or original is None:
+            raise RuntimeError('Both the rotated and original vectors must be provided')
         obj = cls(x,y,z)
-        obj.setRotByAlignement(rotated, original)
+        obj.setRotByAlignment(rotated, original)
         return obj
+
+    @classmethod
+    def from_alignement(cls, x=0., y=0., z=0., rotated:np.ndarray=None, original:np.ndarray=None):
+        """Deprecated spelling of :meth:`from_alignment`."""
+        warnings.warn("Transformation3D.from_alignement is deprecated, "
+                      "use from_alignment instead.",
+                      DeprecationWarning, stacklevel=2)
+        return cls.from_alignment(x, y, z, rotated=rotated, original=original)
 
     @property
     def euler_xyz(self):
@@ -152,17 +183,23 @@ class Transformation3D:
         """
         copy = type(self)()
         memo[id(self)] = copy
-        copy.cobj = _pt_Transformation3D_newfromdata(self.__translation[0], self.__translation[1], self.__translation[2], 
+        copy.cobj = _pt_Transformation3D_newfromdata(self.__translation[0], self.__translation[1], self.__translation[2],
                                                      0, 0, 0, 1.,1.,1.)
         copy._Transformation3D__sciRot = scipyRot.from_matrix(self.__sciRot.as_matrix())
+        # the mangled attribute must be set explicitly: the copy used to get
+        # the value in a non-mangled "_translation" attribute (aliasing the
+        # source array), so the documented getTranslation() accessor reported
+        # [0, 0, 0] on every deepcopied frame
+        copy._Transformation3D__translation = self.__translation.copy()
         copy.update_cpp_rot()
-        copy._translation = self.__translation
-        copy.sciRotMatrix = self.__sciRot.as_matrix()
         return copy
 
     def __del__(self):
         """Clean up C++ transformation object."""
-        _pt_Transformation3D_delete(self.cobj)
+        # guard against __del__ running on a never-initialized object (e.g.
+        # when __init__ raised before assigning cobj)
+        if hasattr(self, 'cobj'):
+            _pt_Transformation3D_delete(self.cobj)
     
     # TODO: review the transformation operations
     # def __mul__(self, other):
@@ -190,6 +227,21 @@ class Transformation3D:
     #     inversion._Transformation3D__sciRot = self.__sciRot.inv()
     #     inversion.update_cpp_rot()
     #     return inversion
+
+    def __mul__(self, other):
+        """
+        Compose two transformations: `other` is applied first, then self
+        (parent frame composed with a child frame expressed in it).
+
+        Args:
+            other (Transformation3D): Transformation applied first
+
+        Returns:
+            Transformation3D: The composed transformation
+        """
+        rot = self.getRotMatrix().dot(other.getRotMatrix())
+        transl = self.getTranslation() + self.getRotMatrix().dot(other.getTranslation())
+        return type(self)(transl[0], transl[1], transl[2]).setSciRot(scipyRot.from_matrix(rot))
 
     def update_cpp_rot(self):
         """Push Python side roation to C++ side."""
@@ -285,27 +337,35 @@ class Transformation3D:
     def applyRotbyMatrix(self, refMatrix):
         """
         Apply rotation by multiplying with reference matrix.
-        
+
         Args:
             refMatrix (ndarray): 3x3 reference rotation matrix
+
+        Returns:
+            Transformation3D: Self for method chaining
         """
+        # the new matrix (R_cur . refMatrix) must also update the Python
+        # side: re-wrapping the OLD matrix here left __sciRot stale, so
+        # C++/Python transforms diverged and deepcopy silently dropped
+        # the applied rotation
         mat = self.__sciRot.as_matrix().dot(refMatrix)
-        self.__sciRot = scipyRot.from_matrix(self.__sciRot.as_matrix())
+        self.__sciRot = scipyRot.from_matrix(mat)
         _pt_Transformlation3D_setRotation(self.cobj, mat[0,0], mat[0,1], mat[0,2],
                                           mat[1,0], mat[1,1], mat[1,2],
                                           mat[2,0], mat[2,1], mat[2,2])
+        return self
 
-    def setRotByAlignement(self, rotated, original):
+    def setRotByAlignment(self, rotated, original):
         """
         Set rotation by aligning original vectors to rotated vectors.
-        
+
         Args:
             rotated (ndarray): Target vectors after rotation (shape: Nx3)
             original (ndarray): Original vectors before rotation (shape: Nx3)
-            
+
         Returns:
             Transformation3D: Self for method chaining
-            
+
         Raises:
             RuntimeError: If vectors don't contain exactly 2 vectors
         """
@@ -314,6 +374,13 @@ class Transformation3D:
         self.__sciRot, rssd = scipyRot.align_vectors(original, rotated)
         self.update_cpp_rot()
         return self
+
+    def setRotByAlignement(self, rotated, original):
+        """Deprecated spelling of :meth:`setRotByAlignment`."""
+        warnings.warn("Transformation3D.setRotByAlignement is deprecated, "
+                      "use setRotByAlignment instead.",
+                      DeprecationWarning, stacklevel=2)
+        return self.setRotByAlignment(rotated, original)
 
     def setSciRot(self, sciRot):
         """
@@ -387,15 +454,81 @@ class Transformation3D:
     def transform_py(self, input):
         """
         Transform input points using Python implementation.
-        
+
         Args:
             input (ndarray): Input points (shape: Nx3)
-            
+
         Returns:
             ndarray: Transformed points (shape: Nx3)
         """
-        return self.__sciRot.inv().apply(input)+ self.__sciRot.inv().apply(self.__translation)
+        # global -> local like the C++ transform(): R^-1 (p - t); the old
+        # "+ R^-1 t" version disagreed with the C++ side for non-zero
+        # translations
+        return self.__sciRot.inv().apply(input - self.__translation)
         
+
+# material configured for Volume(matCfg=None). This is NOT a vacuum: it is a
+# dilute free gas (number density ~6 atoms/m^3, mean free path ~1e24 m, i.e.
+# numerically indistinguishable from vacuum), kept for backwards
+# compatibility instead of silently changing long-established geometries
+_VOLUME_DEFAULT_MATCFG = 'freegas::H1/1e-26kgm3/H_is_1_H1'
+
+# warn only once per process about the implicit default material
+_defaultMatcfgWarned = False
+
+# ---- daughter overlap scan (see Volume.placeChild/_checkDaughterOverlap) ---
+# no new C++ binding is required: the exported boolean-solid helper builds
+# the intersection of two placed solids, whose Monte-Carlo capacity is the
+# overlap volume
+_pt_solid_intersection = importFunc('pt_solid_intersection', type_voidp, [type_voidp, type_voidp, type_voidp])
+
+# pairs farther apart than this multiple of the radii of their
+# capacity-equivalent spheres are assumed disjoint without probing
+_OVERLAP_SCAN_DIST_FACTOR = 50.
+# boolean-capacity probes per parent volume (each costs a 1e6-point
+# Monte-Carlo sample in VecGeom, ~tens of ms)
+_OVERLAP_SCAN_MAX_PROBES = 200
+# intersections below this volume (in mm^3) are Monte-Carlo noise
+_OVERLAP_SCAN_MIN_OVERLAP = 1e-6
+
+# (solidA cobj, solidB cobj, relative rotation, relative translation) -> overlap
+_overlapProbeCache = {}
+
+
+def _equivalentSphereRadius(volume):
+    """Radius of the sphere with the same capacity as the volume's solid."""
+    try:
+        cap = volume.getCapacity()
+    except Exception:
+        return 0.
+    return (3. * max(float(cap), 0.) / (4. * np.pi)) ** (1. / 3.)
+
+
+def _intersectionCapacity(solidA, solidB, transfA, transfB):
+    """Overlap volume (mm^3) of two solids placed by transfA/transfB.
+
+    Returns the Monte-Carlo capacity of solidA . (transfA^-1 transfB)(solidB),
+    cached per solid pair and relative placement.
+    """
+    rotA, transA = transfA.getRotMatrix(), transfA.getTranslation()
+    rotB, transB = transfB.getRotMatrix(), transfB.getTranslation()
+    relRot = rotA.T.dot(rotB)
+    relTrans = rotA.T.dot(transB - transA)
+    key = (solidA, solidB, np.round(relRot, 9).tobytes(), np.round(relTrans, 9).tobytes())
+    if key in _overlapProbeCache:
+        return _overlapProbeCache[key]
+    rel = Transformation3D(relTrans[0], relTrans[1], relTrans[2]).setSciRot(scipyRot.from_matrix(relRot))
+    inter = _pt_solid_intersection(solidA, solidB, rel.cobj)
+    # wrap the intersection in a throw-away logical volume to reach the
+    # capacity binding; it stays registered in the GeoManager on purpose,
+    # deleting it gives "deregistering ... while geometry is closed" noise
+    # (the same reason Volume.__del__ is a no-op)
+    probeLv = _pt_Volume_new(b'cinema_overlap_probe', inter)
+    cap = float(_pt_Volume_capacity(probeLv))
+    _overlapProbeCache[key] = cap
+    return cap
+
+
 class Volume:
     """
     A Volume consists of a geometry, material, surface physics and scorers.
@@ -418,13 +551,18 @@ class Volume:
         Args:
             volname (str): Name identifier for the volume
             solid: Solid shape object (vecgeom::VUnplacedVolume type)
-            matCfg (str, optional): Material configuration string. Default: None
+            matCfg (str, optional): Material configuration string. Default: None,
+                which applies the dilute default material (see
+                _VOLUME_DEFAULT_MATCFG: not a true vacuum) and warns once
             surfaceCfg (str, optional): Surface configuration string. Default: None
         """
         self.volname = volname
-        # self.solid is of type vecgeom::VUnplacedVolume 
+        # self.solid is of type vecgeom::VUnplacedVolume
         self.solid = solid
         self.child = []  # List of child volumes
+        # placed daughters (name, Volume, Transformation3D) for the overlap scan
+        self._placed = []
+        self._overlapProbeCount = 0
         # self.cobj is of type vecgeom::LogicalVolume
         self.cobj = _pt_Volume_new(volname.encode('utf-8'), solid.cobj)
         self.volid = self.getLogicalID(self.cobj)
@@ -432,9 +570,21 @@ class Volume:
         self.surfaceCfg = surfaceCfg
 
         _pt_ResourceManager_addNewVolume(self.volid)
-        
+
         if matCfg is None:
-            self.setMaterial('freegas::H1/1e-26kgm3/H_is_1_H1')  # Set as universe (vacuum)
+            global _defaultMatcfgWarned
+            if not _defaultMatcfgWarned:
+                warnings.warn(
+                    f"Volume '{volname}' created without matCfg: applying the "
+                    f"dilute default material '{_VOLUME_DEFAULT_MATCFG}' "
+                    "(not a true vacuum). Pass an explicit matCfg (e.g. a "
+                    "Material built on 'void.ncmat') to silence this warning.",
+                    RuntimeWarning, stacklevel=2)
+                _defaultMatcfgWarned = True
+            self.setMaterial(_VOLUME_DEFAULT_MATCFG)
+            # record the actually applied material so introspection matches
+            # the configured physics
+            self.matCfg = _VOLUME_DEFAULT_MATCFG
         else:
             if isinstance(matCfg, str):
                 self.setMaterial(matCfg)
@@ -455,10 +605,29 @@ class Volume:
     def setMaterial(self, cfg: str):
         """
         Set bulk material for a volume.
-        
+
         Args:
-            cfg (str): Material configuration string
+            cfg (str): Material configuration string. The canonical form is a
+                `Material().cfg`-style string like
+                `physics=ncrystal;nccfg='<ncrystal cfg>'`; raw NCrystal
+                config strings containing parameters (e.g.
+                `Al_sg225.ncmat;temp=300K`) are accepted with a warning and
+                wrapped automatically, but only the canonical form carries
+                the bias options (scatter_bias/abs_bias/absorp_in_weight).
+
+        Note:
+            Material cfg *content* errors are pre-validated in Python
+            (_validateMatCfg) and raise a normal ValueError. Any error that
+            still escapes into the C++ NCrystal layer crosses the extern "C"
+            ctypes wrappers as a C++ exception, which cannot be caught from
+            Python and aborts the whole process - that bridge itself cannot
+            be fixed from Python.
         """
+        # pre-validate to turn the most common failure modes (missing data
+        # file, rejected cfg content) into normal exceptions instead of an
+        # uncatchable process abort
+        _validateMatCfg(cfg)
+        cfg = wrapRawNccfg(cfg)
         _pt_ResourceManager_cfgVolPhysics(self.volid, cfg.encode('utf-8'))
 
     def addScorer(self, scorer: Union[Scorer, str], cppScorer=ctypes.c_voidp()):
@@ -471,20 +640,22 @@ class Volume:
         """
         if isinstance(cppScorer, int):
             self.__class__.scorer_dict[scorer.name] = scorer.name
-            _pt_ResourceManager_addScorer(self.volid, scorer.name.encode('utf-8'), cppScorer) 
+            _pt_ResourceManager_addScorer(self.volid, scorer.name.encode('utf-8'), cppScorer)
         else:
             import re
             if isinstance(scorer, str):
+                _validateNccfgFiles(scorer)
                 nameList = scorer.split(';')
                 name = [n for n in nameList if 'name' in n][0]
                 name = re.search(r'=.*', name)
                 name = re.sub(r'=', '', name.group()).strip()
                 self.__class__.scorer_dict[name] = scorer
-                _pt_ResourceManager_addScorer(self.volid, scorer.encode('utf-8'), cppScorer) 
+                _pt_ResourceManager_addScorer(self.volid, scorer.encode('utf-8'), cppScorer)
             else:
                 cfg = scorer.cfg
+                _validateNccfgFiles(cfg)
                 self.__class__.scorer_dict[scorer.cfg_name] = cfg
-                _pt_ResourceManager_addScorer(self.volid, cfg.encode('utf-8'), cppScorer) 
+                _pt_ResourceManager_addScorer(self.volid, cfg.encode('utf-8'), cppScorer)
 
     def setSurface(self, cfg: str):
         """
@@ -493,24 +664,85 @@ class Volume:
         Args:
             cfg (str): Surface physics configuration string
         """
-        _pt_ResourceManager_addSurface(self.volid, cfg.encode('utf-8')) 
+        _validateNccfgFiles(cfg)
+        _pt_ResourceManager_addSurface(self.volid, cfg.encode('utf-8'))
 
-    def placeChild(self, name, logVolume, transf=Transformation3D(0,0,0), scorerGroup=0):
+    def placeChild(self, name, logVolume, transf=None, scorerGroup=0, checkOverlap=True):
         """
         Place a child volume inside the current volume.
-        
+
         Args:
             name (str): Name for the placed volume
             logVolume (Volume): Child volume to place
             transf (Transformation3D, optional): Transformation for placement. Default: identity
             scorerGroup (int, optional): Scorer group identifier. Default: 0
-            
+            checkOverlap (bool, optional): Run the best-effort overlap scan
+                against the already-placed daughter volumes and warn on
+                intersections (see _checkDaughterOverlap). Default: True
+
         Returns:
-            Volume: Self 
+            Volume: Self
         """
+        if transf is None:
+            # fresh identity per call: a shared default instance would be
+            # mutated by the first applyRot* on any caller-held reference
+            transf = Transformation3D()
         self.child.append(logVolume)
+        if checkOverlap:
+            try:
+                self._checkDaughterOverlap(name, logVolume, transf)
+            except Exception as exc:
+                # the scan is diagnostic-only and must never break assembly
+                warnings.warn(f"Overlap scan of volume '{self.volname}' was "
+                              f"skipped ({exc.__class__.__name__}: {exc})",
+                              RuntimeWarning, stacklevel=2)
+        self._placed.append((name, logVolume, transf))
         _pt_Volume_placeChild(self.cobj, name.encode('utf-8'), logVolume.cobj, transf.cobj, scorerGroup)
         return self
+
+    def _checkDaughterOverlap(self, name, logVolume, transf):
+        """Warn when the new daughter intersects an already-placed daughter.
+
+        The C++ build and the transport never diagnose overlapping daughters
+        (they run silently with exit 0), so this is the only code-level
+        diagnostic. The intersection volume of two solids is measured as the
+        capacity of their boolean intersection (VecGeom estimates boolean
+        capacities by Monte-Carlo sampling; a disjoint pair measures exactly
+        0). The scan is best effort:
+
+        - pairs whose placement origins are farther apart than
+          _OVERLAP_SCAN_DIST_FACTOR radii of their capacity-equivalent
+          spheres are assumed disjoint (only extreme sliver shapes could
+          defeat this),
+        - at most _OVERLAP_SCAN_MAX_PROBES probes run per parent volume,
+        - results are cached per (solid pair, relative placement).
+        """
+        rNew = _equivalentSphereRadius(logVolume)
+        for pname, pvol, ptransf in self._placed:
+            rOld = _equivalentSphereRadius(pvol)
+            dist = np.linalg.norm(transf.getTranslation() - ptransf.getTranslation())
+            if dist > _OVERLAP_SCAN_DIST_FACTOR * (rNew + rOld):
+                continue
+            if self._overlapProbeCount >= _OVERLAP_SCAN_MAX_PROBES:
+                warnings.warn(
+                    f"Overlap scan of volume '{self.volname}' stopped after "
+                    f"{self._overlapProbeCount} daughter pairs; very large "
+                    "daughter arrays are not fully scanned. Use "
+                    "placeChild(checkOverlap=False) to silence this.",
+                    RuntimeWarning, stacklevel=3)
+                # freeze the counter so the message fires only once
+                self._overlapProbeCount = _OVERLAP_SCAN_MAX_PROBES + 1
+                continue
+            self._overlapProbeCount += 1
+            overlap = _intersectionCapacity(pvol.solid.cobj, logVolume.solid.cobj,
+                                            ptransf, transf)
+            if overlap > _OVERLAP_SCAN_MIN_OVERLAP:
+                warnings.warn(
+                    f"Daughter volumes '{pname}' and '{name}' of volume "
+                    f"'{self.volname}' overlap: estimated intersection "
+                    f"volume {overlap:.3f} mm^3. Overlapping daughters have "
+                    "an undefined transport order; adjust the placements.",
+                    RuntimeWarning, stacklevel=3)
     
     # TODO: need review, to place a collection of Volume
     # def placeArray(self, array, transf=None, marker='', count=0):

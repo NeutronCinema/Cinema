@@ -28,6 +28,7 @@
 #include "PTScorerDirectSqw.hh"
 #include "PTScorerDeltaMomentum.hh"
 #include "PTScorer2D.hh"
+#include "PTScorer1D.hh"
 #include "PTScorerPSD.hh"
 #include "PTKillerMCPL.hh"
 namespace pt = Prompt;
@@ -111,16 +112,28 @@ void* pt_ScorerPSD_new(const char* name, double xmin, double xmax, unsigned nxbi
 
 void pt_addMultiScatter1D(void* scatter, void* scorer, int scatNumReq=-1)
 {
-  auto scr = static_cast<Prompt::Scorer1D *>(scorer);
-  const auto scat = static_cast<Prompt::ScorerMultiScat *>(scatter);
+  // dynamic_cast instead of the previous unchecked static_cast: attaching a
+  // scorer of the wrong dimensionality must fail with a clear message, not
+  // reinterpret across unrelated Scorer1D/Scorer2D layouts (undefined behaviour)
+  // dynamic_cast needs a polymorphic class pointer as its source, so first lift
+  // the void* to the common polymorphic base (every scorer derives from Scorer)
+  auto scr = dynamic_cast<Prompt::Scorer1D *>(static_cast<Prompt::Scorer *>(scorer));
+  const auto scat = dynamic_cast<const Prompt::ScorerMultiScat *>(static_cast<const Prompt::Scorer *>(scatter));
+  if(!scr || !scat)
+    PROMPT_THROW(BadInput, "pt_addMultiScatter1D: the scorer is not a Prompt::Scorer1D, "
+                           "or the scatter counter is not a Prompt::ScorerMultiScat");
   scr->addMultiScatter(scat, scatNumReq);
 }
 
 
 void pt_addMultiScatter2D(void* scatter, void* scorer, int scatNumReq=-1)
 {
-  auto scr = static_cast<Prompt::Scorer2D *>(scorer);
-  const auto scat = static_cast<Prompt::ScorerMultiScat *>(scatter);
+  // see the comment in pt_addMultiScatter1D
+  auto scr = dynamic_cast<Prompt::Scorer2D *>(static_cast<Prompt::Scorer *>(scorer));
+  const auto scat = dynamic_cast<const Prompt::ScorerMultiScat *>(static_cast<const Prompt::Scorer *>(scatter));
+  if(!scr || !scat)
+    PROMPT_THROW(BadInput, "pt_addMultiScatter2D: the scorer is not a Prompt::Scorer2D, "
+                           "or the scatter counter is not a Prompt::ScorerMultiScat");
   scr->addMultiScatter(scat, scatNumReq);
 }
 

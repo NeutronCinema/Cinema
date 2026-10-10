@@ -281,7 +281,9 @@ std::shared_ptr<Prompt::PrimaryGun> Prompt::GunFactory::createGun(const std::str
       return std::make_shared<MCPLGun>(Neutron(), fn);
     }
     else
-      PROMPT_THROW2(BadInput, "Gun " << gunDef << " is not supported. ")
+      PROMPT_THROW2(BadInput, "Gun " << gunDef << " is not supported. Available guns: "
+                    "MaxwellianGun, SimpleThermalGun, IsotropicGun, UniModeratorGun, "
+                    "MPIGun, SANSGun, MCPLGun. ")
   }
   pt_assert_always(false);
   //a return statement here to stop compiler warning, it should never reach here

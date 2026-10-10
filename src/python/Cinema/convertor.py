@@ -47,12 +47,14 @@ _ekin2v_vec = np.vectorize(_ekin2v)
 _v2ekin_vec = np.vectorize(_v2ekin)
 
 # Unit conversion constants
+# regression 2026-10-10: _eV2meV/_meV2eV used to be inverted (1e-3/1e3), so
+# 25.3 meV converted to 25300 eV instead of 0.0253 eV
 _eV2MeV = 1e-6
 _MeV2eV = 1e6
 _eV2keV = 1e-3
 _keV2eV = 1e3
-_eV2meV = 1e-3
-_meV2eV = 1e3
+_eV2meV = 1e3
+_meV2eV = 1e-3
 
 def _is_array_like(x):
     """Check if input is array-like (numpy array, list, tuple, etc.)."""
@@ -186,6 +188,37 @@ def eV2meV(energy_eV):
     return energy_eV * _eV2meV
 
 # Convenient functions with unit support
+def _energy2eV(energy, unit, argname):
+    """Resolve an energy in *unit* to eV; reject unknown unit strings.
+
+    Unknown strings used to fall back to eV silently (a 1000x error for meV
+    input); they now raise ValueError. Matching is exact: meV and MeV differ
+    only by case, so no case-insensitive folding is done here.
+    """
+    if unit == 'eV':
+        return energy
+    if unit == 'meV':
+        return meV2eV(energy)
+    if unit == 'keV':
+        return keV2eV(energy)
+    if unit == 'MeV':
+        return MeV2eV(energy)
+    raise ValueError(f'unsupported energy unit {unit!r} for {argname}; '
+                     'supported units: eV, meV, keV, MeV')
+
+def _eV2energy(energy_eV, unit, argname):
+    """Resolve an energy in eV to *unit*; same exact matching as _energy2eV."""
+    if unit == 'eV':
+        return energy_eV
+    if unit == 'meV':
+        return eV2meV(energy_eV)
+    if unit == 'keV':
+        return eV2keV(energy_eV)
+    if unit == 'MeV':
+        return eV2MeV(energy_eV)
+    raise ValueError(f'unsupported energy unit {unit!r} for {argname}; '
+                     'supported units: eV, meV, keV, MeV')
+
 def angleCosine2Q_units(angle_cos, enin, enin_unit='eV', enout=None, enout_unit='eV'):
     """Calculate momentum transfer Q with flexible unit support.
     
@@ -202,27 +235,13 @@ def angleCosine2Q_units(angle_cos, enin, enin_unit='eV', enout=None, enout_unit=
         Momentum transfer Q in Å⁻¹ (broadcasted shape)
     """
     # Convert to eV
-    if enin_unit == 'meV':
-        enin_eV = meV2eV(enin)
-    elif enin_unit == 'keV':
-        enin_eV = keV2eV(enin)
-    elif enin_unit == 'MeV':
-        enin_eV = MeV2eV(enin)
-    else:  # Default eV
-        enin_eV = enin
-    
+    enin_eV = _energy2eV(enin, enin_unit, 'enin_unit')
+
     if enout is None:
         enout_eV = enin_eV  # Elastic scattering
     else:
-        if enout_unit == 'meV':
-            enout_eV = meV2eV(enout)
-        elif enout_unit == 'keV':
-            enout_eV = keV2eV(enout)
-        elif enout_unit == 'MeV':
-            enout_eV = MeV2eV(enout)
-        else:  # Default eV
-            enout_eV = enout
-    
+        enout_eV = _energy2eV(enout, enout_unit, 'enout_unit')
+
     return angleCosine2Q(angle_cos, enin_eV, enout_eV)
 
 def wl2ekin_units(wl_angstrom, ekin_unit='eV'):
@@ -238,15 +257,7 @@ def wl2ekin_units(wl_angstrom, ekin_unit='eV'):
         Kinetic energy in specified unit (same shape as input)
     """
     ekin_eV = wl2ekin(wl_angstrom)
-    
-    if ekin_unit == 'meV':
-        return eV2meV(ekin_eV)
-    elif ekin_unit == 'keV':
-        return eV2keV(ekin_eV)
-    elif ekin_unit == 'MeV':
-        return eV2MeV(ekin_eV)
-    else:  # Default eV
-        return ekin_eV
+    return _eV2energy(ekin_eV, ekin_unit, 'ekin_unit')
 
 def ekin2wl_units(ekin, ekin_unit='eV'):
     """Convert kinetic energy to wavelength with flexible input units.
@@ -261,15 +272,8 @@ def ekin2wl_units(ekin, ekin_unit='eV'):
         Wavelength in Å (same shape as input)
     """
     # Convert to eV
-    if ekin_unit == 'meV':
-        ekin_eV = meV2eV(ekin)
-    elif ekin_unit == 'keV':
-        ekin_eV = keV2eV(ekin)
-    elif ekin_unit == 'MeV':
-        ekin_eV = MeV2eV(ekin)
-    else:  # Default eV
-        ekin_eV = ekin
-    
+    ekin_eV = _energy2eV(ekin, ekin_unit, 'ekin_unit')
+
     return ekin2wl(ekin_eV)
 
 # Export all functions

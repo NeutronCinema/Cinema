@@ -21,7 +21,7 @@
 ################################################################################
 
 import numpy as np
-from .launcher import Launcher
+from .launcher import Launcher, _WORLD_EXIST_MSG
 from .geo import Volume
 from ..Interface import importFunc
 import warnings
@@ -113,25 +113,40 @@ class Prompt:
     def setWorld(self, world):
         """
         Set the geometry world.
-        
+
         Args:
             world: Geometry world object
-            
+
+        Raises:
+            RuntimeError: If a world already exists in this process
+
         Note:
-            sets world through Launcher and applies random seed.
+            sets world through Launcher and applies random seed. Only one
+            world can be set per process (the Launcher is a process-wide
+            singleton shared by every Prompt instance), so run each world,
+            e.g. each parameter-scan point, in its own process or mpirun rank.
         """
+        # check before setSeed: the underlying C++ aborts the whole process
+        # (uncatchable SIGABRT) when the seed is set a second time
+        if self.l.worldExist:
+            raise RuntimeError(_WORLD_EXIST_MSG)
         self.l.setSeed(self.seed)
         self.l.setWorld(world)
 
-    def show(self, gun, num: int = 0):
+    def show(self, gun, num: int = 0, mergeMesh=False, xscale=1.0, yscale=1.0, zscale=1.0, byMat=False, addLegend=False, geoClip=False):
         """
         Display geometries and particle trajectories.
-        
+
         Args:
             gun: Particle gun configuration or object
             num: Number of particles to display, defaults to 0 (no trajectory, only show geometries)
+            mergeMesh: Whether to merge meshes
+            xscale, yscale, zscale: Coordinate scaling factors
+            byMat: Color the geometry by material
+            addLegend: Add legend
+            geoClip: Geometry clipping
         """
-        self.l.showWorld(gun, num)
+        self.l.showWorld(gun, num, mergeMesh, xscale, yscale, zscale, byMat, addLegend=addLegend, geoClip=geoClip)
 
     def simulateSecondStack(self, num):
         """
@@ -157,10 +172,10 @@ class Prompt:
         """
         if hasattr(gun, 'items'):
             self.l.setGun(gun.cfg)
-            self.l.go(int(num), timer=timer, save2Dis=save2Disk)
+            self.l.go(int(num), timer=timer, save2Disk=save2Disk)
         elif isinstance(gun, str):
             self.l.setGun(gun)
-            self.l.go(int(num), timer=timer, save2Dis=save2Disk)
+            self.l.go(int(num), timer=timer, save2Disk=save2Disk)
         else:
             # it is a python gun
             from tqdm import tqdm
@@ -192,18 +207,24 @@ class Prompt:
     def gatherHistData(self, cfg, raw=False):
         """
         Collect histogram data from scorer.
-        
+
         Args:
             cfg: Scorer configuration or name
             raw: Whether to return raw data, defaults to False (uses scorer dictionary)
-            
+
         Returns:
             Hist: Histogram data object
+
+        Raises:
+            KeyError: If no scorer with the given name is registered
         """
         if raw:
             return self.l.getHist(cfg)
         else:
-            return self.l.getHist(self.scorer[cfg])
+            try:
+                return self.l.getHist(self.scorer[cfg])
+            except KeyError:
+                raise KeyError(f"no scorer named '{cfg}'; registered scorers: {list(self.scorer)}") from None
 
     def save_all_scorers(self, savepdf=False):
         """
@@ -259,20 +280,25 @@ class PromptMPI(Prompt):
     def size(self):
         return self._size
 
-    def simulate(self, gun, num: int = 0):
+    def simulate(self, gun, num: int = 0, timer=True, save2Disk=False):
         """
         MPI version of simulation method, automatically distributes events to processes.
-        
+
         Args:
             gun: Particle gun, an instance of class Gun
             num: Total number of events
-            
+            timer: Whether to enable timer, defaults to True (timing prints on rank 0 only)
+            save2Disk: Whether to save scorers to disk, defaults to False
+                (saved on rank 0 only; non-root ranks never save since their
+                histograms are reduced to the root rank afterwards)
         """
         batchSize = int(num / self.size)
         if self.rank:
-            super().simulate(gun, batchSize, timer=False)
+            # non-root ranks never print the timer nor save to disk: their
+            # local histograms are reduced to the root rank afterwards
+            super().simulate(gun, batchSize, timer=False, save2Disk=False)
         else:
-            super().simulate(gun, num - batchSize * (self.size - 1))
+            super().simulate(gun, num - batchSize * (self.size - 1), timer=timer, save2Disk=save2Disk)
 
     def show(self, gun, num: int = 0, mergeMesh=False, xscale=1.0, yscale=1.0, zscale=1.0, byMat=False, addLegend=False, geoClip=False):
         """

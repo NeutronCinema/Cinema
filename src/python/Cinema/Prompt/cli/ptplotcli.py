@@ -18,7 +18,7 @@ from Cinema.analysis import IncidentParameters
 plotStyle()
 
 try:
-    from Cinema import CinemaXY
+    from Cinema import CinemaXY, CinemaXYZ
     print("Successfully imported CinemaXY class")
 except ImportError as e:
     print(f"Failed to import CinemaXY class: {e}")
@@ -240,12 +240,25 @@ def load_single_h5_file(h5_filepath):
             return None, None
         
         print(f"\nLoading HDF5 file: {h5_filepath}")
-        
-        # Use the from_hdf5 method you implemented
-        cinema_data = CinemaXY.from_hdf5(h5_filepath)
-        
+
+        # Dispatch on the dataset layout written by the histogram writers:
+        # Hist1D.save stores center/edge, Hist2D.save stores xcenter/ycenter/
+        # xedge/yedge. The "type" dataset only holds the histogram name prefix
+        # (e.g. "pt" or "ScorerTOF"), so it cannot distinguish 1D from 2D.
+        import h5py
+        with h5py.File(h5_filepath, 'r') as f:
+            ftype = f['type'][()].decode() if 'type' in f else 'unknown'
+            is2d = 'xcenter' in f and 'ycenter' in f
+
+        print(f"Histogram type dataset: {ftype}")
+
+        if is2d:
+            cinema_data = CinemaXYZ.from_hdf5(h5_filepath)
+        else:
+            cinema_data = CinemaXY.from_hdf5(h5_filepath)
+
         file_basename = os.path.basename(h5_filepath)
-        print(f"Successfully created CinemaXY object for {file_basename}")
+        print(f"Successfully created {type(cinema_data).__name__} object for {file_basename}")
         print(f"Data shape: {cinema_data.shape}")
         print(f"X coordinate range: [{cinema_data.x.min():.3f}, {cinema_data.x.max():.3f}]")
         print(f"Weight range: [{cinema_data.mean.min():.3f}, {cinema_data.mean.max():.3f}]")
@@ -350,13 +363,27 @@ def create_plot(cinema_data_list : list[CinemaXY], file_basenames, xlabel=None, 
         # Calculate integral
         integral = calculate_integral(cinema_data)
         
-        # Downbinning
+        # Downbinning: 1D data is pair-summed along x, 2D data along its rows
         _maxdb_level = 0
         for _ in range(downbinning_level):
-            if len(cinema_data.x) % 2 != 0:
+            binned_axis_len = cinema_data.shape[0] if cinema_data.ndim == 2 else len(cinema_data.x)
+            if binned_axis_len % 2 != 0:
                 print(f"Warning: Maximun downbinning level reached for {basename}, fall back to {_maxdb_level} downbinning operations")
                 break
-            cinema_data = (cinema_data[::2] + cinema_data[1::2])
+            if cinema_data.ndim == 2:
+                # Pair-sum the rows and rebuild both coordinates (the generic
+                # ufunc path only propagates the x attribute, leaving y None)
+                x_labels_rows = len(cinema_data.x) == cinema_data.shape[0]
+                rowc = np.asarray(cinema_data.x if x_labels_rows else cinema_data.y)
+                colc = cinema_data.y if x_labels_rows else cinema_data.x
+                rowc = 0.5 * (rowc[::2] + rowc[1::2])
+                cinema_data = cinema_data[::2] + cinema_data[1::2]
+                if x_labels_rows:
+                    cinema_data.x, cinema_data.y = rowc, colc
+                else:
+                    cinema_data.x, cinema_data.y = colc, rowc
+            else:
+                cinema_data = (cinema_data[::2] + cinema_data[1::2])
             _maxdb_level += 1
 
         # Format integral value
@@ -374,9 +401,13 @@ def create_plot(cinema_data_list : list[CinemaXY], file_basenames, xlabel=None, 
             alpha = 1.0
             label = f'Weight ± Standard Deviation, integral {integral_str}'
         
-        # Use CinemaXY's built-in plot method
-        cinema_data.plot(ax=ax, fmt=f'{color}-', marker=marker, markersize=4, alpha=alpha,
-                       label=label, capsize=3, elinewidth=1, ylog=ylog)
+        # Use the built-in plot method: 2D data (CinemaXYZ) renders as an
+        # image with a colorbar, 1D data as errorbars
+        if cinema_data.ndim == 2:
+            cinema_data.plot(ax=ax)
+        else:
+            cinema_data.plot(ax=ax, fmt=f'{color}-', marker=marker, markersize=4, alpha=alpha,
+                           label=label, capsize=3, elinewidth=1, ylog=ylog)
     
     # Set axis labels and title
     ax.set_xlabel(xlabel if xlabel else 'X Coordinate')
@@ -385,7 +416,8 @@ def create_plot(cinema_data_list : list[CinemaXY], file_basenames, xlabel=None, 
     if not is_combined:
         ax.set_title(f'HDF5 Data Visualization (File: {file_basenames[0]})')
     
-    ax.legend()
+    if ax.get_legend_handles_labels()[0]:
+        ax.legend()
     ax.grid(True, alpha=0.3)
     
     plt.tight_layout()

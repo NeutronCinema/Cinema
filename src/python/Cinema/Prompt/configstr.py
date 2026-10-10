@@ -31,8 +31,14 @@ class ConfigString(dict):
         >>> print(config.cfg_name)  # Output: 'quantity'
     """
     
-    # Enable attribute-style access to dictionary items
-    __getattr__ = dict.__getitem__
+    # Enable attribute-style access to dictionary items. A missing item must
+    # raise AttributeError instead of KeyError so that hasattr()/3-arg getattr()
+    # and the copy/pickle protocols keep working for all ConfigString subclasses.
+    def __getattr__(self, name):
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(f'{type(self).__name__!r} object has no attribute {name!r}') from None
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
 
