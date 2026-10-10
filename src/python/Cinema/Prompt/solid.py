@@ -531,13 +531,22 @@ class Paraboloid(Solid):
         rbot: Radius at bottom. In unit mm.
         rtop: Radius at top. In unit mm.
         halfHeight: Half-height. In unit mm.
-        
+
+    Raises:
+        ValueError: If rbot >= rtop. The vendored transport kernel is written
+            for rhi > rlo; inverted radii make DistanceToOut/DistanceToIn
+            return garbage (negative/infinite), and equal radii are not a
+            defined shape (the profile parabola through two equal-radius
+            circles is not unique), so both are rejected loudly.
+
     Example:
-        >>> paraboloid = Paraboloid(3.0, 1.0, 5.0)
+        >>> paraboloid = Paraboloid(1.0, 3.0, 5.0)
     """
-    
+
     def __init__(self, rbot, rtop, halfHeight):
         self._sanityCheckPositive(rbot, rtop, halfHeight)
+        if rbot >= rtop:
+            raise ValueError(f"Paraboloid requires rbot < rtop, got rbot={rbot}, rtop={rtop}")
         self.cobj = _pt_Paraboloid_new(rbot, rtop, halfHeight)
 
 class PolyCone(Solid):

@@ -101,11 +101,14 @@ def test_trapezoid_boxlike_capacity():
 def test_paraboloid_capacity_315():
     # convention confirmed on four parameter sets: V = pi z (rbot^2 + rtop^2)
     # with z the halfHeight argument
-    assert _capacity(Paraboloid(3.0, 1.0, 5.0)) == pytest.approx(np.pi * 5 * (9 + 1))
+    assert _capacity(Paraboloid(1.0, 3.0, 5.0)) == pytest.approx(np.pi * 5 * (9 + 1))
 
 
-def test_paraboloid_capacity_224():
-    assert _capacity(Paraboloid(2.0, 2.0, 4.0)) == pytest.approx(np.pi * 4 * (4 + 4))
+def test_paraboloid_capacity_234():
+    # the old (2,2,4) case pinned the same formula but rbot == rtop is rejected
+    # by the constructor now (out of the kernel's rhi > rlo contract), so the
+    # equality degenerate was replaced by a valid ordered pair
+    assert _capacity(Paraboloid(2.0, 3.0, 4.0)) == pytest.approx(np.pi * 4 * (4 + 9))
 
 
 def test_polycone_straight_profile_is_tube():

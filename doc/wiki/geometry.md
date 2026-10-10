@@ -215,7 +215,7 @@ all angles degrees.
 | `Polyhedron` | `(zPlanes, rMin, rMax, sideCount=6, phiStart_deg=0, phiDelta_deg=360)` | equal-length arrays; per-plane `rMin <= rMax` checked |
 | `PolyCone` | `(vec_z, vec_rmin, vec_rmax, phiStart_deg=0, phiDelta_deg=360)` | equal-length arrays; the z-planes must be monotonic |
 | `Cone` | `(rmaxBot, rmaxTop, z, rminBot=0, rminTop=0, phiStart_deg=0, phiDelta_deg=360)` | conical frustum; **the docstring says "Height" for `z`, but the value is passed straight to VecGeom's `UnplacedCone(..., dz, ...)` — it is a *half*-height.** |
-| `Paraboloid` | `(rbot, rtop, halfHeight)` | |
+| `Paraboloid` | `(rbot, rtop, halfHeight)` | `halfHeight` = **half**-height; `rbot < rtop` is **enforced** — the constructor raises `ValueError` for `rbot >= rtop` (the vendored transport kernel is written for `rhi > rlo`: inverted radii make the distance kernels return garbage, and `rbot == rtop` divides by zero and does not define a unique shape, unlike `Cone` where equal radii are the cylinder limit) |
 | `HyperbolicTube` | `(rmax, inst, outst, halfHeight, rmin=0)` | hyperbolic tube; `inst`/`outst` stereo angles in deg, must not exceed 90° (the check rejects a value above 90°; "less than 90° suggested"). The old misspelling `HypebolicTube` still constructs but emits a `DeprecationWarning` |
 | `Ellipsoid` | `(dx, dy, dz, zBottomCut=0, zTopCut=0)` | semi-axes; optional z cut planes (both 0 = uncut) |
 | `Tetrahedron` | `(p1, p2, p3, p4)` | the 4 corner vectors |

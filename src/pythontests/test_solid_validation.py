@@ -158,6 +158,19 @@ def test_paraboloid_negative_halfheight_raises():
         Paraboloid(3.0, 1.0, -5.0)
 
 
+def test_paraboloid_inverted_raises():
+    # the vendored kernel is written for rhi > rlo (dd = 1/(rhi^2 - rlo^2)):
+    # probed 2026-10-10, inverted radii make DistanceToOut return negative
+    # garbage for interior points (e.g. -2.35) -- a silent wall leak -- and
+    # equal radii diverge it (3e30), because dd divides by zero and the
+    # profile parabola through two equal-radius circles is not even unique
+    # (unlike Cone, where rmin == rmax is the well-defined cylinder limit)
+    with pytest.raises(ValueError, match=r"requires rbot < rtop, got rbot=3\.0, rtop=1\.0"):
+        Paraboloid(3.0, 1.0, 5.0)
+    with pytest.raises(ValueError, match=r"requires rbot < rtop, got rbot=2\.0, rtop=2\.0"):
+        Paraboloid(2.0, 2.0, 4.0)
+
+
 def test_arbtrapezoid_negative_halfz_raises():
     with pytest.raises(ValueError, match="Negative value"):
         ArbTrapezoid(*_box_corners(1.0, 1.0), -5.0)
