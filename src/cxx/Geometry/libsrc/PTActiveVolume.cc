@@ -347,7 +347,8 @@ bool Prompt::ActiveVolume::proprogateInAVolume(Particle &particle)
   #endif
   
   // Here is the state just before interaction
-  // FIXME: absorption reaction will score twice for PEA_PRE type scorer, affects Volfluence
+  // PEA_PRE scores here once per segment; absorption no longer double-fires it
+  // (the absorb_scorers registration for PEA_PRE was removed in ResourceManager::addScorer)
   if(sameVolume)
     scorePropagatePre(particle);
 

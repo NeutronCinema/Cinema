@@ -630,15 +630,37 @@ class Volume:
         cfg = wrapRawNccfg(cfg)
         _pt_ResourceManager_cfgVolPhysics(self.volid, cfg.encode('utf-8'))
 
+    def _raiseIfScorerNameTaken(self, name: str):
+        """Raise ValueError when a scorer name is already registered.
+
+        A duplicate scorer name would silently alias to the first
+        registration: both volumes would report the same histogram and the
+        results could not be told apart. The registry is shared by all
+        volumes, so a name must be unique across the whole world. This is the
+        single contract enforcement point; the C++ ResourceManager only
+        prints a warning when the same cfg is re-registered on one volume.
+        """
+        if name in self.__class__.scorer_dict:
+            raise ValueError(
+                f"a scorer named '{name}' is already registered (registering "
+                f"volume '{self.volname}'); scorer names must be unique - "
+                "give the scorer a different name instead of registering it "
+                "twice")
+
     def addScorer(self, scorer: Union[Scorer, str], cppScorer=ctypes.c_voidp()):
         """
         Add a scorer to the volume.
-        
+
         Args:
             scorer (Union[Scorer, str]): Scorer object or configuration string
             cppScorer (ctypes.c_voidp, optional): C++ scorer object pointer. Default: empty
+
+        Raises:
+            ValueError: A scorer with the same name is already registered,
+                on this or any other volume of the world.
         """
         if isinstance(cppScorer, int):
+            self._raiseIfScorerNameTaken(scorer.name)
             self.__class__.scorer_dict[scorer.name] = scorer.name
             _pt_ResourceManager_addScorer(self.volid, scorer.name.encode('utf-8'), cppScorer)
         else:
@@ -649,11 +671,13 @@ class Volume:
                 name = [n for n in nameList if 'name' in n][0]
                 name = re.search(r'=.*', name)
                 name = re.sub(r'=', '', name.group()).strip()
+                self._raiseIfScorerNameTaken(name)
                 self.__class__.scorer_dict[name] = scorer
                 _pt_ResourceManager_addScorer(self.volid, scorer.encode('utf-8'), cppScorer)
             else:
                 cfg = scorer.cfg
                 _validateNccfgFiles(cfg)
+                self._raiseIfScorerNameTaken(scorer.cfg_name)
                 self.__class__.scorer_dict[scorer.cfg_name] = cfg
                 _pt_ResourceManager_addScorer(self.volid, cfg.encode('utf-8'), cppScorer)
 

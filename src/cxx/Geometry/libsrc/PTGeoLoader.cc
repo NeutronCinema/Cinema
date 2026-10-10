@@ -135,6 +135,10 @@ void Prompt::GeoLoader::initFromGDML(const std::string &gdml_file)
           if (info.GetType() == "Scorer")
           {
             std::string scorercfg = info.GetValue();
+            // duplicate-name contract: the Python Volume.addScorer raises
+            // ValueError on a duplicate registration. GDML loads go through
+            // ResourceManager::addScorer, which only prints a one-line
+            // warning when the same cfg is registered twice on this volume.
             m_resman.addScorer(volID, scorercfg);
 
             // std::shared_ptr<Prompt::Scorer> scor = getScorer(info.GetValue());

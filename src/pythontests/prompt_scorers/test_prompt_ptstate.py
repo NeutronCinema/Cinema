@@ -112,6 +112,58 @@ def test_PROPAGATE_PRE_POST():
     sim.clear()
 
 
+@pytest.mark.medium
+def test_PEA_PRE_absorber():
+    """
+    A thick Cd slab: thermal neutrons entering it are almost all absorbed.
+
+    PEA_PRE (propagate-exit-absorb) must fire exactly once per track segment:
+    propagate_pre before each in-volume interaction - including the absorbing
+    one - plus once at exit. An absorbed segment is therefore counted once,
+    so per history PEA_PRE == ENTRY + EXIT. When the absorbing segment was
+    additionally registered as an absorb trigger, PEA_PRE recorded about
+    twice the number of entries.
+    """
+    class MySim(Prompt):
+        def __init__(self, seed) -> None:
+            super().__init__(seed)
+
+        def makeWorld(self):
+            world = Volume('world', Box(50, 50, 200))
+
+            sample_mat = "Cd.ncmat"
+            slab = Volume('sample', Box(2,2,20), sample_mat)
+
+            scorerTest1 = ESpectrumHelper('testObj_ENTRY', 1e-6, 10, 20, 2112, 'ENTRY', False, )
+            scorerTest1.make(slab)
+            scorerTest2 = ESpectrumHelper('testObj2_EXIT', 1e-6, 10, 20, 2112, 'EXIT', False, )
+            scorerTest2.make(slab)
+            scorerTest3 = ESpectrumHelper('testObj3_PEA_PRE', 1e-6, 10, 20, 2112, 'PEA_PRE', False, )
+            scorerTest3.make(slab)
+
+            world.placeChild('phy_sample', slab)
+
+            self.setWorld(world)
+
+    sim = MySim(seed=4096)
+    sim.makeWorld()
+
+    gun = "gun=MaxwellianGun;src_w=1;src_h=1;src_z=-100;slit_w=1;slit_h=1;slit_z=1e99;temperature=293;"
+    pnum = 1e4
+    sim.simulate(gun, pnum)
+    nentry = sim.gatherHistData('testObj_ENTRY').getTotalHit()
+    nexit = sim.gatherHistData('testObj2_EXIT').getTotalHit()
+    npea = sim.gatherHistData('testObj3_PEA_PRE').getTotalHit()
+    print(nentry, nexit, npea)
+    # one fire per segment: an absorbed history scores once (the pre-hit of
+    # the absorbing interaction), a transmitted history scores once at exit
+    np.testing.assert_allclose(npea, nentry + nexit, rtol=0.05)
+    # guard against the old double counting: absorption must not score again
+    np.testing.assert_allclose(npea, nentry, rtol=0.1)
+    assert npea < 1.5 * nentry
+    sim.clear()
+
+
 def test_prompt_ptstate():
     if __name__ == '__main__':
         test_ENTRY_EXIT()
