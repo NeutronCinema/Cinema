@@ -69,6 +69,10 @@ Prompt::CfgParser::StringCfg Prompt::CfgParser::parse(const std::string& cfgstri
   }  
 
   auto strvec = split(cfgstr, ';');
+  if(strvec.empty()) //split() drops empty tokens, so e.g. an empty cfg leaves nothing to read
+    PROMPT_THROW2(BadInput, " cfg \""<< cfgstrinput << "\" is empty (expected "
+                  "key=value sections separated by ';'; if this is a gun definition, "
+                  "the first section must be gun=<GunName>)" );
   StringCfg cfg;
   cfg.name=strvec[0];
   for(const auto &s: strvec)

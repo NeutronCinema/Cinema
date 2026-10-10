@@ -194,6 +194,28 @@ TEST_CASE("CfgParser rejects sections without '=' and empty values")
   CHECK(trailing.find("a") == "b");
 }
 
+TEST_CASE("CfgParser empty cfg strings throw BadInput instead of crashing")
+{
+  // split() drops empty tokens, so an all-empty cfg used to index past the
+  // end of the token vector (segfault); it must throw BadInput instead
+  CHECK_THROWS_AS(parseCfg(""), Prompt::Error::BadInput);
+  CHECK_THROWS_AS(parseCfg(";"), Prompt::Error::BadInput);
+  CHECK_THROWS_AS(parseCfg(" ;; "), Prompt::Error::BadInput);
+  CHECK_THROWS_AS(parseCfg("   "), Prompt::Error::BadInput);
+
+  // valid strings still parse identically (single- and multi-section)
+  auto single = parseCfg("k=v");
+  CHECK(single.size() == 1);
+  CHECK(single.name == "k=v");
+  CHECK(single.find("k") == "v");
+
+  auto multi = parseCfg("a=b;c=d");
+  CHECK(multi.size() == 2);
+  CHECK(multi.name == "a=b");
+  CHECK(multi.find("a") == "b");
+  CHECK(multi.find("c") == "d");
+}
+
 TEST_CASE("CfgParser single-section string: name is the whole first section")
 {
   auto cfg = parseCfg("k=v");
