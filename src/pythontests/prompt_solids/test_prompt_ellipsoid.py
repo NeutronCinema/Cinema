@@ -2,6 +2,7 @@
 
 from Cinema.Prompt import Prompt, PromptMPI
 from Cinema.Prompt.geo import Volume, Transformation3D
+import pytest
 from Cinema.Prompt.solid import Box,Tube, Ellipsoid
 from Cinema.Prompt.scorer import makePSD, ESpectrumHelper, WlSpectrumHelper, TOFHelper
 from Cinema.Prompt.gun import PythonGun
@@ -13,6 +14,7 @@ from Cinema.Prompt.gun import UniModeratorGun
 import numpy as np
 
 
+@pytest.mark.medium  # ~0.29 s body: medium tier (cimbuild -tt/-ttt), skipped by the pre-push hook
 def test_simulation():
     para_half_length = 1000
     para_source_location = -2000

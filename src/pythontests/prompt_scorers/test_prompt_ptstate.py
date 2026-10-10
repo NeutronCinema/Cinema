@@ -11,6 +11,7 @@ EXIT
     SURFACE
     ABSORB
 """
+import pytest
 from Cinema.Prompt import Prompt, PromptMPI
 from Cinema.Prompt.geo import Volume
 from Cinema.Prompt.solid import Box, Sphere, Tube
@@ -19,6 +20,7 @@ from Cinema.Prompt.scorer import ESpectrumHelper
 from Cinema.Prompt.geo import Transformation3D
 import numpy as np
 
+@pytest.mark.slow  # >0.7 s body: excluded from the pre-push hook, runs in cimbuild -t
 def test_ENTRY_EXIT():
     """
     A Sphere@Box model with void material

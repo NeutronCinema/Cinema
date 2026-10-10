@@ -2,6 +2,7 @@
 
 from Cinema.Prompt import Prompt, PromptMPI
 from Cinema.Prompt.geo import Volume, Transformation3D
+import pytest
 from Cinema.Prompt.solid import Box, HypebolicTube
 from Cinema.Prompt.gun import PythonGun
 from Cinema.Prompt.scorer import WlSpectrum
@@ -11,6 +12,7 @@ from Cinema.Prompt import Prompt
 from Cinema.Prompt.geo import Volume
 
 
+@pytest.mark.medium  # ~0.62 s body: medium tier (cimbuild -tt/-ttt), skipped by the pre-push hook
 def test_simulation():
     expectWl = [385., 385., 397., 374., 404., 384., 323., 384., 359., 321., 262.,
            248., 238., 227., 187., 152., 163., 151., 159., 129.]

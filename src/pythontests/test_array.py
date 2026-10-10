@@ -1,9 +1,11 @@
 import numpy as np
+import pytest
 from  Cinema.Prompt.histogram import Hist1D, NumpyHist1D
 import matplotlib.pyplot as plt
 from Cinema import CinemaArray, CinemaXY
 
 
+@pytest.mark.slow  # >0.7 s body: excluded from the pre-push hook, runs in cimbuild -t
 def test_simulation():
     xbin=10
     xmin=0.

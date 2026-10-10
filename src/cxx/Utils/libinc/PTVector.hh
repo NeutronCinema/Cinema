@@ -3,9 +3,9 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -129,6 +129,32 @@ void inline Prompt::Vector::findRotationMatrixFrom001(double rotation_matrix[9])
     Vector v(-vec_rotated_from_001_unit.y(), vec_rotated_from_001_unit.x(), 0);
     double s = v.mag();
     double c = vec_rotated_from_001_unit.z(); // Simplified dot product with z-axis
+
+    if (s == 0.0) {
+      // Degenerate case: the target vector is exactly along the z-axis
+      // (x == y == 0), for which the Rodrigues construction below would divide
+      // by s*s == 0 and produce an all-NaN matrix. The exact +z direction is
+      // handled above, so this is either +z up to rounding of the
+      // normalisation (use the identity), or the antiparallel (0,0,-1)
+      // direction, for which the rotation is not unique: use the 180-degree
+      // rotation about the x-axis, which maps +z onto -z.
+      if (vec_rotated_from_001_unit.z() > 0.0) {
+        for (int i = 0; i < 9; ++i) {
+          rotation_matrix[i] = (i % 4 == 0) ? 1.0 : 0.0;
+        }
+      } else {
+        rotation_matrix[0] = 1.0;
+        rotation_matrix[1] = 0.0;
+        rotation_matrix[2] = 0.0;
+        rotation_matrix[3] = 0.0;
+        rotation_matrix[4] = -1.0;
+        rotation_matrix[5] = 0.0;
+        rotation_matrix[6] = 0.0;
+        rotation_matrix[7] = 0.0;
+        rotation_matrix[8] = -1.0;
+      }
+      return;
+    }
 
     // Skew-symmetric matrix in 1D array
     double k_mat[9] = {

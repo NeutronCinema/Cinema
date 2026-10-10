@@ -295,12 +295,21 @@ broken install.
 
 ## 9. Running the test suite
 
-`cimbuild -t` (after a build) runs everything, in two halves:
+`cimbuild -t` (after a build) runs the C++ tests plus the **fast** Python tier;
+repeat the flag for wider tiers:
 
-1. **C++ tests** — `ctest -j<n/2>` in `cinemabin/`: doctest-based unit tests
-   (`src/cxxtests/`) plus one ctest entry per Python test file.
-2. **Python tests** — `scripts/pytest_tree.py`: runs
-   `pytest src/pythontests --forked` and prints the result as a tree.
+| command | C++ (`ctest`) | Python tier |
+|---|---|---|
+| `cimbuild -t` | all | fast only — `-m "not medium and not slow"` |
+| `cimbuild -tt` | all | fast + medium — `-m "not slow"` |
+| `cimbuild -ttt` | all | everything |
+
+Tiers are set by test-body duration, via the markers registered in
+`src/pythontests/conftest.py`: **fast** = unmarked, body under ~50 ms;
+**medium** = `@pytest.mark.medium`, roughly 50 ms–0.7 s; **slow** =
+`@pytest.mark.slow`, over 0.7 s (real simulations, plotting, CLI
+round-trips). The pre-push hook (`scripts/git-hooks/pre-push`) runs the same
+checks as `cimbuild -t` minus the rebuild, so pushes stay fast.
 
 Three prerequisites, or the suites fail for environment reasons rather than code
 reasons:
@@ -317,31 +326,33 @@ reasons:
 ### Direct invocations (faster than a full `cimbuild -t`)
 
 ```bash
-# Python suite only — the fast, authoritative check (~10 s):
+# Python suite only — the fast tier, same as the pre-push hook (~15 s):
+cd cinemabin && ../cinemavirenv/bin/python3 -m pytest ../src/pythontests --forked --tb=line -q -m "not medium and not slow"
+
+# Python suite only — everything, incl. the slow tier:
 cd cinemabin && ../cinemavirenv/bin/python3 -m pytest ../src/pythontests --forked --tb=line -q
 
-# C++ suite only:
-cd cinemabin && ctest -j$(($(nproc)/2))
+# C++ suite only (python-tests is the ctest entry that wraps pytest):
+cd cinemabin && ctest -j$(($(nproc)/2)) -E "^python-tests$"
 
 # One C++ test:            ctest -R test_geonav -V
 # One Python test:         pytest ../src/pythontests/test_prompt_hist.py -q
-# The tree view cimbuild:  ../scripts/pytest_tree.py
+# The tree view cimbuild:  ../scripts/pytest_tree.py --tier fast
 ```
 
-### What a green suite looks like (2.0.0a5, measured 2026-10)
+### What a green suite looks like (2.1.0, measured 2026-10)
 
-- **pytest: 44 passed, 9 skipped, 0 failed.** The 9 skips are environmental, not
-  bugs: numba and `makeChopper` not installed, tests needing external gdml/mcpl
-  data files, a broken `ParticleParameter` API, and three expected-value
-  mismatches (`mirror`, `pythongun`, `scorerCfg`). The geometry solids
-  expectations (Box/Cone/Orb/Tet/ellipsoid/...) all pass on the current VecGeom
-  and are no longer excluded.
-- **ctest: 68 entries — 64 pass.** The 4 permanent reds are the *same* files
-  conftest.py excludes (`python-test_cinema_array_ops`, `python-test_prompt_chopper`,
-  `python-test_tak_parfft`, `python-test_tak_trj`): ctest runs each file as a
-  bare script and does not see conftest exclusions. Run ctest with
-  `-E "^(python-test_cinema_array_ops|python-test_prompt_chopper|python-test_tak_parfft|python-test_tak_trj)$"`
-  to match the pytest verdict.
+- **pytest: 460 passed, 11 skipped, 0 failed.** The 11 skips are environmental,
+  not bugs: numba and `makeChopper` not installed, tests needing external
+  gdml/mcpl data files, a broken `ParticleParameter` API, and three
+  expected-value mismatches (`mirror`, `pythongun`, `scorerCfg`). The geometry
+  solids expectations (Box/Cone/Orb/Tet/ellipsoid/...) all pass on the current
+  VecGeom and are no longer excluded.
+- **ctest: 47 entries — 46 C++ binaries pass + 1 wrapped.** 46 entries are the
+  doctest binaries under `src/cxxtests/unittest/` (auto-registered, one per
+  `.cc`); the remaining entry, `python-tests`, re-runs the whole pytest suite
+  — exclude it (`ctest -E "^python-tests$"`) wherever you run pytest yourself,
+  as the hook and `cimbuild -t` do.
 
 Many Python tests are **golden-anchor** regressions: exact per-bin values at a
 fixed seed (e.g. the expected wavelength spectrum in the solids tests). A red
@@ -350,10 +361,10 @@ physics review item, not noise.
 
 ### Automatic tests on every push
 
-The repo ships a pre-push hook that runs the suite (ctest with the 4 known-red
-entries excluded, plus the full pytest run; it sources `env.sh` and normalises
-`NCRYSTAL_PLUGIN_LIST` itself, so it works from any shell). Total cost: roughly
-20-30 s.
+The repo ships a pre-push hook running the **fast tier**: ctest (the
+`python-tests` entry excluded) plus pytest `-m "not medium and not slow"`; it
+sources `env.sh` and normalises `NCRYSTAL_PLUGIN_LIST` itself, so it works from
+any shell. Total cost: under a minute.
 
 ```bash
 git config core.hooksPath scripts/git-hooks   # activate, once per clone

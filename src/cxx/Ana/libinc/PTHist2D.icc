@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -50,8 +50,15 @@ inline void Prompt::Hist2D::fill_unguard(double xval, double yval, double w)
     m_overflow+=w;
     return;
   }
-  const unsigned ix = floor((xval-m_xmin)*m_xbinfactor);
-  const unsigned iy = floor((yval-m_ymin)*m_ybinfactor);
+  //xval==xmax / yval==ymax compute the one-past-the-last bin index
+  //(floor(nbins)); clamp them into the last bin, as the [min, max] range
+  //is right-closed here
+  unsigned ix = floor((xval-m_xmin)*m_xbinfactor);
+  if(ix>=m_xnbins)
+    ix=m_xnbins-1;
+  unsigned iy = floor((yval-m_ymin)*m_ybinfactor);
+  if(iy>=m_ynbins)
+    iy=m_ynbins-1;
   m_data[ix*m_ynbins + iy] += w;
   m_hit[ix*m_ynbins + iy] += 1;
   m_ww[ix*m_ynbins + iy] += w*w;

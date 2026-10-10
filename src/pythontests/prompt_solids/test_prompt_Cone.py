@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import pytest
 from Cinema.Prompt import Prompt, PromptMPI
 from Cinema.Prompt.geo import Volume, Transformation3D
 from Cinema.Prompt.solid import Box, Sphere, Tube, Trapezoid, ArbTrapezoid, Cone
@@ -11,6 +12,8 @@ from Cinema.Prompt import Prompt
 from Cinema.Prompt.geo import Volume
 
 
+@pytest.mark.medium  # ~0.61 s body: medium tier (cimbuild -tt/-ttt), skipped by the pre-push hook
+@pytest.mark.slow  # >0.7 s body: excluded from the pre-push hook, runs in cimbuild -t
 def test_simulation():
     expectWl = [425., 454., 427., 456., 425., 447., 392., 415., 362., 334., 295.,
            276., 271., 234., 243., 194., 192., 183., 157., 156.]

@@ -78,6 +78,7 @@ def test_convertor_mev_mev_case_distinct():
 
 
 # ---------------------------------------------------------------- #29
+@pytest.mark.slow  # >0.7 s body: excluded from the pre-push hook, runs in cimbuild -t
 def test_prompt_py_help_warns_before_executing_script(capsys, tmp_path):
     """`prompt -g script.py -h` must print the module-level-execution NOTE
     before the script loads, then reach the argparse help (SystemExit 0)."""

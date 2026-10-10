@@ -41,6 +41,7 @@ def makeVol(name, hx=10.):
 
 # ----------------------------------------------------------------- finding #2
 
+@pytest.mark.slow  # >0.7 s body: excluded from the pre-push hook, runs in cimbuild -t
 def test_from_alignment_aligns_vectors():
     # the documented align-two-vectors constructor used to fail on every
     # input ("if rotated or original is None" parsed as
@@ -190,6 +191,7 @@ def test_overlap_check_can_be_disabled():
 
 # ---------------------------------------------------------------- finding #22
 
+@pytest.mark.slow  # >0.7 s body: excluded from the pre-push hook, runs in cimbuild -t
 def test_anchor_getreltransf_known_transform():
     a1 = Anchor(Transformation3D(0., 0., 0.), 'origin')
     a2 = Anchor(Transformation3D(100., 0., 0.).applyRotZ(90.), 'shifted')
@@ -277,6 +279,7 @@ def test_raw_parameterised_nccfg_warned_and_wrapped():
     assert wrapRawNccfg(canon) == canon
 
 
+@pytest.mark.medium  # ~0.46 s body: medium tier (cimbuild -tt/-ttt), skipped by the pre-push hook
 @needsNCCApi
 def test_bad_nccfg_content_raises_python_error():
     # NCrystal::Error::BadInput used to terminate the process without any
@@ -297,6 +300,7 @@ def test_bad_nccfg_content_raises_python_error():
     Material('solid::Cd/8.65gcm3')
 
 
+@pytest.mark.medium  # ~0.31 s body: medium tier (cimbuild -tt/-ttt), skipped by the pre-push hook
 @needsNCCApi
 def test_setmaterial_mos_repro_raises_not_aborts():
     # the usability report's verbatim #8 repro: this exact call used to
@@ -306,6 +310,7 @@ def test_setmaterial_mos_repro_raises_not_aborts():
         Volume('mosrepro', Box(10, 10, 1), matCfg='Ge_sg227.ncmat;mos=0.0267deg')
 
 
+@pytest.mark.medium  # ~0.32 s body: medium tier (cimbuild -tt/-ttt), skipped by the pre-push hook
 @needsNCCApi
 def test_setmaterial_validates_content_before_ctypes():
     with pytest.raises(ValueError, match='NCrystal'):
@@ -313,6 +318,7 @@ def test_setmaterial_validates_content_before_ctypes():
                matCfg="physics=ncrystal;nccfg='void.ncmat;nosuchkey=3'")
 
 
+@pytest.mark.medium  # ~0.32 s body: medium tier (cimbuild -tt/-ttt), skipped by the pre-push hook
 def test_setmaterial_accepts_valid_cfgs_end_to_end():
     v = Volume('matok', Box(2., 2., 2.), matCfg=FILLER)
     v.setMaterial('solid::Cd/8.65gcm3')
@@ -320,6 +326,7 @@ def test_setmaterial_accepts_valid_cfgs_end_to_end():
         v.setMaterial('void.ncmat;temp=100K')
 
 
+@pytest.mark.medium  # ~0.32 s body: medium tier (cimbuild -tt/-ttt), skipped by the pre-push hook
 def test_material_cfg_roundtrip_unchanged():
     m = Material('void.ncmat')
     assert m.cfg == "physics=ncrystal;nccfg='void.ncmat'"
@@ -327,6 +334,7 @@ def test_material_cfg_roundtrip_unchanged():
 
 # ---------------------------------------------------------------- finding #37
 
+@pytest.mark.medium  # ~0.31 s body: medium tier (cimbuild -tt/-ttt), skipped by the pre-push hook
 def test_setabsorpinweight_rejects_garbage():
     m = Material('void.ncmat')
     with pytest.raises(TypeError, match='flag'):
@@ -340,6 +348,7 @@ def test_setabsorpinweight_rejects_garbage():
         m.setAbsorpInWeight(None)
 
 
+@pytest.mark.medium  # ~0.31 s body: medium tier (cimbuild -tt/-ttt), skipped by the pre-push hook
 def test_setabsorpinweight_accepts_bools_and_01():
     m = Material('void.ncmat')
     m.setAbsorpInWeight(True)
