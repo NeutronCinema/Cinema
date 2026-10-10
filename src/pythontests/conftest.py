@@ -64,3 +64,18 @@ for fname in expected_mismatch:
     fpath = os.path.join(os.path.dirname(__file__), fname)
     if os.path.exists(fpath):
         collect_ignore.append(fname)
+
+
+def pytest_configure(config):
+    # Three test tiers, selected by test-body duration:
+    #   fast   (no marker)  < ~50 ms  - pre-push hook and `cimbuild -t`
+    #   medium 50 ms - 0.7 s         - `cimbuild -tt` and `-ttt`
+    #   slow   > 0.7 s                - `cimbuild -ttt` only
+    config.addinivalue_line(
+        "markers",
+        "medium: medium test (roughly 50 ms - 0.7 s body); runs in cimbuild -tt/-ttt, "
+        "skipped by the pre-push hook and cimbuild -t")
+    config.addinivalue_line(
+        "markers",
+        "slow: slow test (>0.7 s body: real simulations, plotting, CLI round-trips); "
+        "runs only in cimbuild -ttt")

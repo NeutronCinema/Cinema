@@ -4,12 +4,14 @@
 # Activate once per clone:   git config core.hooksPath scripts/git-hooks
 # Skip for a single push:    git push --no-verify
 #
-# Runs the same checks as `cimbuild -t`, minus the rebuild:
+# Runs the same checks as `cimbuild -t`, minus the rebuild - the fast tier
+# of the three-tier test scheme (see src/pythontests/conftest.py):
 #   1. ctest  - C++ unit tests (build tree in cinemabin/)
-#   2. pytest - python suite in src/pythontests (--forked)
-# The four python entries excluded by src/pythontests/conftest.py (missing
-# numba/makeChopper deps, broken API) are excluded from ctest too; see the
-# wiki, install.md "Running the test suite".
+#   2. pytest - python suite in src/pythontests (--forked), unmarked tests
+#      only (< ~50 ms bodies). 'medium'-marked (50 ms - 0.7 s) tests are added
+#      by `cimbuild -tt`, 'slow'-marked (> 0.7 s: real simulations, plotting,
+#      CLI round-trips) only by `cimbuild -ttt`.
+# See the wiki, install.md "Running the test suite", for the tier scheme.
 # NOTE: no `set -u` here - sourcing env.sh pulls in install.sh, which reads
 # variables it never defines and would abort the hook under nounset.
 
@@ -30,7 +32,9 @@ status=0
 
 if [ -f "$ROOT/cinemabin/CTestTestfile.cmake" ]; then
     echo "==> ctest (C++ unit tests)"
-    excl='^(python-test_cinema_array_ops|python-test_prompt_chopper|python-test_tak_parfft|python-test_tak_trj)$'
+    # the single 'python-tests' ctest entry runs the full pytest suite; the
+    # hook runs pytest itself (fast tier) below, so skip it here.
+    excl='^python-tests$'
     ( cd "$ROOT/cinemabin" && ctest -j"$(( $(nproc 2>/dev/null || echo 4) / 2 ))" -E "$excl" --output-on-failure ) || status=1
 else
     echo "==> ctest skipped (no build tree in cinemabin/ - run 'cimbuild -r' first)"
@@ -39,8 +43,8 @@ fi
 PY="$ROOT/cinemavirenv/bin/python3"
 if [ -x "$PY" ]; then
     if "$PY" -c 'import pytest, pytest_forked' >/dev/null 2>&1; then
-        echo "==> pytest src/pythontests"
-        ( cd "$ROOT/cinemabin" && "$PY" -m pytest "$ROOT/src/pythontests" --forked --tb=line -q ) || status=1
+        echo "==> pytest src/pythontests (fast tier; medium/slow tiers run in cimbuild -tt/-ttt)"
+        ( cd "$ROOT/cinemabin" && "$PY" -m pytest "$ROOT/src/pythontests" --forked --tb=line -q -m "not medium and not slow" ) || status=1
     else
         echo "pre-push: pytest is missing from cinemavirenv - install it with:" >&2
         echo "    $PY -m pip install pytest pytest-forked" >&2

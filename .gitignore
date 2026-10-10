@@ -53,3 +53,5 @@ bigdata
 .gitlab-ci.yml
 
 *.pdf
+ncplugin-sascsns/
+bzscope/

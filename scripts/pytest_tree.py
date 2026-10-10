@@ -1,18 +1,32 @@
 #!/usr/bin/env python3
 """Run pytest and format results as a filesystem tree."""
 
+import argparse
 import subprocess
 import sys
 import os
 import re
 
-CINEMA_PATH = os.environ.get('CINEMAPATH', '/home/zypan/projects/dev')
+CINEMA_PATH = os.environ.get('CINEMAPATH')
+if not CINEMA_PATH:
+    sys.exit("Error: CINEMAPATH is not set - source env.sh first.")
 BUILD_DIR = os.path.join(CINEMA_PATH, 'cinemabin')
 TEST_DIR = os.path.join(CINEMA_PATH, 'src', 'pythontests')
 VENV_PYTHON = os.path.join(CINEMA_PATH, 'cinemavirenv', 'bin', 'python3.10')
 
-def run_pytest():
+# Test tiers, matching the markers registered in src/pythontests/conftest.py:
+# fast = unmarked, medium = 50 ms - 0.7 s, slow = > 0.7 s.
+TIERS = {
+    'fast': 'not medium and not slow',
+    'medium': 'not slow',
+    'full': None,
+}
+
+def run_pytest(tier):
     cmd = [VENV_PYTHON, '-m', 'pytest', TEST_DIR, '-v', '--forked', '--tb=line', '-q']
+    marker = TIERS[tier]
+    if marker:
+        cmd += ['-m', marker]
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=BUILD_DIR)
     return result.stdout + result.stderr
 
@@ -116,8 +130,14 @@ def _print_file(name, status, prefix, connector):
         print(f"\033[31m{prefix}{connector}{name} !\033[0m")
 
 def main():
+    ap = argparse.ArgumentParser(description="Run pytest and print per-file results as a tree.")
+    ap.add_argument('--tier', choices=sorted(TIERS), default='full',
+                    help="test tier: 'fast' (pre-push/cimbuild -t), 'medium' (-tt), "
+                         "'full' (-ttt, default when run directly)")
+    args = ap.parse_args()
+
     print("\n=== Python Tests Tree ===\n")
-    output = run_pytest()
+    output = run_pytest(args.tier)
     tree, passed, failed, skipped, error = parse_results(output)
     
     if tree:
