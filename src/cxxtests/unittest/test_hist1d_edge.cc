@@ -161,7 +161,7 @@ TEST_CASE("Hist1D_log_edges_geometric")
     CHECK(edges[i+1]/edges[i] == doctest::Approx(ratio).epsilon(1e-12));
 }
 
-TEST_CASE("Hist1D_merge_sums_and_quadrature_ww")
+TEST_CASE("Hist1D_merge_sums_ww_variances")
 {
   pt::Hist1D a("a", 0., 10., 4);
   pt::Hist1D b("b", 0., 10., 4);
@@ -175,7 +175,7 @@ TEST_CASE("Hist1D_merge_sums_and_quadrature_ww")
 
   CHECK(a.getRaw()[0] == doctest::Approx(7.0));
   CHECK(a.getHit()[0] == doctest::Approx(2.0));
-  CHECK(a.getww()[0]  == doctest::Approx(std::sqrt(9.0*9.0 + 16.0*16.0))); //combined in quadrature
+  CHECK(a.getww()[0]  == doctest::Approx(9.0 + 16.0)); //ww stores sum(w^2): variances add (errors 3 and 4 combine in quadrature to 5)
   CHECK(a.getRaw()[3] == doctest::Approx(1.0));
   CHECK(a.getUnderflow() == doctest::Approx(1.0));
   CHECK(a.getOverflow()  == doctest::Approx(2.0));

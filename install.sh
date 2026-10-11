@@ -421,8 +421,11 @@ echo "Added the ptgeo example directory into environment"
 # non-empty NCRYSTAL_PLUGIN_LIST replaces (not extends) automatic discovery, so
 # it must contain ALL plugin libraries (colon-separated):
 if ! command -v ncrystal-pluginmanager > /dev/null 2>&1 ; then
-  if [ -x /data/caixx/miniconda3/envs/pt/bin/ncrystal-pluginmanager ]; then
-    NCRYSTAL_PLUGINMANAGER=/data/caixx/miniconda3/envs/pt/bin/ncrystal-pluginmanager
+  # not on PATH: fall back to the bin/ of the NCrystal install prefix
+  # (NCRYSTAL_LIB points at <prefix>/lib/libNCrystal.so, e.g. of a conda env)
+  NCRYSTAL_PLUGINMANAGER="$(dirname "$(dirname "${NCRYSTAL_LIB:-}")")/bin/ncrystal-pluginmanager"
+  if [ ! -x "$NCRYSTAL_PLUGINMANAGER" ]; then
+    NCRYSTAL_PLUGINMANAGER=
   fi
 else
   NCRYSTAL_PLUGINMANAGER=ncrystal-pluginmanager

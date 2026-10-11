@@ -454,7 +454,7 @@ if not OPT:
         midSheildHist.savefig("midSheild.png", "Mid sheild count")
   
 else: # optimization
-    from Cinema.Prompt import Optimiser
+    from Cinema.Prompt.parameterOptimizer import Optimiser
     from Cinema.Prompt.dataReduction import tof2hw_INS, getPeakReso
     class CurveOpt(Optimiser):
         def __init__(self, sim):

@@ -24,6 +24,8 @@
 #include "PTParticleProcess.hh"
 #include "PTLauncher.hh"
 #include "PTGidiSetting.hh"
+#include "PTNCrystalScat.hh"
+#include "PTPython.hh"
 
 TEST_CASE("ModelCollection")
 {
@@ -120,4 +122,54 @@ TEST_CASE("ModelCollection")
 
   // collection.generate(1., {1,0,0}, final, out);
   // std::cout << final << " " << out << std::endl;
+}
+
+// generate() used to build a default-constructed (null) incident direction
+// and hand it to the samplers: NCrystal normalises the direction, 1/sqrt(0)
+// produced NaN, and its rejection test NaN<0.99 never passed, i.e. an
+// infinite hot loop. CAUTION: on a pre-fix binary the sampling cases below
+// hang instead of failing.
+TEST_CASE("ModelCollection generate null direction rejects instead of hanging")
+{
+  using namespace Prompt;
+
+  // defence line 1: the NCrystal scatter model itself
+  NCrystalScat scat("Al_sg225.ncmat");
+  CHECK_THROWS_AS(scat.sampleReaction(0.0253, Vector(0., 0., 0.)),
+                  Prompt::Error::BadInput);
+  // a real direction samples fine; thermal inelastic scattering may
+  // UP-scatter (phonon energy gain), so no ceiling at the incident energy,
+  // only non-negativity and a sanity bound
+  const auto &ok = scat.sampleReaction(0.0253, Vector(0., 0., 1.));
+  CHECK(ok.final_ekin >= 0.);
+  CHECK(ok.final_ekin <= 100. * 0.0253);
+  CHECK(ok.final_dir.isUnitVector());
+
+  // defence line 2: the extern "C" python bridge validates before touching
+  // any model, so the null vector cannot even reach the samplers
+  void *obj = pt_makeModelCollection("physics=ncrystal;nccfg='Al_sg225.ncmat'");
+  REQUIRE(obj != nullptr);
+  CHECK_THROWS_AS(pt_ModelCollection_generate(obj, 0.0253, 0., 0., 0.),
+                  Prompt::Error::BadInput);
+  pt_deleteModelCollection(obj);
+}
+
+TEST_CASE("ModelCollection generate samples with a unit direction")
+{
+  using namespace Prompt;
+  const double ekin = 0.0253;
+  const Vector dir(0., 0., 1.);
+
+  auto pp = ParticleProcess("physics=ncrystal;nccfg='Al_sg225.ncmat'");
+  auto &coll = *pp.getModelCollection();
+
+  // cold pickAndSample is the caller's problem to arm (the python bridge now
+  // always calls totalCrossSection first); here we mirror that contract
+  coll.totalCrossSection(2112, ekin, dir);
+  auto &res = coll.pickAndSample(ekin, dir);
+  // scattered (or absorbed) final energy is non-negative; up-scatter beyond
+  // ekin is legitimate thermal physics, hence only a sanity ceiling
+  CHECK(res.final_ekin >= 0.);
+  CHECK(res.final_ekin <= 100. * ekin);
+  CHECK(res.final_dir.isUnitVector());
 }

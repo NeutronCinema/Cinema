@@ -47,9 +47,12 @@ _pt_Transformlation3D_setTranslation  = importFunc('pt_Transformlation3D_setTran
 
 
 # Resource manager C function imports
+# addScorer/addSurface are bridged (int status + pt_last_error message,
+# surfaced through raiseOnBridgeError) so a rejected cfg raises a normal
+# RuntimeError instead of aborting the process at the ctypes boundary
 _pt_ResourceManager_addNewVolume = importFunc('pt_ResourceManager_addNewVolume', None, [type_uint])
-_pt_ResourceManager_addScorer = importFunc('pt_ResourceManager_addScorer', None, [type_uint, type_cstr, type_voidp])
-_pt_ResourceManager_addSurface = importFunc('pt_ResourceManager_addSurface', None, [type_uint, type_cstr])
+_pt_ResourceManager_addScorer = importFunc('pt_ResourceManager_addScorer', type_int, [type_uint, type_cstr, type_voidp])
+_pt_ResourceManager_addSurface = importFunc('pt_ResourceManager_addSurface', type_int, [type_uint, type_cstr])
 _pt_ResourceManager_cfgVolPhysics = importFunc('pt_ResourceManager_cfgVolPhysics', None, [type_uint, type_cstr])
 
 
@@ -662,7 +665,7 @@ class Volume:
         if isinstance(cppScorer, int):
             self._raiseIfScorerNameTaken(scorer.name)
             self.__class__.scorer_dict[scorer.name] = scorer.name
-            _pt_ResourceManager_addScorer(self.volid, scorer.name.encode('utf-8'), cppScorer)
+            raiseOnBridgeError(_pt_ResourceManager_addScorer(self.volid, scorer.name.encode('utf-8'), cppScorer))
         else:
             import re
             if isinstance(scorer, str):
@@ -673,13 +676,13 @@ class Volume:
                 name = re.sub(r'=', '', name.group()).strip()
                 self._raiseIfScorerNameTaken(name)
                 self.__class__.scorer_dict[name] = scorer
-                _pt_ResourceManager_addScorer(self.volid, scorer.encode('utf-8'), cppScorer)
+                raiseOnBridgeError(_pt_ResourceManager_addScorer(self.volid, scorer.encode('utf-8'), cppScorer))
             else:
                 cfg = scorer.cfg
                 _validateNccfgFiles(cfg)
                 self._raiseIfScorerNameTaken(scorer.cfg_name)
                 self.__class__.scorer_dict[scorer.cfg_name] = cfg
-                _pt_ResourceManager_addScorer(self.volid, cfg.encode('utf-8'), cppScorer)
+                raiseOnBridgeError(_pt_ResourceManager_addScorer(self.volid, cfg.encode('utf-8'), cppScorer))
 
     def setSurface(self, cfg: str):
         """
@@ -689,7 +692,7 @@ class Volume:
             cfg (str): Surface physics configuration string
         """
         _validateNccfgFiles(cfg)
-        _pt_ResourceManager_addSurface(self.volid, cfg.encode('utf-8'))
+        raiseOnBridgeError(_pt_ResourceManager_addSurface(self.volid, cfg.encode('utf-8')))
 
     def placeChild(self, name, logVolume, transf=None, scorerGroup=0, checkOverlap=True):
         """

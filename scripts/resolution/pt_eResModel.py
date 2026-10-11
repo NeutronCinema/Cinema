@@ -179,7 +179,7 @@ sim = MySim(-mod_smp_dist, 0.025100171020, seed=1010)
 #     plt.savefig(f'{fn}.pdf')
 
 if do_optimization:
-    from Cinema.Prompt import Optimiser
+    from Cinema.Prompt.parameterOptimizer import Optimiser
     import subprocess
     class SampleOpt(Optimiser):
         def __init__(self, sim):

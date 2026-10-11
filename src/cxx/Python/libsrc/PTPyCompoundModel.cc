@@ -41,13 +41,19 @@ double pt_ModelCollection_getxs(void* obj, int pdg, double ekin)
       ->getModelCollection()->totalCrossSection(pdg, ekin, dir)/Prompt::Unit::barn;
 }
 
-double pt_ModelCollection_generate(void* obj, double ekin)
+double pt_ModelCollection_generate(void* obj, double ekin, double dx, double dy, double dz)
 {
-  Prompt::Vector dir;
-  double final_ekin(0); 
-  Prompt::Vector final_dir;
+  Prompt::Vector dir(dx, dy, dz);
+  if(dir.isStrictNullVector())
+    PROMPT_THROW2(BadInput, "null incident direction (direction sampler would loop forever)");
 
-  static_cast<Prompt::ParticleProcess *>(obj)
-      ->getModelCollection()->pickAndSample(ekin, dir);
-  return 0;
+  auto *coll = static_cast<Prompt::ParticleProcess *>(obj)->getModelCollection();
+
+  // Arm the cross-section cache with this exact (ekin, dir) inquiry before
+  // sampling: pickAndSample declines to sample whenever the cache does not
+  // match, so a cold generate() would silently return a dummy result without
+  // sampling anything.
+  coll->totalCrossSection(2112, ekin, dir);
+
+  return coll->pickAndSample(ekin, dir).final_ekin;
 }

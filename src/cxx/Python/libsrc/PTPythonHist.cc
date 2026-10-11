@@ -142,12 +142,19 @@ void pt_HistBase_getHit(void* obj, double* data)
 
 const char* pt_HistBase_getName(void* obj)
 {
-  return static_cast<pt::Hist1D *>(obj)->getName().c_str();
+  // getName() returns a temporary std::string; keep a copy alive so the
+  // c_str() handed to ctypes outlives the call (ctypes reads it afterwards).
+  static thread_local std::string buf;
+  buf = static_cast<pt::Hist1D *>(obj)->getName();
+  return buf.c_str();
 }
 
 const char* pt_HistBase_getNote(void* obj)
 {
-  return static_cast<pt::HistBase *>(obj)->getNote().c_str();
+  // same lifetime consideration as pt_HistBase_getName
+  static thread_local std::string buf;
+  buf = static_cast<pt::HistBase *>(obj)->getNote();
+  return buf.c_str();
 }
 
 void pt_HistBase_addNote(void* obj, const char* note)

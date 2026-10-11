@@ -71,6 +71,11 @@ Prompt::Vector Prompt::PhysicsBase::randDirectionGivenScatterMu( double mu, cons
 {
   pt_assert(std::abs(mu)<=1.);
 
+  //Throws (in all builds, unlike pt_assert) on a null input: the invm
+  //normalisation below would turn it into NaN and the rejection loop below
+  //would never terminate.
+  pt_assert_always(indir.mag2() > 0.);
+
   double m2 = indir.mag2();
   double invm = ( std::abs(m2-1.0)<1e-12 ? 1.0 : 1.0/std::sqrt(m2) );
   Vector u = indir * invm;

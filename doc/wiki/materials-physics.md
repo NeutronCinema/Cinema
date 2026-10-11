@@ -422,7 +422,7 @@ from Cinema.Prompt.compoundModel import ModelCollection
 
 mc = ModelCollection(mat.cfg)     # accepts any material config string
 mc.xs(0.0253)                     # total *biased* microscopic xs at 25.3 meV, in barn
-mc.generate(0.0253)               # sample one reaction (smoke test; return value unused)
+mc.generate(0.0253)               # sample one reaction (smoke test; returns sampled final ekin in eV)
 ```
 
 Example values (measured with Cinema 2.0.0a5 / NCrystal 4.2.12 on the development

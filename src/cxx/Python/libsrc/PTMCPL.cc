@@ -32,9 +32,12 @@ void pt_MCPLBinaryWrite_delete(void* obj)
   delete static_cast<Prompt::MCPLBinaryWrite *>(obj);
 }
 
-void pt_MCPLBinaryWrite_write(void* obj, mcpl_particle_t par)
+// mcpl_particle_t is a 104-byte MEMORY-class argument in the SysV ABI: it
+// must cross the ctypes boundary as a pointer (the python side passes
+// POINTER(MCPLParticle)), never by value.
+void pt_MCPLBinaryWrite_write(void* obj, const mcpl_particle_t* par)
 {
-  static_cast<Prompt::MCPLBinaryWrite *>(obj)->write(par);
+  static_cast<Prompt::MCPLBinaryWrite *>(obj)->write(*par);
 }
 
 void pt_MCPLBinaryWrite_close(void* obj)

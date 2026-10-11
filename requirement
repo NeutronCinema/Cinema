@@ -45,3 +45,7 @@ gvar
 # optimization
 optuna
 # mysqlclient
+
+#testing (gates cimbuild -t and the pre-push hook via scripts/pytest_tree.py)
+pytest
+pytest-forked

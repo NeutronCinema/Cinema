@@ -54,7 +54,9 @@ void Prompt::HistBase::merge(const Prompt::HistBase &hist)
   {
     m_data[i] += hist.m_data[i];
     m_hit[i] += hist.m_hit[i];
-    m_ww[i] = sqrt(m_ww[i]*m_ww[i] + hist.m_ww[i]*hist.m_ww[i]);
+    //m_ww stores sum(w^2), so merging adds the variances (errors combine
+    //in quadrature), consistent with the MPI reduce which sums ww
+    m_ww[i] += hist.m_ww[i];
   }
 
   m_underflow += hist.m_underflow;
