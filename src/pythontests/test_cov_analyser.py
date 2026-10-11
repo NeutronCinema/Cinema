@@ -20,9 +20,13 @@ Covers four pure-python analysis modules with no simulation involved:
 
 Every numeric pin below is derived in closed form from the synthetic inputs
 (comments show the arithmetic); no expected value is copied from the code
-under test. Note: np.divide(..., where=mask) without out= leaves masked
-entries UNINITIALISED, so error arrays are only pinned where the underlying
-count is strictly positive (see test_loader_detector_error_is_sqrt_10w).
+under test. Note: error arrays carry an exact 0.0 in empty (zero-count) bins
+- the np.divide calls pass out=np.zeros(...), so where-masked slots can never
+inherit uninitialised heap memory (mechanism pinned by
+test_masked_npdivide_always_carries_zeroed_out; the heap-poison churn in
+test_loader_detector_error_is_sqrt_10w and
+test_ep_itruediv_zero_divisor_slots_carry_exact_zero is the end-to-end
+counterpart).
 """
 import numpy as np
 import pytest
@@ -166,8 +170,9 @@ def test_ep_itruediv_combines_relative_errors():
 
 
 def test_ep_itruediv_zero_self_weight_gives_zero_ratio():
-    # a zero-count numerator bin yields a zero ratio (the error there stems
-    # from an uninitialised masked np.divide slot and is deliberately not pinned)
+    # a zero-count numerator bin yields a zero ratio and an exact 0.0 error
+    # (the masked selferr slot is pinned to 0.0, so no NaN/garbage can leak
+    # through sqrt(...) into the empty bin)
     a = ErrorPropagator(np.array([0., 20.]), np.arange(2.),
                         error=np.array([0., 2.]))
     b = ErrorPropagator(np.array([4., 8.]), np.arange(2.),
@@ -175,6 +180,51 @@ def test_ep_itruediv_zero_self_weight_gives_zero_ratio():
     a /= b
     assert a.weight[0] == 0.
     assert a.weight[1] == pytest.approx(2.5, rel=1e-13)
+    assert a.error[0] == 0.
+
+
+def test_ep_itruediv_zero_divisor_slots_carry_exact_zero():
+    # dividing by an array holding zero-count bins: every where-masked
+    # np.divide slot (both per-bin relative errors AND the ratio itself) must
+    # come out as an exact 0.0, never inherited heap memory. Poison the heap
+    # first so a reverted out= is likely to surface as 3.3 here (donor-buffer
+    # luck can hide it - the np.divide spy test pins the mechanism itself).
+    poison = [np.full(4096, 3.3) for _ in range(4)]
+    del poison
+    a = ErrorPropagator(np.array([10., 20.]), np.arange(2.),
+                        error=np.array([1., 2.]))
+    b = ErrorPropagator(np.array([4., 0.]), np.arange(2.),
+                        error=np.array([0.4, 0.8]))
+    a /= b
+    # slot 0: ratio 10/4, relative errors 1/10 and 0.4/4 on the two sides
+    assert a.weight[0] == pytest.approx(2.5, rel=1e-13)
+    assert a.error[0] == pytest.approx(2.5 * np.sqrt(0.02), rel=1e-13)
+    # slot 1: zero-count divisor -> zero ratio with an exact 0.0 error
+    assert a.weight[1] == 0.
+    assert a.error[1] == 0.
+
+
+def test_masked_npdivide_always_carries_zeroed_out(det_file, monkeypatch):
+    # deterministic mechanism pin: every where-masked np.divide issued by the
+    # analyser must pass an all-zeros out=, so masked slots can never inherit
+    # uninitialised heap memory (empty-bin error = 0.0 by construction).
+    calls = []
+    real_divide = np.divide
+
+    def spy(num, den, out=None, where=None):
+        if where is not None:
+            calls.append(out is not None and bool(np.all(out == 0.)))
+        return real_divide(num, den, out=out, where=where)
+
+    monkeypatch.setattr(np, 'divide', spy)
+    DataLoader(det_file, "mod", tofcut=2)      # detector + monitor ctor divides
+    a = ErrorPropagator(np.array([10., 20.]), np.arange(2.),
+                        error=np.array([1., 2.]))
+    b = ErrorPropagator(np.array([4., 0.]), np.arange(2.),
+                        error=np.array([0.4, 0.8]))
+    a /= b                                     # selferr, othererr, ratio
+    # 2 ctor divides + 3 divides in ErrorPropagator.divide, all with out=
+    assert calls == [True, True, True, True, True]
 
 
 def test_ep_arithmetic_rejects_mismatched_binning():
@@ -230,11 +280,18 @@ def test_loader_roundtrip_detector_counts_and_tofcut(det_file):
 def test_loader_detector_error_is_sqrt_10w(det_file):
     # counts are reused as count and weight, so error = w/sqrt(w/10) = sqrt(10w):
     # row 0 -> sqrt(30), sqrt(40), sqrt(50) in the surviving columns.
+    # Churn the heap with poison floats before the DataLoader construction:
+    # a divide that drops its out= is likely to surface 3.3 in the tofcut-
+    # zeroed slots below instead of the empty-bin 0.0 (donor-buffer luck can
+    # hide it - the np.divide spy test pins the mechanism itself).
+    poison = [np.full(4096, 3.3) for _ in range(4)]
+    del poison
     dl = DataLoader(det_file, "mod", tofcut=2)
     expected = np.sqrt(10. * SMALL_COUNTS[:, 2:])
     assert np.allclose(dl.detErrPro.error[:, 2:], expected, rtol=1e-13, atol=0.)
-    # The cut columns have count == 0, which masks them out of an out=-less
-    # np.divide; those slots are uninitialised memory and must stay unpinned.
+    # empty-bin convention: the cut columns carry an exact 0.0 error
+    assert np.all(dl.detErrPro.error[:, :2] == 0.)
+    assert np.all(dl.moniErrPro.error[:2] == 0.)
 
 
 def test_loader_monitor_roundtrip(det_file):
