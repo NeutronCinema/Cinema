@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
+import os
 import sys
-sys.path.append("/home/panzy/project/ml/scripts/bl9")
+# Root of the bl9 script tree (two levels up from this file), holding the
+# local modules (mcgd, jsonReader) and geo_data/.
+projectpath = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) + '/'
+sys.path.append(projectpath)
 
 from Cinema.Prompt import Launcher, Visualiser
 from Cinema.Prompt.solid import Box, Tessellated
@@ -14,9 +18,6 @@ from Cinema.Prompt.scorer import WlSpectrum, PSDHelper, ESpectrumHelper
 from mcgd import GuideSectionCollection
 from jsonReader import JsonParser
 import numpy as np
-import os
-
-projectpath = "/home/panzy/project/ml/scripts/bl9/"
 
 GEO_FILE = os.path.join(projectpath, 'geo_data/section.json')
 

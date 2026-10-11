@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
+import os
 import sys
-sys.path.append("/home/panzy/project/ml/scripts/bl9")
+# Root of the bl9 script tree (two levels up from this file), holding the
+# local modules (mcgd, jsonReader) and the source/ KDSource output.
+projectpath = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) + '/'
+sys.path.append(projectpath)
 from Cinema.Prompt import Launcher, Visualiser
 from Cinema.Prompt.solid import Box, Tessellated
 from Cinema.Prompt.gun import PythonGun
@@ -14,7 +18,6 @@ from mcgd import GuideSectionCollection, GuideSection, McstasGuideData
 from Cinema.Prompt.component import makeTrapezoidGuide
 from jsonReader import JsonParser
 import numpy as np
-import os
 
 class MySim(PromptMPI):
     def __init__(self, seed) -> None:
@@ -56,7 +59,6 @@ if __name__ == "__main__":
     # >>>> Transport run
     outdir = 'prompt_out'
 
-    projectpath = "/home/panzy/project/ml/scripts/bl9/"
     sim = MySim(seed=102)
     sim.makeWorld()
     # sec1_entry = [15.1 * 2, 47.7 *2]

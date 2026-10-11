@@ -14,6 +14,7 @@ from Cinema.Prompt.gun import IsotropicGun, PythonGun
 from Cinema.Prompt.component import makeDiskChopper
 
 import numpy as np
+import os
 
 do_optimization = True
 para_lsp = 10000
@@ -269,7 +270,14 @@ else:
 
         from pt_h5Tool import read_hdf5, plot_sw
         from pt_dataFitting import HistPost
-        file = '/home/panzy/project/ml/ncmat/c1_vol_77K.h5'
+        # S(Q,w) table from a phonon calculation: point CINEMA_SQW_FILE at it;
+        # when unset, fall back to a file of that name in the working
+        # directory, with a warning.
+        file = os.environ.get('CINEMA_SQW_FILE')
+        if not file:
+            print('Warning: CINEMA_SQW_FILE is not set - falling back to the '
+                  "relative default 'c1_vol_77K.h5'")
+            file = 'c1_vol_77K.h5'
         w, q, s = read_hdf5(file)
         plt.figure(3001)
         plot_bar(hw, tofDet.getWeight())
