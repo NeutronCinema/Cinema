@@ -12,7 +12,9 @@ from Cinema.Interface import plotStyle
 
 plotStyle()
 import os
-os.environ['OPENMC_CROSS_SECTIONS']='/home/caixx/git/openmc/data/endfb-viii.0-hdf5/cross_sections.xml'
+# openmc reads its cross-section XML (e.g. endfb-viii.0-hdf5/cross_sections.xml)
+# from OPENMC_CROSS_SECTIONS; take it from the environment, no default here.
+os.environ['OPENMC_CROSS_SECTIONS'] = os.environ.get('OPENMC_CROSS_SECTIONS', '')
 
 cdata=GidiSetting()
 cdata.setGidiThreshold(-5)
