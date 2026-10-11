@@ -32,7 +32,6 @@ namespace Prompt {
     virtual ~Gamma(){};
 
     double calcSpeed() const override;
-    double calcEffSpeed() const override;
 
   };
 }
@@ -52,12 +51,6 @@ inline Prompt::Gamma::Gamma(double ekin, const Vector& dir, const Vector& pos)
 }
 
 double Prompt::Gamma::calcSpeed() const 
-{
-  PROMPT_THROW(NotImplemented, "Prompt::Gamma::calcSpeed()");
-  return 0;
-}
-
-double Prompt::Gamma::calcEffSpeed() const 
 {
   PROMPT_THROW(NotImplemented, "Prompt::Gamma::calcSpeed()");
   return 0;

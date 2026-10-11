@@ -47,12 +47,6 @@ namespace Prompt {
     void setDirection(const Vector& dir);
     const Vector &getDirection() const { return m_dir; }
 
-    bool hasEffEnergy() const { return !m_effdir.isStrictNullVector(); }
-    double getEffEKin() const { return m_effekin; }
-    void setEffEKin(double e)  { m_effekin=e; }
-    virtual void setEffDirection(const Vector& dir);
-    const Vector &getEffDirection() const { return m_effdir; }
-
     void setPosition(const Vector& pos);
     const Vector &getPosition() const { return m_pos; }
 
@@ -78,7 +72,6 @@ namespace Prompt {
     int getPDG() const { return m_pdg; }
 
     virtual double calcSpeed() const;
-    virtual double calcEffSpeed() const;
 
     double getMass() const { return m_rest_mass; }
 
@@ -102,10 +95,6 @@ namespace Prompt {
 
     // to be remove
     double m_step, m_deltaEn, m_deposition;
-
-    // for Doppler models
-    Vector m_effdir; 
-    double m_effekin;
   };
 
   std::ostream& operator << (std::ostream &, const Particle&);
@@ -113,7 +102,7 @@ namespace Prompt {
 
 
 inline Prompt::Particle::Particle(int pdg)
-  :m_ekin0(0.), m_ekin(0.), m_effekin(0.), m_time(0.), m_dir(), m_effdir(), m_pos(), m_pdg(pdg),
+  :m_ekin0(0.), m_ekin(0.), m_time(0.), m_dir(), m_pos(), m_pdg(pdg),
   m_weight(1.), m_surviveP(1.), m_rest_mass(0.), m_alive(true), m_eventid(0), m_id(0), m_parentid(0),
   m_step(0.), m_deltaEn(0.), m_deposition(0.)
 {
@@ -122,7 +111,7 @@ inline Prompt::Particle::Particle(int pdg)
 }
 
 inline Prompt::Particle::Particle(double ekin, const Vector& dir, const Vector& pos, int pdg)
-  :m_ekin0(ekin), m_ekin(ekin), m_effekin(0.), m_time(0.), m_dir(dir), m_effdir(), m_pos(pos), m_pdg(pdg),
+  :m_ekin0(ekin), m_ekin(ekin), m_time(0.), m_dir(dir), m_pos(pos), m_pdg(pdg),
   m_weight(1.), m_surviveP(1.), m_rest_mass(0), m_alive(true), m_eventid(0), m_id(0), m_parentid(0),
   m_step(0.), m_deltaEn(0.), m_deposition(0.)
 {
@@ -158,11 +147,6 @@ inline void Prompt::Particle::setPosition(const Vector& pos)
   m_pos = pos;
 }
 
-inline void Prompt::Particle::setEffDirection(const Vector& dir)
-{
-  m_effdir = dir;
-}
-
 inline void Prompt::Particle::setDirection(const Vector& dir)
 {
   m_dir = dir;
@@ -171,11 +155,6 @@ inline void Prompt::Particle::setDirection(const Vector& dir)
 inline double Prompt::Particle::calcSpeed() const
 {
     return m_rest_mass ? std::sqrt(2*m_ekin/m_rest_mass) : const_c;
-}
-
-inline double Prompt::Particle::calcEffSpeed() const
-{
-  return m_rest_mass ? std::sqrt(2*m_effekin/m_rest_mass) : const_c;
 }
 
 inline bool Prompt::Particle::isAlive()

@@ -28,7 +28,6 @@
 #include "PTScorerTOF.hh"
 #include "PTScorerVolFluence.hh"
 #include "PTScorerMultiScat.hh"
-#include "PTScorerRotatingObj.hh"
 #include "PTScorerWlSpectrum.hh"
 #include "PTScorerAngular.hh"
 #include "PTScorerSplit.hh"
@@ -574,19 +573,6 @@ Prompt::Scorer* Prompt::ScorerFactory::createScorer(const std::string &cfgstr, d
       std::string name = cfg.find("name", true);
       int split = ptstoi(cfg.find("split", true));
       return new ScorerSplit(name, split, const_neutron_pgd);
-    }
-    else if(ScorDef == "RotatingObj")
-    {
-      // "Scorer=RotatingObj;name=ro1;rotation_axis=0,1,0;point_on_axis=0,0,0;rot_fre=100;type=Entry or Proprogate or Exit"/
-
-      int parCount = 5;
-      bool force = true;
-
-      std::string name = cfg.find("name", force);
-      auto rotAxis = string2vec(cfg.find("rotation_axis", force));
-      auto pointAxis = string2vec(cfg.find("point_on_axis", force));
-      double rotFreq = ptstod(cfg.find("rot_fre", force));
-      return new ScorerRotatingObj(name, rotAxis, pointAxis, rotFreq, const_neutron_pgd);
     }
     else if(ScorDef == "WlAngle")
     {

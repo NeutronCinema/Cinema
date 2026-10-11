@@ -31,8 +31,6 @@
             <solidref ref="SphereSolid" />
             <materialref ref="Water" />
             <auxiliary auxtype="Scorer" auxvalue="Scorer=VolFluence;name=Sflux;min=1e-5;max=1.2;numbin=100;linear=no"/>
-            <auxiliary auxtype="Scorer" auxvalue="Scorer=RotatingObj;name=roen;
-              rotation_axis=0,1,0;point_on_axis=0,0,0;rot_fre=1000"/>
         </volume>
 
         <volume name="VolBoxSide">

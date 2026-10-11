@@ -214,14 +214,7 @@ void Prompt::ActiveVolume::scoreExit(Prompt::Particle &particle)
     setCurrentTracingState(Scorer::ScorerType::EXIT);
     for(auto &v:m_matphysscor->exit_scorers)
     {
-      // to act along with the Prompt::ScorerRotatingObj::score method,
-      // disable the effective energy and direction, by setting the direction to null
-      if(particle.hasEffEnergy())
-          particle.setEffDirection(Vector());
-      else
-      {
-        v->score(particle);
-      }
+      v->score(particle);
     }
   }
 }
