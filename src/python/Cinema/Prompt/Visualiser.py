@@ -30,9 +30,10 @@ from .Mesh import Mesh, generateVolumetricMesh
 
 try:
     import pyvista as pv
-except Exception as e:
-    print(e)
-    sys.exit(1)
+except Exception:
+    # raise (matching Mesh.py), not sys.exit: importing this module from a
+    # library must fail with a normal catchable exception
+    raise ImportError("pyvista is required to visualize.")
 
 high_contrast_colors = ["#FF0000","#FF4500","#FF8C00","#FFD700","#FFFF00","#FF6347","#CD5C5C",
     "#0000FF","#1E90FF","#00BFFF","#00FFFF","#00FF00","#32CD32","#2E8B57","#20B2AA",

@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-viz = [ "pyvista", "matplotlib"]
+viz = [ "pyvista", "matplotlib", "tetgen"]
 
 # [project.scripts]
 # my_package_cli = 'my_package.console:run'
