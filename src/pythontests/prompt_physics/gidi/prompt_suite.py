@@ -38,7 +38,8 @@ def promptRun(cfg, energy, gidiThreshold = -5, popsPath = None,
     _get_cdata().setGidiThreshold(gidiThreshold)
     _get_cdata().setEnableGidiPowerIteration(False)
     _get_cdata().setGammaTransport(isGammaTransport)
-    if not popsPath:
+    # only override the pops path when the caller provided one
+    if popsPath:
         _get_cdata().setGidiPops(popsPath)
 
     numbin_mu=10
