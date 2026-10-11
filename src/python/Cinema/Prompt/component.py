@@ -318,11 +318,17 @@ class FlatAnalyser(EntityArray):
                     pass
                 elif cur_h == 0:
                     # print('Using vertical single curved surface')
+                    # iy is already centred on 0 by set_rect_position/
+                    # set_trape_position, so use it directly like the
+                    # double-curve branch below
                     tilt_h = 0
-                    tilt_v = - np.arcsin((iy - height * 0.5) / cur_v) * np.rad2deg(1)
+                    tilt_v = - np.arcsin(iy / cur_v) * np.rad2deg(1)
                 elif cur_v == 0:
                     # print('Using horizontal single curved surface')
-                    tilt_h = np.arcsin((ix - length * 0.5) / cur_h) * np.rad2deg(1)
+                    # ix is already centred on 0 by set_rect_position/
+                    # set_trape_position, so use it directly like the
+                    # double-curve branch below
+                    tilt_h = np.arcsin(ix / cur_h) * np.rad2deg(1)
                     tilt_v = 0
                 else:
                     # print('Using double curved surface')

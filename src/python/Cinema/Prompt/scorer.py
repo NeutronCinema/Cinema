@@ -726,8 +726,9 @@ class DirectSqwHelper(ScorerHelper2D, MultiScatMixin2D):
         ------
         - The dynamic structure factor S(Q,ω) provides information about both spatial correlations (via Q)
           and temporal correlations (via ω) in the sample material
-        - Energy transfer ω = E_final - E_initial, where positive values indicate energy gain
-          (neutron gains energy from sample) and negative values indicate energy loss
+        - Energy transfer ω = E_initial - E_final: positive values indicate energy loss
+          (neutron loses energy to the sample, downscatter) and negative values indicate
+          energy gain (upscatter)
         - This is particularly useful for studying inelastic scattering processes, phonons,
           and other dynamic phenomena in materials
         - The 2D histogram provides a comprehensive view of scattering dynamics across

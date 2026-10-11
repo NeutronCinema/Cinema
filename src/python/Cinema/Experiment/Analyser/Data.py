@@ -73,7 +73,7 @@ class RunData(DataLoader):
             self.detErrPro.scale(1./totMonitor)
 
         else:
-            raise RunTimeError('Unknown normalise method')
+            raise RuntimeError('Unknown normalise method')
         
     def plot(self, show=False, logscale=False):
         try:
