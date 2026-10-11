@@ -32,6 +32,12 @@ namespace Prompt {
     void fill(double val) override;
     void fill(double val, double weight) override;
     void fill(double val, double weight, double error);
+    //Est1D keeps its sdev in m_hit (m_ww stays 0): merge combines that
+    //channel in quadrature and scale rescales it by the absolute factor,
+    //both instead of the base-class linear/variance treatment. See
+    //HistBase::merge()/scale() for the two-channel documentation.
+    void merge(const HistBase &hist) override;
+    void scale(double scalefact) override;
   };
 }
 

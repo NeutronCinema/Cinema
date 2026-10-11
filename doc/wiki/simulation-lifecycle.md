@@ -179,9 +179,16 @@ if __name__ == "__main__":
 5. **`simulate(gun, N)`** — the event loop. Config-string guns go through the C++
    `go()` main loop; a `PythonGun` is driven event-batch by event-batch from Python.
    Scorers accumulate weight/hit/Σw² in C++ histograms.
-6. **Gather and save** — `sim.gatherHistData('name')` returns an independent `Hist1D`/`Hist2D`
-   copy for plotting in the same script (`hist.savefig(...)`); `sim.save_all_scorers()`
-   writes every scorer to disk. Details in
+6. **Gather and save** — `sim.gatherHistData('name')` returns the gathered `Hist1D`/`Hist2D`
+   for plotting in the same script (`hist.savefig(...)`); `sim.save_all_scorers()`
+   writes every scorer to disk. Under `PromptMPI` the gather result is written into a
+   **fresh clone** of the scorer histogram — on the destination rank, including size-1
+   (single-rank) runs — and the live
+   scorer histogram itself is never updated in place, so **use the return value**: the merged
+   arrays exist only in the returned object, while scalar getters such as `getTotalWeight()`
+   stay rank-local on both the clone and the original (repeated gathers are idempotent).
+   Plain serial `Prompt` has nothing to reduce and returns a live view of the scorer.
+   Details in
    [Scoring](scorers) and [section 7](#7-what-a-run-writes).
 7. **`clear()`** (only if you want another simulation in the same process) — resets the
    C++ resource manager, `worldExist` and the scorer registry; see
@@ -247,7 +254,7 @@ satisfy this.
 |---|---|
 | Seeds | Each rank simulates with `seed + rank` (independent streams; combined they are statistically independent — exactly what you want). |
 | Event split | `PromptMPI.simulate(gun, num)` computes `batchSize = int(num / self.size)`. Ranks 1..n-1 run `batchSize` events each (progress timer and `save2Disk` off); **rank 0 runs the remainder** `num - batchSize*(size-1)`, with the timer on and, if requested, the `save2Disk` dump. The sum over ranks equals `num`. |
-| `gatherHistData(cfg, raw=False, dst=0)` | **Collective.** After fetching the local histogram it prints `Scorer <name> rank <r>: weight ..., hit ...` per rank, then performs three `comm.Reduce` (sum) operations over the weight, hit and Σw² arrays to root `dst` (default 0). Every rank must call it, in the same order. The returned histogram holds the merged data **only on rank `dst`**; on other ranks ignore the returned arrays. |
+| `gatherHistData(cfg, raw=False, dst=0)` | **Collective.** After fetching the local histogram it prints `Scorer <name> rank <r>: weight ..., hit ...` per rank, then performs three `comm.Reduce` (sum) operations over the weight, hit and Σw² arrays to root `dst` (default 0). Every rank must call it, in the same order. On rank `dst` the reduced arrays are written into an **independent clone** which is returned — the live scorer histogram keeps its rank-local content, gathers are idempotent, and the clone's C++ scalars (`getTotalWeight`, over/underflow) are *not* part of the reduce. On other ranks the returned object is the borrowed local histogram; ignore its arrays there. |
 | `show(...)` | Rank 0 renders the window and then all ranks barrier — no MPI-deadlocked windows, but do not call it in batch jobs. |
 | `save_all_scorers()` | Writes files on **rank 0 only** under MPI (internally `rank = getattr(self, 'rank', 0)`, so plain serial `Prompt` runs write too). |
 | Console | Rank 0 owns progress printing; `gatherHistData` prints one weight/hit line per rank. |
