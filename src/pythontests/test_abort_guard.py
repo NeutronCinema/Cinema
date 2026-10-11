@@ -4,9 +4,11 @@
 # process (SIGABRT, core dump) on documented everyday inputs.
 #
 # The bridged entry points (Launcher.setGun/go/loadGeometry,
-# Volume.addScorer/setSurface) return an int status and record the C++ message
-# in a thread-local buffer exposed as pt_last_error(); raiseOnBridgeError
-# turns a nonzero status into a RuntimeError carrying that message.
+# Volume.addScorer/setSurface, and from wave 2b the ModelCollection creation
+# via pt_makeModelCollection_checked) return an int status and record the C++
+# message in a thread-local buffer exposed as pt_last_error();
+# raiseOnBridgeError turns a nonzero status into a RuntimeError carrying that
+# message.
 #
 # One test per reachable failure mode. The Launcher is a process-global
 # singleton (one world per process), so these tests rely on the pytest
@@ -20,6 +22,7 @@ import struct
 import pytest
 
 from Cinema.Prompt import Prompt
+from Cinema.Prompt.compoundModel import ModelCollection
 from Cinema.Prompt.geo import Volume
 from Cinema.Prompt.solid import Box
 
@@ -122,3 +125,27 @@ def test_mcplgun_zero_particle_file_raises_and_process_survives(tmp_path):
     # recovery: the process is alive and the Launcher accepts a valid gun
     # after the rejected one
     sim.l.setGun('gun=SimpleThermalGun;energy=0.0253;position=0,0,-500;direction=0,0,1')
+
+
+# --------------------------------------------------------------------- ModelCollection
+
+# The ModelCollection creation bridge completed the int-status family in wave
+# 2b (pt_makeModelCollection_checked, same 0/1/2 + pt_last_error protocol).
+# EXPECTED-FAIL against the stale .so and green after the round-2 gate
+# rebuild (full ledger in test_cov_compound_model.py): pre-gate the raw
+# bridge lets the Prompt::Error escape and the fork dies at the constructor
+# call, reported by pytest-forked as
+#   running the test CRASHED with signal 6 (SIGABRT)
+# with "terminate called after throwing an instance of
+# 'Prompt::Error::BadInput'" on the child's stderr. The match accepts the
+# recorded C++ message bare ('unknown physics nosuchphysics') or with its
+# exception type name prefixed, like the two-wording MCPL pin above.
+def test_model_collection_rejected_cfg_raises_and_process_survives():
+    with pytest.raises(RuntimeError, match=r'unknown physics|BadInput'):
+        ModelCollection('physics=nosuchphysics;xs_barn=5;density_per_aa3=0.05')
+
+    # recovery: the process is alive and a valid cfg constructs a working
+    # model (xs_barn=5 asked for exactly 5 barn, the xs() bridge reports it
+    # barn-normalised)
+    mc = ModelCollection("physics=idealElaScat;xs_barn=5;density_per_aa3=0.05")
+    assert mc.xs(0.0253) == pytest.approx(5.0)

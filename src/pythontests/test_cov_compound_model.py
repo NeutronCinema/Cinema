@@ -22,6 +22,9 @@
 # reintroduced hang must fail the test, not wedge the suite (measured on the
 # unfixed tree: xs then generate never returned; killed by timeout).
 #
+# The bridge pins at the bottom are EXPECTED-FAIL against the stale cinemabin
+# .so and green after the round-2 gate rebuild (see the ledger block there).
+#
 # Everything here is NCrystal-backed (fast, but loads Al_sg225.ncmat and
 # spawns python workers), so per the conftest tier table the tests are
 # marked medium (skipped by the pre-push hook, run by cimbuild -tt/-ttt).
@@ -33,6 +36,7 @@ import sys
 import pytest
 
 from Cinema.Prompt.compoundModel import ModelCollection
+from Cinema.Prompt.histogram import Hist1D, Hist2D
 
 AL_CFG = "physics=ncrystal;nccfg='Al_sg225.ncmat'"
 EKIN = 0.0253  # eV (25.3 meV thermal neutron)
@@ -115,3 +119,66 @@ def test_generate_rejects_null_direction():
     mc = ModelCollection("physics=idealElaScat;xs_barn=5;density_per_aa3=0.05")
     with pytest.raises(ValueError, match='null incident direction'):
         mc.generate(EKIN, dir=(0., 0., 0.))
+
+
+# ---------------------------------------------------------------- bridge pins
+#
+# EXPECTED-FAIL LEDGER (wave 2b, cluster b2): red against the stale cinemabin
+# .so. The two CREATION pins turn green after the round-2 gate rebuild alone;
+# the two MERGE pins additionally need the int-status conversion of the hist
+# merge entry points (pt_HistBase_merge/pt_Hist2D_merge in PTPythonHist.cc and
+# the restype/raiseOnBridgeError wiring in histogram/Hist.py - files outside
+# b2's exclusive list, reported to the lead; reference bridge:
+# pt_HistBase_merge_checked in PTPythonResource.cc) - until that lands they
+# stay red (SIGABRT) even after the gate rebuild.
+#
+# On the stale library the creation and merge bridges let the C++ exception
+# escape the extern "C" boundary, so std::terminate aborts the forked worker
+# at the call itself and pytest.raises never gets to evaluate anything. Every
+# test below fails there with (recorded 2026-10-11 against the stale .so,
+# pytest --forked; the child's stderr additionally shows the terminate text,
+# e.g. "terminate called after throwing an instance of
+# 'Prompt::Error::BadInput'"):
+#   running the test CRASHED with signal 6 (SIGABRT)
+#
+# After the gate rebuild (plus the merge conversion above) the checked bridges
+# return a nonzero status with the message in pt_last_error() and
+# raiseOnBridgeError turns it into the RuntimeError matched below (creation:
+# pt_makeModelCollection_checked; merge: the converted hist entry points).
+# The match alternatives accept the C++ message either bare or with its
+# exception type name prefixed.
+
+def test_model_collection_bad_physics_name_raises_instead_of_abort():
+    """physics=nosuchphysics used to abort: Prompt::Error::BadInput ('unknown
+    physics nosuchphysics') escaped pt_makeModelCollection."""
+    with pytest.raises(RuntimeError, match=r'unknown physics|BadInput'):
+        ModelCollection('physics=nosuchphysics;xs_barn=5;density_per_aa3=0.05')
+
+
+def test_model_collection_bad_nccfg_raises_instead_of_abort():
+    """An nccfg naming a data file NCrystal cannot find used to abort: the
+    NCrystal::Error (not a Prompt::Error) escaped the raw bridge."""
+    with pytest.raises(RuntimeError, match=r'NoSuchMat_xyz\.ncmat'):
+        ModelCollection("physics=ncrystal;nccfg='NoSuchMat_xyz.ncmat'")
+
+
+def test_histbase_merge_mismatched_bins_raises_instead_of_abort():
+    """HistBase.merge with different nbins used to abort: the CalcError
+    ('m_nbins 4 is different with the m_nbins of another histogram 8')
+    escaped pt_HistBase_merge. No notes are set, so the python-side note
+    guard in HistBase.merge passes and the call really reaches C++."""
+    a = Hist1D(0., 1., 4)
+    b = Hist1D(0., 1., 8)
+    with pytest.raises(RuntimeError, match=r'different with the m_nbins'):
+        a.merge(b)
+
+
+def test_hist2d_merge_cross_type_raises_instead_of_abort():
+    """Hist2D.merge with a Hist1D used to abort: the reference dynamic_cast
+    in Hist2D::merge throws std::bad_cast ('std::bad_cast') which escaped
+    pt_Hist2D_merge. Same note (none) on both sides keeps the python-side
+    guard silent."""
+    a = Hist2D(0., 1., 4, 0., 1., 4)
+    b = Hist1D(0., 1., 4)
+    with pytest.raises(RuntimeError, match=r'bad_cast'):
+        a.merge(b)
