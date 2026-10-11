@@ -33,6 +33,13 @@ namespace Prompt {
                  double ymin, double ymax, unsigned nybins);
     virtual ~Hist2D();
 
+    //Independent copy: rebuilds the geometry through the normal constructor,
+    //then takes over the scored state (the base forbids its own copy)
+    Hist2D(const Hist2D& other)
+    :Hist2D(other.m_name, other.m_xmin, other.m_xmax, other.m_xnbins,
+            other.m_ymin, other.m_ymax, other.m_ynbins)
+    {copyTrivialFrom(other);}
+
     void operator+=(const Hist2D& hist);
     unsigned dimension() const override { return 2; }  
     void save(const std::string &filename) const override;

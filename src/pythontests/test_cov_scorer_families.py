@@ -35,8 +35,7 @@
 #   wavelength (method=1) and its y axis is the angle between
 #   (position - sample_pos) and beam_dir;
 # - MultiScat counters score the per-particle scattering count, Split
-#   scales the weight by 1/split and clones the track, RotatingObj scores
-#   the comoving energy E0 + 0.5*m*(omega*rho)^2 of the rotating frame.
+#   scales the weight by 1/split and clones the track.
 #
 # The Launcher is a process-global singleton (one world per process), so
 # every simulation test relies on the pytest --forked run mode. All sim
@@ -730,7 +729,7 @@ def test_scatter_counter_filter_downstream_documented_semantics():
 
 
 # ---------------------------------------------------------------------------
-# Split and RotatingObj
+# Split
 # ---------------------------------------------------------------------------
 
 @pytest.mark.medium
@@ -797,38 +796,12 @@ def test_split_one_is_identity():
     assert wbin == hits == NPRIM
 
 
-@pytest.mark.medium
-def test_rotatingobj_effective_energy_bin():
-    # ScorerRotatingObj (cfg string, PEA_POST) fills the comoving kinetic
-    # energy E_lab + 0.5*m*(omega*rho)^2 into a hardwired [0, 1] eV / 100
-    # bin histogram, with omega = 2*pi*rot_fre and rho = the distance of
-    # the scored point from the rotation axis (143 mm at the exit face,
-    # v_lab perpendicular to v_rot for this geometry). rot_fre=1853 puts
-    # the rotation contribution at 0.0145 eV, i.e. bin 3 - one bin above
-    # the f=0 result (bin 2); an omega=f slip would stay in bin 2, so the
-    # pin discriminates the 2*pi factor at one-bin resolution.
-    sim, world, plate = _straight_world()
-    plate.addScorer("Scorer=RotatingObj;name=rot;rotation_axis=0,1,0;"
-                    "point_on_axis=0,0,0;rot_fre=1853")
-    world.placeChild('pv_plate', plate, Transformation3D(0, 0, PLATE_ZC))
-    sim.setWorld(world)
-    sim.simulate(_PencilGun(vectorized=500), NPRIM)
-
-    omega = 2 * math.pi * 1853.0
-    ecom = E0 + 0.5 * M_EVC2 * (Z_EXIT * omega) ** 2
-    h = sim.gatherHistData('rot')
-    assert h.getXMin() == 0.0 and h.getXMax() == pytest.approx(1.0)
-    idx, wbin, hits = _single_bin(h)
-    assert idx == _bin_linear(ecom, 0.0, 1.0, 100) == 3
-    assert wbin == hits == NPRIM              # one score per primary
-
-
 # ---------------------------------------------------------------------------
 # fast, transport-free checks of the cfg-string-only scorers
 # ---------------------------------------------------------------------------
 
 def test_cfg_only_scorers_register_without_world():
-    # Angular, WlAngle, MultiScat, RotatingObj and Split have no helper
+    # Angular, WlAngle, MultiScat and Split have no helper
     # class; adding their cfg strings to a standalone Volume must parse
     # them immediately and register them under their name key (the same
     # registration path the simulations above score through)
@@ -842,13 +815,23 @@ def test_cfg_only_scorers_register_without_world():
                     "dist=1000;ptstate=ENTRY;wl_min=0.5;wl_max=5;numbin_wl=45;"
                     "angle_min=0;angle_max=180;numbin_angle=6;method=0"),
         'msc_reg': "Scorer=MultiScat;name=msc_reg;min=0;max=5;linear=yes",
-        'rot_reg': ("Scorer=RotatingObj;name=rot_reg;rotation_axis=0,1,0;"
-                    "point_on_axis=0,0,0;rot_fre=50"),
         'split_reg': "Scorer=Split;name=split_reg;split=3",
     }
     for cfg in cfgs.values():
         vol.addScorer(cfg)
     assert set(VolumeCls.scorer_dict) >= set(cfgs)
+
+
+def test_rotatingobj_cfg_is_rejected():
+    # RotatingObj was removed (model found wrong); the cfg string must fail
+    # loudly and catchably. Green only after the gate rebuild - the stale
+    # prebuilt .so still accepts it.
+    from Cinema.Prompt.geo import Volume as VolumeCls
+
+    vol = VolumeCls("cfgrej", Box(10, 10, 2), matCfg='vacuum.ncmat')
+    with pytest.raises(RuntimeError):
+        vol.addScorer("Scorer=RotatingObj;name=x;rotation_axis=0,1,0;"
+                      "point_on_axis=0,0,0;rot_fre=1")
 
 
 def test_multiscat_counter_class_defaults():

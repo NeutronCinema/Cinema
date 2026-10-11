@@ -152,7 +152,8 @@ class PixelLocator(KDTree):
         qtsq = hist1d2.getWeight()
         hist1d.plot()
         hist1d2.plot(True)
-        return hist1d.getCentre(), np.divide(qtsq, qesq, where=(qesq!=0))
+        return hist1d.getCentre(), np.divide(qtsq, qesq, where=(qesq!=0),
+                                             out=np.zeros_like(qtsq, dtype=float))
 
 class IDFLoader():
     def __init__(self, dir):

@@ -12,12 +12,28 @@ Coverage plan (cluster cov-py3-histops):
 - F: savefig smoke into tmp_path (medium tier, ~0.2-0.3 s per body)
 - G: op-matrix state machine comparing the ctypes fetchers after every step
 
+EXPECTED-FAIL LEDGER (round-2 hist semantics). The tests flagged with
+"EXPECTED-FAIL" below pin behaviour that lives in existing libprompt_core
+symbols which the checked-out cinemabin build predates:
+- HistBase::scale must scale the ww channel (sum(w^2)) by f^2, so getSdev()
+  scales by |f| - the stale .so leaves ww untouched;
+- Est1D must merge its error channel (m_hit) in quadrature (3+4 -> 5) and
+  scale it by |f| - the stale .so adds it linearly and leaves it unscaled.
+These tests are RED against the stale cinemabin .so and turn GREEN after the
+round-2 gate rebuild, EXCEPT the two Est1D ones, which additionally need the
+Est1D::merge/Est1D::scale overrides in src/cxx/Ana/libinc/PTEst1D.hh and
+src/cxx/Ana/libsrc/PTEst1D.cc (files outside the b1 cluster's exclusive list,
+reported to the lead); they stay red until that override lands and the .so is
+rebuilt.
+
 Deliberately NOT exercised here:
 - HistBase.merge with mismatched binning: the C++ CalcError escapes the
-  ctypes ABI and abort()s the interpreter (verified 2026-10), so there is no
-  catchable Python error to pin; the python-side note-mismatch guard is
-  covered by test_hist_invariants.py. The catchable mismatched-binning
-  errors live in the analysis layer and are pinned in section D.
+  ctypes ABI and abort()s the interpreter (verified 2026-10, re-verified in
+  round 2: SIGABRT with 'terminate called after throwing an instance of
+  Prompt::Error::CalcError'), so there is no catchable Python error to pin;
+  the python-side note-mismatch guard is covered by test_hist_invariants.py.
+  The catchable mismatched-binning errors live in the analysis layer and are
+  pinned in section D.
 - Est1D.fillmany: np.vectorize double-fills the first element (documented in
   test_hist2d_est1d.py), so every Est1D fill below is a plain scalar loop.
 
@@ -73,6 +89,9 @@ def test_normalise_to_unit_total_exact_array():
 
 
 def test_scale_zero_clears_weights_keeps_counters():
+    # EXPECTED-FAIL (round-2 ledger): needs HistBase::scale to scale the ww
+    # channel by f^2; red against the stale cinemabin .so (ww stays [4, 36]),
+    # green after the gate rebuild. See the module docstring.
     h = Hist1D(0., 2., 2)
     h.fill(0.25, 2.0)   # bin 0
     h.fill(1.5, 6.0)    # bin 1
@@ -80,13 +99,17 @@ def test_scale_zero_clears_weights_keeps_counters():
     assert np.array_equal(h.getWeight(), [0., 0.])
     assert h.getAccWeight() == pytest.approx(0.0)
     assert h.getTotalWeight() == pytest.approx(0.0)
-    # scale() never touches the hit counter or the ww channel
+    # the hit counter counts fill calls and is never rescaled; the ww channel
+    # (sum(w^2)) scales with f^2 = 0 and is cleared with the content
     assert np.array_equal(h.getHit(), [1., 1.])
-    assert np.array_equal(h.getWW(), [4., 36.])
-    assert np.array_equal(h.getSdev(), [2., 6.])  # sdev = sqrt(ww), unscaled
+    assert np.array_equal(h.getWW(), [0., 0.])
+    assert np.array_equal(h.getSdev(), [0., 0.])
 
 
 def test_scale_negative_sign_flip_exact():
+    # f = -1: |f| = 1, so old and new scale semantics coincide (ww is left
+    # untouched by the stale .so and scaled by (-1)^2 = 1 after the fix) -
+    # this pin holds under both and guards the sign flip of the content
     h = Hist1D(0., 2., 2)
     h.fill(0.5, 2.0)
     h.fill(1.5, 6.0)
@@ -94,6 +117,10 @@ def test_scale_negative_sign_flip_exact():
     assert np.array_equal(h.getWeight(), [-2., -6.])
     assert h.getAccWeight() == pytest.approx(-8.0)
     assert h.getTotalWeight() == pytest.approx(-8.0)
+    # |f| = 1: the variance (ww) is unchanged and so is the sdev
+    assert np.array_equal(h.getWW(), [4., 36.])
+    assert np.array_equal(h.getSdev(), [2., 6.])
+    assert np.array_equal(h.getHit(), [1., 1.])
 
 
 def test_scale_multiplies_overflow_underflow_counters():
@@ -109,20 +136,51 @@ def test_scale_multiplies_overflow_underflow_counters():
     assert h.getTotalWeight() == pytest.approx(20.0)
 
 
-def test_scale_leaves_hit_and_ww_untouched():
-    # ww accumulates sum(w^2) at fill time; the C++ scale() multiplies the
-    # bin weights and the sumW bookkeeping only, so ww/hit keep their
-    # pre-scale values (documented semantics of HistBase::scale)
+def test_scale_ww_by_f_squared_and_sdev_by_absf():
+    # EXPECTED-FAIL (round-2 ledger): needs HistBase::scale to scale the ww
+    # channel (sum(w^2)) by f^2; red against the stale cinemabin .so (ww stays
+    # [4, 9], sdev [2, 3]), green after the gate rebuild. The hit counter
+    # counts fill calls and stays unscaled either way.
     h = Hist1D(0., 2., 2)
     h.fill(0.5, 2.0)
     h.fill(1.5, 3.0)
     h.scale(5.0)
     assert np.array_equal(h.getWeight(), [10., 15.])
     assert np.array_equal(h.getHit(), [1., 1.])
-    assert np.array_equal(h.getWW(), [4., 9.])
-    assert np.array_equal(h.getSdev(), [2., 3.])
+    # ww 4 and 9 scale by 5^2 = 25; sdev = sqrt(ww) scales by |5|
+    assert np.array_equal(h.getWW(), [100., 225.])
+    assert np.array_equal(h.getSdev(), [10., 15.])
     assert h.getAccWeight() == pytest.approx(25.0)
     assert h.getTotalHit() == pytest.approx(2.0)
+
+
+def test_normalise_scales_sdev_unit_weights():
+    # EXPECTED-FAIL (round-2 ledger): the classic normalise-by-sum idiom on
+    # unit-weight data. ww is 1 per bin after the fills, so after scaling by
+    # 0.5 the sdev must be 0.5 like the content; the stale cinemabin .so
+    # leaves ww untouched and reports sdev 1 (green after the gate rebuild).
+    # All quantities are exact binary fractions.
+    h = Hist1D(0., 2., 2)
+    h.fill(0.5)          # unit weight: ww = 1
+    h.fill(1.5)          # unit weight: ww = 1
+    assert h.getTotalWeight() == pytest.approx(2.0)
+    h.scale(1. / h.getTotalWeight())     # normalise to unit total
+    assert np.array_equal(h.getWeight(), [0.5, 0.5])
+    assert np.array_equal(h.getWW(), [0.25, 0.25])
+    assert np.array_equal(h.getSdev(), [0.5, 0.5])
+
+
+def test_hist2d_scale_sdev_by_absf_weighted():
+    # EXPECTED-FAIL (round-2 ledger): 2D variant - HistBase::scale must scale
+    # the ww channel by f^2; red against the stale cinemabin .so (sdev stays
+    # 3), green after the gate rebuild
+    h = Hist2D(0., 2., 2, 0., 4., 2)
+    h.fill(0.5, 1.0, 3.0)    # cell [0][0]: weight 3, ww 9, sdev 3
+    h.scale(2.0)
+    assert np.array_equal(h.getWeight(), [[6., 0.], [0., 0.]])
+    assert np.array_equal(h.getWW(), [[36., 0.], [0., 0.]])
+    assert np.array_equal(h.getSdev(), [[6., 0.], [0., 0.]])
+    assert np.array_equal(h.getHit(), [[1., 0.], [0., 0.]])  # call counter
 
 
 def test_fill_scale_fillmany_scale_sequence_exact():
@@ -314,6 +372,24 @@ def test_hist2d_merge_exact_weight_hit_matrices():
     assert np.array_equal(a.getWeight(), [[3., 0.], [0., 3.]])
     assert np.array_equal(a.getHit(), [[2., 0.], [0., 1.]])
     assert a.getAccWeight() == pytest.approx(6.0)
+
+
+def test_hist2d_merge_ww_variances_add_weighted():
+    # 2D companion of the 1D variance pins above: merge must ADD the sum(w^2)
+    # channels (errors of independent runs combine in quadrature through the
+    # sqrt in getSdev). 0.5 and 2.0 are exact binary fractions, so ww 400 and
+    # 25 add bitwise to 425. Green against the round-1 merge fix.
+    a = Hist2D(0., 1., 1, 0., 1., 1)
+    for _ in range(100):
+        a.fill(0.5, 0.5, 2.0)    # ww = 100 * 4 = 400
+    b = Hist2D(0., 1., 1, 0., 1., 1)
+    for _ in range(100):
+        b.fill(0.5, 0.5, 0.5)    # ww = 100 * 0.25 = 25
+    a.merge(b)
+    assert a.getWW()[0, 0] == 425.0
+    assert a.getSdev()[0, 0] == pytest.approx(np.sqrt(425.0), rel=1e-15)
+    assert a.getWeight()[0, 0] == pytest.approx(250.0)
+    assert a.getHit()[0, 0] == pytest.approx(200.0)
 
 
 # --- D: analysis-layer arithmetic (ErrorPropagator, RebinHist1D) -----------------
@@ -530,6 +606,42 @@ def test_est1d_out_of_range_draws_hit_counters_only():
     assert np.array_equal(e.getError(), [0., 0.])  # no bin was touched
 
 
+# --- E2: Est1D error channel under merge/scale (EXPECTED-FAIL ledger) ------------
+# Est1D keeps its sdev in the hit array (m_ww stays 0), so the base-class
+# HistBase semantics do not apply to it: merge must quadrature the error
+# channel and scale must rescale it by |f|. Both need Est1D::merge /
+# Est1D::scale overrides in PTEst1D.hh/.cc, which are outside the b1 cluster's
+# exclusive file list (reported to the lead) - these two stay red until that
+# override lands and the .so is rebuilt (see the module docstring).
+
+def test_est1d_merge_error_channel_quadrature():
+    # EXPECTED-FAIL (round-2 ledger): the stale .so merges the Est1D error
+    # channel linearly (3 + 4 = 7); the 3-4-5 quadrature below needs the
+    # Est1D::merge override (PTEst1D.hh/.cc) plus a rebuild
+    a = Est1D(0., 2., 1)
+    a.fill(1.0, 1.0, 3.0)
+    b = Est1D(0., 2., 1)
+    b.fill(1.0, 1.0, 4.0)
+    a.merge(b)
+    # 3-4-5 triangle: the classic quadrature of independent errors
+    assert a.getError()[0] == pytest.approx(5.0)
+    assert a.getWeight()[0] == pytest.approx(2.0)     # content adds linearly
+    assert a.getAccWeight() == pytest.approx(2.0)
+
+
+def test_est1d_scale_scales_error_channel_by_absf():
+    # EXPECTED-FAIL (round-2 ledger): m_hit IS the sdev accumulator for
+    # Est1D, linear in the factor - the stale .so leaves it untouched (3
+    # instead of 6); needs the Est1D::scale override (PTEst1D.hh/.cc) plus a
+    # rebuild. The content takes the sign, the error scales with |-2|.
+    e = Est1D(0., 2., 1)
+    e.fill(1.0, 2.0, 3.0)
+    e.scale(-2.0)
+    assert e.getWeight()[0] == pytest.approx(-4.0)
+    assert e.getError()[0] == pytest.approx(6.0)
+    assert np.array_equal(e.getWW(), [0.])    # ww stays the unused channel
+
+
 # --- F: plot()/savefig() smoke (medium: 0.2-0.3 s per body) ----------------------
 
 @pytest.mark.medium
@@ -606,7 +718,10 @@ def test_hist1d_op_matrix_fetch_after_each_step():
     h.scale(0.5)
     assert np.array_equal(h.getWeight(), [1., 1.5, 0.5, 2.5])
     assert np.array_equal(h.getHit(), [1., 1., 1., 1.])      # unscaled
-    assert np.array_equal(h.getWW(), [4., 9., 1., 25.])      # unscaled
+    # EXPECTED-FAIL (round-2 ledger): ww scales by 0.5^2 = 0.25; the stale
+    # cinemabin .so leaves ww at [4, 9, 1, 25]. Green after the gate rebuild.
+    assert np.array_equal(h.getWW(), [1., 2.25, 0.25, 6.25])
+    assert np.allclose(h.getSdev(), [1., 1.5, 0.5, 2.5])     # sqrt(ww), |f| * w
     assert h.getAccWeight() == pytest.approx(5.5)
 
     h.reset()

@@ -83,8 +83,6 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
 
   // fixme: when a particle exiting a volume, a reaction channel is forced to sampled at the moment
   // lab_ekin could be -1 in those cases, but the transport keeps going, that is very confusing.
-  // std::cout << particle.getEventID() << ", is alive? " << particle.isAlive() << ", wall? "<< hitWall<<
-  //  ", labEkin " << lab_ekin   << ", effEkin " << particle.getEffEKin() << "\n";
 
   double weightCorrection = m_discretModels->calculateWeight(stepLength * m_numdensity, false);
 

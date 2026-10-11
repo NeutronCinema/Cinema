@@ -18,7 +18,7 @@ There are four routes out of a simulation:
 
 | Route | How | Output |
 |---|---|---|
-| In-session histogram | `hist = sim.gatherHistData('name')` | Live `Hist1D`/`Hist2D` view of the C++ histogram (retrieval model in [Scoring](scorers)) |
+| In-session histogram | `hist = sim.gatherHistData('name')` | Merged `Hist1D`/`Hist2D`. With `PromptMPI` the destination rank receives an **independent clone** holding the reduced arrays — the live scorer histogram is never written, so use the return value (plain serial `Prompt` returns a live view of the scorer instead) |
 | All scorers to disk | `sim.save_all_scorers(savepdf=False)` | One `<name>.h5` per scorer, written on rank 0; `savepdf=True` adds a `<name>.pdf` each |
 | Histogram dump at end of run | `sim.simulate(gun, n, save2Disk=True)` (under MPI written on rank 0; silently ignored for `PythonGun` guns — see below) | `<internal name>_seed<seed>.mcpl.gz` + a ready-made `<internal name>_view.py` template (section 3) |
 | Particle records | `MCPLOutHelper` scorer | One MCPL particle file per rank: `<name>_pro<rank>.mcpl.gz` (section 5) |
@@ -76,7 +76,7 @@ The accessors you will actually use:
 | `getTotalWeight()` | A C++-side scalar accumulator, over/underflow included (gotcha 4) |
 | `getOverflow()` / `getUnderflow()` | Weight that fell outside the scored range — always check after changing a range |
 | `getEdges()` / `getCentre()` / `getMean()` | Bin edges (`nbins+1`), centres, weighted mean |
-| `scale(f)` / `reset()` / `addNote(s)` / `getNote()` | Rescale, start over, free-form metadata — checked by `Hist1D.merge` only, ignored by `Hist2D.merge` |
+| `scale(f)` / `reset()` / `addNote(s)` / `getNote()` | Rescale (content and totals by f, Σw² by f², so `getSdev()` by \|f\|; hits are fill counts and stay), start over, free-form metadata — checked by `Hist1D.merge` only, ignored by `Hist2D.merge` |
 | `fill(x, w)` / `fillmany(x, w)` | Fill (1D; `Hist2D.fill(x, y, w)`) |
 | `toArrayXY()` (1D) | Convert to an error-propagating `CinemaXY` array (section 8) |
 
@@ -108,13 +108,13 @@ guards fail very differently:
 **`Hist2D.merge` overrides `merge` and never checks notes**: two 2D histograms with
 different notes merge silently, keeping the first note (measured: weights 2+3 summed, note
 `runA` kept) — notes do not keep two PSD-map runs apart; tag 2D runs by file name instead
-(gotcha 6). Weights and hits
-are summed; the Σw² arrays are combined **as if they were errors** —
-`ww → sqrt(ww₁² + ww₂²)`. Measured: a bin with weight 5, Σw²=13 merged with weight 1, Σw²=1
-gives weight 6, hit 3, `getSdev()` ≈ 3.611. For two *independent single-fill* runs (weights 2
-and 3) the merged sdev is 3.138 while the statistically correct value is `sqrt(2² + 3²)` =
-3.606 — **`merge` underestimates the error of merged runs**; use the MPI reduce or
-`McplAnalysor.getHistMany` for multi-run averaging (gotcha 6).
+(gotcha 6). Weights, hits **and** the Σw² arrays are summed, so the merged `getSdev()` =
+`sqrt(Σ(Σw²))` is exactly the quadrature of the per-run uncertainties. Measured: a bin with
+weight 5, Σw²=13 merged with weight 1, Σw²=1 gives weight 6 and `getSdev()` ≈ 3.742
+(= `sqrt(14)`); two *independent single-fill* runs with weights 2 and 3 merge to sdev 3.606
+= `sqrt(2² + 3²)`, the statistically correct value. `merge` and the MPI reduce (which also
+sums Σw²) agree; for file-based multi-run averaging use `McplAnalysor.getHistMany`
+(gotcha 6).
 
 ---
 
@@ -388,7 +388,7 @@ zero-hit bins return **0** error, not NaN, so they plot as "precise zeros".
 
 `ErrorPropagator` (in `Cinema.Experiment.Analyser`) supports `+=`, `-=`, `/=` and `.scale(f)`
 with errors propagated in quadrature (measured: 100 ⊕ 5 → 100.12) and rejects incompatible
-axes — the statistically correct merge for independent runs (contrast gotcha 6). It is one
+axes — the same quadrature convention as `Hist.merge` and the MPI reduce (gotcha 6). It is one
 piece of the wider `Cinema.Experiment` toolbox for comparing simulated histograms with real
 beamline data; the rest of it, and the research modules built around it, are described on
 [Adjacent research modules](adjacent-research-modules).
@@ -421,29 +421,35 @@ fine = xy.interpolate(np.linspace(xmin, xmax, 200))   # needs an ARRAY of x valu
    `<...>_seed<seed>.mcpl.gz` histogram files (section 1). Even in serial mode the flag is
    silently ignored for `PythonGun` guns: bypass `simulate` with `sim.l.go(n, save2Disk=True)`
    or save the histograms yourself (section 1).
-3. **Call `gatherHistData` once per scorer under MPI.** It is collective (every rank, same
-   order) and its reduce *replaces* the arrays on rank `dst` with the merged sums, so a second
-   call re-sums the already-merged root arrays with the other ranks again. Gathering for
-   plotting and then calling `save_all_scorers()` (which gathers again) makes rank 0 save an
-   over-counted `.h5`: measured 10000 true events on two ranks, seed 4096 → weight sum 10000
-   after the first gather, 15000 after a second, 20000 in the `.h5`. Save first, or
-   `hist.save('x.h5')` the gathered object yourself.
+3. **`gatherHistData` is collective — every rank calls it, in the same order.** The reduce
+   result is written into an **independent clone** that is *returned* on rank `dst` (size-1
+   MPI runs included; plain serial `Prompt` has nothing to reduce and returns the live view);
+   the live scorer histogram keeps its rank-local content.
+   Consequences: repeated gathers are idempotent (gathering for plotting and then calling
+   `save_all_scorers()`, which gathers again, no longer over-counts the saved `.h5`), but the
+   merged numbers exist **only in the returned clone** — code that ignores the return value
+   still reads the rank-local scorer, and the C++ scalar getters stay rank-local even on the
+   clone (gotcha 4).
 4. **`getTotalWeight()`, `getOverflow()`, `getUnderflow()` are C++ scalars** and are not
-   covered by the MPI reduce: after `gatherHistData` on rank 0 they still hold that rank's
-   *local* values (measured: `getTotalWeight` 5000 with merged weight sum 10000). Use
-   `getAccWeight()`, `getTotalHit()` or `getWeight().sum()` for merged numbers.
+   covered by the MPI reduce: after `gatherHistData` on rank `dst` they hold that rank's
+   *local* values — on the returned clone as much as on the live scorer (measured:
+   `getTotalWeight` 5000 with merged weight sum 10000). Use `getAccWeight()`,
+   `getTotalHit()` or `getWeight().sum()` for merged numbers.
 5. **File names embed the seed current at scorer creation** — the library default 5489 on the
    first build, not your constructor seed; fresh-process reruns overwrite, in-process rebuilds
    add files (section 3).
-6. **`Hist.merge` combines Σw² in quadrature** (`ww → sqrt(ww₁²+ww₂²)`), so merged
-   `getSdev()` is *not* `sqrt(Σw²)` of the merged weights — it underestimates the variance of
-   merged independent runs (measured: 3.138 vs the correct 3.606, section 2). For correct
-   multi-run errors use the MPI reduce (which sums Σw² arrays) or `ErrorPropagator`/
-   `getHistMany`. The note guard is `Hist1D`-only: `Hist1D.merge` raises `RuntimeError` on a
-   note mismatch, but `Hist2D.merge` does not check notes and merges silently — keep 2D runs
-   (e.g. PSD maps) distinguishable by file name, not `addNote` (section 2). That
-   `RuntimeError` is the *only* catchable merge failure: a geometry mismatch aborts the
-   interpreter, it does not raise (section 2).
+6. **Two error channels live in the histogram arrays — know which is which before merging.**
+   `Hist1D`/`Hist2D` accumulate Σw² in the ww channel and keep entry counts in `hit`;
+   `Est1D` is the opposite: its error estimate *is* the `hit` array (`getError()` returns it)
+   and ww stays zero. Both merge correctly since the round-2 fix — `Hist.merge` sums the ww
+   variances (errors of independent runs combine in quadrature through `getSdev()` =
+   `sqrt(Σ(Σw²))`, section 2), and `Est1D` overrides the merge so its error channel also
+   combines in quadrature (3+4 → 5, not 7) — but they are not interchangeable: `getSdev()`
+   on an `Est1D` is always 0, use `getError()`. The note guard is `Hist1D`-only:
+   `Hist1D.merge` raises `RuntimeError` on a note mismatch, but `Hist2D.merge` does not check
+   notes and merges silently — keep 2D runs (e.g. PSD maps) distinguishable by file name, not
+   `addNote` (section 2). That `RuntimeError` is the *only* catchable merge failure: a
+   geometry mismatch aborts the interpreter, it does not raise (section 2).
 7. **`ptplot -s` needs a dummy file argument**, and `-o` only accepts an existing directory
    or a file path (section 4).
 8. **`PromptFileReader`'s particle-record helpers are stale.** Its module-level record map

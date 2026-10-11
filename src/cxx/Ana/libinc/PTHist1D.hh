@@ -30,6 +30,12 @@ namespace Prompt {
     explicit Hist1D(const std::string &name, double xmin, double xmax, unsigned nbins,bool linear=true);
     virtual ~Hist1D();
 
+    //Independent copy: rebuilds the geometry through the normal constructor,
+    //then takes over the scored state (the base forbids its own copy)
+    Hist1D(const Hist1D& other)
+    :Hist1D(other.m_name, other.m_xmin, other.m_xmax, other.m_nbins, other.m_linear)
+    {copyTrivialFrom(other);}
+
     unsigned dimension() const override { return 1; }  
     std::vector<double> getEdges() const;
     void save(const std::string &filename) const override;

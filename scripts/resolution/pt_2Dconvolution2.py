@@ -4,6 +4,7 @@ from scipy.signal import convolve, convolve2d
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import imshow
 import numpy as np
+import os
 
 aa = 1e-10 #m/aa
 cm = 1e-2 #m/cm
@@ -166,7 +167,14 @@ def fix_range(w, q, s, ein):
     # s = s * np.ones((len(w), len(q))) * w[w>ein]
     return w, q, s
 
-file = '/home/zypan/project/ml/ncmat/c1_vol_77K.h5'
+# S(Q,w) table from a phonon calculation: point CINEMA_SQW_FILE at it; when
+# unset, fall back to a file of that name in the working directory, with a
+# warning.
+file = os.environ.get('CINEMA_SQW_FILE')
+if not file:
+    print('Warning: CINEMA_SQW_FILE is not set - falling back to the '
+          "relative default 'c1_vol_77K.h5'")
+    file = 'c1_vol_77K.h5'
 w, q, s = read_hdf5(file)
 print(w.shape, q.shape, w.max())
 wf, qf, sf = fix_range(w,q,s,0.1)

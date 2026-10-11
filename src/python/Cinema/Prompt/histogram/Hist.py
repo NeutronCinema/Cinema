@@ -43,7 +43,9 @@ _pt_Hist2D_getWeight = importFunc('pt_Hist2D_getWeight', None, [type_voidp, type
 _pt_Hist2D_getHit = importFunc('pt_Hist2D_getHit', None, [type_voidp, type_npdbl2d])
 _pt_Hist2D_getDensity = importFunc('pt_Hist2D_getDensity', None, [type_voidp, type_npdbl2d])
 _pt_Hist2D_fill = importFunc('pt_Hist2D_fill', None, [type_voidp, type_dbl, type_dbl, type_dbl])
-_pt_Hist2D_merge = importFunc('pt_Hist2D_merge', None, [type_voidp, type_voidp])
+# Bridged with an int status (0 ok / nonzero error, message via pt_last_error):
+# Hist2D::merge rejects mismatched binnings and cross-type arguments.
+_pt_Hist2D_merge = importFunc('pt_Hist2D_merge', type_int, [type_voidp, type_voidp])
 _pt_Hist2D_fill_many = importFunc('pt_Hist2D_fillmany', None, [type_voidp, type_sizet, type_npdbl1d, type_npdbl1d, type_npdbl1d])
 _pt_Hist2D_getWeight = importFunc('pt_Hist2D_getWeight', None, [type_voidp, type_npdbl2d])
 _pt_Hist2D_getYMin = importFunc('pt_Hist2D_getYMin', type_dbl, [type_voidp])
@@ -52,7 +54,9 @@ _pt_Hist2D_getNBinX = importFunc('pt_Hist2D_getNBinX', type_uint, [type_voidp])
 _pt_Hist2D_getNBinY = importFunc('pt_Hist2D_getNBinY', type_uint, [type_voidp])
 
 # Prompt::HistBase
-_pt_HistBase_merge = importFunc('pt_HistBase_merge', None, [type_voidp, type_voidp])
+# Bridged with an int status like pt_Hist2D_merge: HistBase::merge rejects
+# mismatched xmin/xmax/nbins.
+_pt_HistBase_merge = importFunc('pt_HistBase_merge', type_int, [type_voidp, type_voidp])
 _pt_HistBase_getXMin = importFunc('pt_HistBase_getXMin', type_dbl, [type_voidp])
 _pt_HistBase_getXMax = importFunc('pt_HistBase_getXMax', type_dbl, [type_voidp])
 _pt_HistBase_getTotalWeight = importFunc('pt_HistBase_getTotalWeight', type_dbl, [type_voidp])
@@ -77,6 +81,14 @@ _pt_HistBase_setWW  = importFunc('pt_HistBase_setWW', None, [type_voidp, type_np
 _pt_HistBase_getNote = importFunc('pt_HistBase_getNote', type_cstr, [type_voidp])
 _pt_HistBase_addNote = importFunc('pt_HistBase_addNote', None, [type_voidp, type_cstr])
 
+# Bound defensively, unlike the imports above: pt_HistBase_clone only exists
+# in libraries rebuilt after its introduction, and a missing symbol here must
+# not break importing this module (clone() raises a clear error instead).
+try:
+    _pt_HistBase_clone = importFunc('pt_HistBase_clone', type_voidp, [type_voidp])
+except AttributeError:
+    _pt_HistBase_clone = None
+
 
 
 class HistBase():
@@ -86,8 +98,8 @@ class HistBase():
     def merge(self, anotherhist):
         if self.getNote() != anotherhist.getNote():
             raise RuntimeError(f'histogram {self.getName()} note {self.getNote()} != {anotherhist.getNote()}')
-        
-        _pt_HistBase_merge(self.cobj, anotherhist.cobj)
+
+        raiseOnBridgeError(_pt_HistBase_merge(self.cobj, anotherhist.cobj))
         
 
     def setWeight(self, w: np.ndarray):
@@ -165,6 +177,31 @@ class HistBase():
 
     def getNote(self):
         return _pt_HistBase_getNote(self.cobj).decode('utf-8')
+
+    def clone(self):
+        """Independent copy of this histogram as a fresh C++ object.
+
+        The returned wrapper owns (and on deletion frees) the copy, unlike
+        histograms obtained through Launcher.getHist, whose cobj is borrowed
+        from the live scorer. PromptMPI.gatherHistData relies on the
+        independence: it writes the reduced content into a clone so that
+        gathers never mutate the scorer histogram itself.
+        """
+        if _pt_HistBase_clone is None:
+            raise RuntimeError('libprompt_core.so lacks pt_HistBase_clone; rebuild Cinema to use clone()')
+        dim = self.dimension()
+        cobj = _pt_HistBase_clone(self.cobj)
+        if not cobj:
+            raise RuntimeError(f'failed to clone the histogram {self.getName()}')
+        if dim == 1:
+            newhist = Hist1D(cobj=cobj)
+        elif dim == 2:
+            newhist = Hist2D(cobj=cobj)
+        else:
+            raise RuntimeError(f'clone not implemented for dimension {dim}')
+        # the clone is fresh heap memory, so the wrapper must free it
+        newhist.managedBySelf = True
+        return newhist
     
 
     
@@ -450,7 +487,7 @@ class Hist2D(HistBase):
     def merge(self, hist2):
         if id(self.cobj) == id(hist2.cobj):
             raise RuntimeError('merging a histogram with itself. The histogram can be scaled up by 2 instead')
-        _pt_Hist2D_merge(self.cobj, hist2.cobj)
+        raiseOnBridgeError(_pt_Hist2D_merge(self.cobj, hist2.cobj))
 
 
 _pt_Est1D_new = importFunc('pt_Est1D_new', type_voidp, [type_dbl, type_dbl, type_uint, type_bool])
@@ -459,7 +496,13 @@ _pt_Est1D_fill = importFunc('pt_Est1D_fill', None, [type_voidp, type_dbl, type_d
 
 class Est1D(Hist1D):
     def __init__(self, xmin, xmax, num, linear=True):
-        super().__init__(xmin, xmax, num, linear)
+        # A real pt::Est1D, not the pt::Hist1D that Hist1D.__init__ would
+        # create from the geometry arguments: the error-channel behaviour
+        # (quadrature merge, |f|-linear scale) lives in the derived-class
+        # vtable, and the pt_Est1D_delete in __del__ must pair with
+        # pt_Est1D_new instead of deleting a base-constructed object.
+        super().__init__(cobj=_pt_Est1D_new(xmin, xmax, num, linear))
+        self.managedBySelf = True
 
     def __del__(self):
         _pt_Est1D_delete(self.cobj)

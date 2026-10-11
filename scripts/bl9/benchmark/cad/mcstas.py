@@ -2,7 +2,9 @@
 import sys
 import os
 import json
-projectpath = "/home/panzy/project/ml/scripts/bl9/"
+# Root of the bl9 script tree (two levels up from this file), holding the
+# local modules (jsonReader) and geo_data/.
+projectpath = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) + '/'
 sys.path.append(projectpath)
 from jsonReader import JsonParser
 

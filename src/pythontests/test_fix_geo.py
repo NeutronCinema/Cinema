@@ -50,8 +50,13 @@ def test_from_alignment_aligns_vectors():
     original = np.array([[0., 0., 1.], [0., 1., 0.]])
     tf = Transformation3D.from_alignment(1., 2., 3., rotated=rotated,
                                          original=original)
-    ref, _ = scipyRot.align_vectors(original, rotated)
+    # align_vectors(a, b) returns the rotation with a.apply(b) == a, so the
+    # reference must map original onto rotated (the old
+    # align_vectors(original, rotated) pinned the INVERSE rotation)
+    ref, _ = scipyRot.align_vectors(rotated, original)
     assert np.allclose(tf.getRotMatrix(), ref.as_matrix())
+    # semantic direction: the frame rotation maps original onto rotated
+    assert np.allclose(tf.getRotMatrix() @ original.T, rotated.T, atol=1e-12)
     assert np.allclose(tf.getTranslation(), [1., 2., 3.])
 
 
@@ -63,13 +68,28 @@ def test_from_alignment_accepts_plain_lists():
     assert np.allclose(tf.getTranslation(), [0., 0., 0.])
 
 
+def test_from_alignment_maps_original_onto_rotated():
+    # adversarial-verification repro: the old setRotByAlignment stored the
+    # INVERSE rotation (R @ original gave [0, 0, -1] instead of [0, 0, 1]),
+    # because scipy align_vectors(a, b) satisfies a.apply(b) == a and the
+    # arguments were swapped
+    rotated = np.array([[0., 0., 1.], [1., 0., 0.]])
+    original = np.array([[0., 1., 0.], [1., 0., 0.]])
+    tf = Transformation3D.from_alignment(rotated=rotated, original=original)
+    assert np.allclose(tf.getRotMatrix() @ original.T, rotated.T, atol=1e-12)
+    # and the same holds through the mutator spelling
+    tf2 = Transformation3D().setRotByAlignment(rotated, original)
+    assert np.allclose(tf2.getRotMatrix() @ original.T, rotated.T, atol=1e-12)
+
+
 def test_from_alignement_deprecated_spelling_works():
     rotated = np.array([[0., 0., 1.], [1., 0., 0.]])
     original = np.array([[0., 0., 1.], [0., 1., 0.]])
     with pytest.warns(DeprecationWarning):
         tf = Transformation3D.from_alignement(0., 0., 0., rotated=rotated,
                                               original=original)
-    ref, _ = scipyRot.align_vectors(original, rotated)
+    # same direction contract as from_alignment: original maps onto rotated
+    ref, _ = scipyRot.align_vectors(rotated, original)
     assert np.allclose(tf.getRotMatrix(), ref.as_matrix())
 
 

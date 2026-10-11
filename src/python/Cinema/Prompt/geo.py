@@ -136,6 +136,9 @@ class Transformation3D:
         """
         Create transformation by aligning vectors.
 
+        The resulting rotation maps the original vectors onto the rotated
+        vectors (R . original[i] == rotated[i]).
+
         Args:
             x (float, optional): X translation. Default: 0.0
             y (float, optional): Y translation. Default: 0.0
@@ -360,7 +363,9 @@ class Transformation3D:
 
     def setRotByAlignment(self, rotated, original):
         """
-        Set rotation by aligning original vectors to rotated vectors.
+        Set rotation so that it maps the original vectors onto the rotated
+        vectors (R . original[i] == rotated[i], like
+        scipyRot.align_vectors(rotated, original)).
 
         Args:
             rotated (ndarray): Target vectors after rotation (shape: Nx3)
@@ -374,7 +379,10 @@ class Transformation3D:
         """
         if len(original)!= len(rotated) or len(original)!=2:
             raise RuntimeError('rotated and original should be contain 2 vectors')
-        self.__sciRot, rssd = scipyRot.align_vectors(original, rotated)
+        # argument order matters: align_vectors(a, b) returns the rotation
+        # with a.apply(b) == a, i.e. R maps original onto rotated; the old
+        # align_vectors(original, rotated) stored the inverse rotation
+        self.__sciRot, rssd = scipyRot.align_vectors(rotated, original)
         self.update_cpp_rot()
         return self
 
@@ -493,6 +501,10 @@ _OVERLAP_SCAN_DIST_FACTOR = 50.
 _OVERLAP_SCAN_MAX_PROBES = 200
 # intersections below this volume (in mm^3) are Monte-Carlo noise
 _OVERLAP_SCAN_MIN_OVERLAP = 1e-6
+# a daughter is reported as (partly) outside its parent when more than this
+# fraction of its volume lies outside (the 1e6-point boolean-capacity
+# Monte-Carlo stays well below it for any non-sliver shape)
+_CONTAIN_SCAN_NOISE_FRACTION = 0.01
 
 # (solidA cobj, solidB cobj, relative rotation, relative translation) -> overlap
 _overlapProbeCache = {}
@@ -662,10 +674,14 @@ class Volume:
             ValueError: A scorer with the same name is already registered,
                 on this or any other volume of the world.
         """
+        # The registry entry is written only AFTER the C++ bridge accepts the
+        # cfg: a rejected registration must leave no ghost behind (a ghost
+        # would fail a same-name retry with a false "already registered" and
+        # send later gathers into an unregistered scorer).
         if isinstance(cppScorer, int):
             self._raiseIfScorerNameTaken(scorer.name)
-            self.__class__.scorer_dict[scorer.name] = scorer.name
             raiseOnBridgeError(_pt_ResourceManager_addScorer(self.volid, scorer.name.encode('utf-8'), cppScorer))
+            self.__class__.scorer_dict[scorer.name] = scorer.name
         else:
             import re
             if isinstance(scorer, str):
@@ -675,14 +691,14 @@ class Volume:
                 name = re.search(r'=.*', name)
                 name = re.sub(r'=', '', name.group()).strip()
                 self._raiseIfScorerNameTaken(name)
-                self.__class__.scorer_dict[name] = scorer
                 raiseOnBridgeError(_pt_ResourceManager_addScorer(self.volid, scorer.encode('utf-8'), cppScorer))
+                self.__class__.scorer_dict[name] = scorer
             else:
                 cfg = scorer.cfg
                 _validateNccfgFiles(cfg)
                 self._raiseIfScorerNameTaken(scorer.cfg_name)
-                self.__class__.scorer_dict[scorer.cfg_name] = cfg
                 raiseOnBridgeError(_pt_ResourceManager_addScorer(self.volid, cfg.encode('utf-8'), cppScorer))
+                self.__class__.scorer_dict[scorer.cfg_name] = cfg
 
     def setSurface(self, cfg: str):
         """
@@ -703,9 +719,11 @@ class Volume:
             logVolume (Volume): Child volume to place
             transf (Transformation3D, optional): Transformation for placement. Default: identity
             scorerGroup (int, optional): Scorer group identifier. Default: 0
-            checkOverlap (bool, optional): Run the best-effort overlap scan
-                against the already-placed daughter volumes and warn on
-                intersections (see _checkDaughterOverlap). Default: True
+            checkOverlap (bool, optional): Run the best-effort assembly scan
+                and warn on intersections between the already-placed daughter
+                volumes (see _checkDaughterOverlap) and on daughters lying
+                outside their parent (see _checkDaughterContainment).
+                Default: True
 
         Returns:
             Volume: Self
@@ -718,9 +736,10 @@ class Volume:
         if checkOverlap:
             try:
                 self._checkDaughterOverlap(name, logVolume, transf)
+                self._checkDaughterContainment(name, logVolume, transf)
             except Exception as exc:
                 # the scan is diagnostic-only and must never break assembly
-                warnings.warn(f"Overlap scan of volume '{self.volname}' was "
+                warnings.warn(f"Assembly scan of volume '{self.volname}' was "
                               f"skipped ({exc.__class__.__name__}: {exc})",
                               RuntimeWarning, stacklevel=2)
         self._placed.append((name, logVolume, transf))
@@ -770,6 +789,34 @@ class Volume:
                     f"volume {overlap:.3f} mm^3. Overlapping daughters have "
                     "an undefined transport order; adjust the placements.",
                     RuntimeWarning, stacklevel=3)
+
+    def _checkDaughterContainment(self, name, logVolume, transf):
+        """Warn when a part of the new daughter lies outside its parent.
+
+        Like the sibling-overlap scan, the transport cannot diagnose this at
+        run time: VecGeom silently tracks a daughter placed outside its
+        parent, so neutrons get transported into the misplaced region and
+        world ENTRY/EXIT scorers over-count. The check reuses the overlap
+        machinery: the Monte-Carlo capacity of
+        parent . (placed daughter) divided by the daughter capacity is the
+        contained fraction, so one boolean-capacity probe measures the
+        outside fraction directly. It is best effort (see the noise
+        threshold _CONTAIN_SCAN_NOISE_FRACTION) and never raises.
+        """
+        capDaughter = float(logVolume.getCapacity())
+        if capDaughter <= 0.:
+            return
+        # the parent solid lives in its own frame, i.e. at identity placement
+        capInside = _intersectionCapacity(self.solid.cobj, logVolume.solid.cobj,
+                                          Transformation3D(), transf)
+        outsideFraction = 1. - capInside / capDaughter
+        if outsideFraction > _CONTAIN_SCAN_NOISE_FRACTION:
+            warnings.warn(
+                f"Daughter volume '{name}' of volume '{self.volname}' lies "
+                f"{max(outsideFraction, 0.) * 100:.1f}% outside its parent "
+                "(Monte-Carlo volume estimate). Daughters outside their "
+                "parent are silently transported into; adjust the placement.",
+                RuntimeWarning, stacklevel=3)
     
     # TODO: need review, to place a collection of Volume
     # def placeArray(self, array, transf=None, marker='', count=0):

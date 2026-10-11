@@ -58,12 +58,6 @@
     <volume name="Sample">
       <materialref ref="Be"/>
       <solidref ref="SampleSolid"/>
-      <auxiliary auxtype="Scorer" auxvalue="Scorer=RotatingObj;name=roen;
-        rotation_axis=0,1,0;point_on_axis=95,0,-0;rot_fre=150;ptstate=ENTRY"/>
-      <auxiliary auxtype="Scorer" auxvalue="Scorer=RotatingObj;name=ropr;
-        rotation_axis=0,1,0;point_on_axis=95,0,-0;rot_fre=150;ptstate=PROPAGATE"/>
-      <auxiliary auxtype="Scorer" auxvalue="Scorer=RotatingObj;name=roex;
-        rotation_axis=0,1,0;point_on_axis=95,0,-0;rot_fre=150;ptstate=EXIT"/>
     </volume>
     <!-- PROPAGATE, ENTRY, EXIT -->
 

@@ -20,7 +20,6 @@
 
 from ..Interface import *
 from enum import Enum
-import sys
 
 try:
     import pyvista as pv
@@ -37,10 +36,11 @@ _pt_Transformation3D_print = importFunc('pt_Transformation3D_print', ctypes.c_ch
 def generateVolumetricMesh(mesh : pv.PolyData) -> pv.PolyData:
     try:
         from tetgen import TetGen
-    except Exception as e:
-        print(e)
-        print("tetgen is required. Use 'pip install tetgen' to install. ")
-        sys.exit(1)
+    except Exception:
+        # raise, not sys.exit: library users (Visualiser.loadMesh has a
+        # documented fall-back-without-geoClip path) must survive a missing
+        # optional dependency
+        raise ModuleNotFoundError("tetgen is required. Use 'pip install tetgen' to install.")
 
     mesh.triangulate(inplace=True)
     tet = TetGen(mesh)

@@ -54,7 +54,9 @@ void pt_Launcher_simOneEvent(void *obj, bool recordTrj);
 size_t pt_Launcher_goWithSecondStack(void *obj, uint64_t numParticle);
 
 // Prompt::HistBase
-void pt_HistBase_merge(void* obj, void* obj2);
+// merge bridges return an int status (0 ok / nonzero error, message via
+// pt_last_error()) so a rejected merge raises in python instead of aborting.
+int pt_HistBase_merge(void* obj, void* obj2);
 void pt_HistBase_setWeight(void *obj, double *data, size_t n);
 void pt_HistBase_setHit(void *obj, double *data, size_t n);
 void pt_HistBase_setWW(void *obj, double *data, size_t n);
@@ -104,7 +106,7 @@ void pt_Hist2D_getDensity(void* obj, double* d);
 void pt_Hist2D_getHit(void* obj, double* h);
 void pt_Hist2D_fill(void* obj, double xval, double yval, double weight);
 void pt_Hist2D_fillmany(void* obj, size_t n, double* xval, double* yval, double* weight);
-void pt_Hist2D_merge(void* obj, void* obj2);
+int pt_Hist2D_merge(void* obj, void* obj2);
 double pt_Hist2D_getYMin(void* obj);
 double pt_Hist2D_getYMax(void* obj);
 unsigned  pt_Hist2D_getNBinX(void* obj);

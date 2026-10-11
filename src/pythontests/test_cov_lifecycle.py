@@ -14,6 +14,10 @@
 #   8. Prompt/utils.py nccalNumDensity against crystallographic closed forms.
 #   9. parameterOptimizer with the installed optuna (storage semantics,
 #      deprecation/value errors, small quadratic mini-optimizations).
+#  10. round-2 hardening pins: second makeWorld fail-fast (RuntimeError
+#      before any geometry is built), registry lookup resilience of
+#      gatherHistData/save_all_scorers, PromptMPI clone guard. Pure python,
+#      green against the stale cinemabin .so as well.
 #
 # The real-simulation tests follow the minimal world of
 # test_prompt_clean_world.py (void world + detector with a WlSpectrum scorer)
@@ -331,6 +335,13 @@ class _FakeHist:
         self.ww = np.asarray(w, dtype=float)
         self.set_calls.append('ww')
 
+    def clone(self):
+        # PromptMPI.gatherHistData writes the reduced content into an
+        # independent clone (fix wave 2), so the fake must clone like the
+        # real Hist: fresh object, copied arrays, empty setter log.
+        # type(self) keeps subclass behaviour (e.g. _SavingHist.save).
+        return type(self)(self.weight.copy(), self.hit.copy(), self.ww.copy())
+
 
 def _fake_mpi_promptmpi(monkeypatch, rank, size, bus=None):
     comm = _FakeComm(rank, size, bus)
@@ -413,7 +424,11 @@ def test_promptmpi_gather_one_real_rank_is_identity(monkeypatch):
     np.testing.assert_array_equal(out.getWeight(), [1., 2., 3.])
     np.testing.assert_array_equal(out.getHit(), [4., 5., 6.])
     np.testing.assert_array_equal(out.getWW(), [0., 0.25, 0.5])
-    assert hist.set_calls == ['hit', 'weight', 'ww']  # documented setter order
+    # root returns an independent clone: the setters write the reduced content
+    # into the clone (documented setter order), the original stays untouched —
+    # that untouched original is what keeps repeated gathers idempotent.
+    assert out.set_calls == ['hit', 'weight', 'ww']
+    assert hist.set_calls == []
 
 
 def test_promptmpi_gather_two_fake_ranks_sum_into_root(monkeypatch):
@@ -796,3 +811,169 @@ def test_optimize_storage_wins_over_deprecated_localhost_flag(tmp_path):
     # (no convergence pin here: covered by the in-memory and sqlite tests)
     assert dbfile.exists()
     assert len(study.trials) == 3
+
+
+# ===========================================================================
+# 10. round-2 hardening: second-world fail-fast, ghost-free scorer registry,
+#     gather/save resilience, clone guard (no new C++ behaviour needed -
+#     green against the stale cinemabin .so as well)
+# ===========================================================================
+
+def test_second_makeworld_fails_fast_before_any_geometry(monkeypatch):
+    # doc/wiki/simulation-lifecycle.md section 2 promises the catchable
+    # "World exist already" RuntimeError for a second world in one process.
+    # The guard installed on every makeWorld override must fire BEFORE the
+    # body runs, so no throwaway geometry is built into the closed world.
+    built = []
+
+    class _Sim(Prompt):
+        def makeWorld(self, thickness=1.0):
+            built.append(thickness)
+            return 'geometry'
+
+    sim = _Sim(seed=1)
+    sim.l.worldExist = True  # simulate a first world in this process
+    try:
+        # wording must match the documented setWorld exception verbatim
+        with pytest.raises(RuntimeError) as ei:
+            sim.makeWorld(0.5)
+        assert str(ei.value) == promptCore_mod._WORLD_EXIST_MSG
+        assert built == []  # fail-fast: the body never ran
+    finally:
+        sim.l.worldExist = False
+
+    # the documented clear() -> makeWorld() rebuild loop still works
+    sim.clear()
+    assert sim.makeWorld(0.5) == 'geometry'
+    assert built == [0.5]  # extra positional args pass through the guard
+
+
+def test_second_makeworld_real_world_documented_runtimeerror(capfd):
+    # real-geometry variant: the second makeWorld raises the documented
+    # RuntimeError immediately - in particular it does NOT build volumes
+    # into the closed geometry (VecGeom would log "Logical Volume created
+    # after geometry is closed" for each of them), and the first world
+    # stays usable afterwards.
+    sim = ScanSim(seed=4096)
+    sim.makeWorld()
+    with pytest.raises(RuntimeError, match='World exist already'):
+        sim.makeWorld()
+    assert 'Logical Volume created after geometry is closed' \
+        not in capfd.readouterr().out
+    assert sim.l.worldExist is True  # first world still committed
+
+    # the first world keeps working after the rejected rebuild attempt
+    sim.simulate(GUN_CFG, 100)
+    assert sim.gatherHistData('WavelengthSp').getHit().sum() > 0
+    sim.clear()  # documented hygiene: no world left for the next test
+
+
+def test_gather_hist_data_unknown_name_lists_the_registry(monkeypatch):
+    # a missing scorer name is a catchable KeyError naming the request and
+    # the registered scorers - never a crash in the unbridged getHist
+    monkeypatch.setattr(Volume, 'scorer_dict',
+                        {'WavelengthSp': WAVELENGTH_SCORER_CFG})
+    sim = Prompt(seed=1)
+    with pytest.raises(KeyError) as ei:
+        sim.gatherHistData('Missing')
+    assert "no scorer named 'Missing'" in str(ei.value)
+    assert 'WavelengthSp' in str(ei.value)  # the registry is listed
+
+
+def test_save_all_scorers_skips_and_warns_on_missing_registry(monkeypatch):
+    # defense-in-depth against a poisoned registry (e.g. a stale entry left
+    # behind by a rejected registration): the failing scorer is skipped with
+    # a RuntimeWarning and every other scorer is still saved.
+    saved = []
+
+    class _SavingHist(_FakeHist):
+        def save(self, fname):
+            saved.append(fname)
+
+        def savefig(self, fname, log=False):
+            saved.append(fname)
+
+    ghost_cfg = ('Scorer=WlSpectrum;name=GhostSp;min=1;max=2;numbin=20;'
+                 'ptstate=BOGUS;')
+    monkeypatch.setattr(Volume, 'scorer_dict',
+                        {'WavelengthSp': WAVELENGTH_SCORER_CFG,
+                         'GhostSp': ghost_cfg})
+
+    def fake_gethist(self, cfg):
+        if cfg == ghost_cfg:
+            raise KeyError("no scorer named 'GhostSp'; "
+                           "the C++ side rejected this registration")
+        return _SavingHist([1.], [1.], [1.])
+
+    monkeypatch.setattr(type(Prompt(seed=1).l), 'getHist', fake_gethist)
+
+    sim = Prompt(seed=1)
+    with pytest.warns(RuntimeWarning, match="skipping scorer 'GhostSp'"):
+        sim.save_all_scorers()
+    assert saved == ['WavelengthSp.h5']  # healthy scorer unaffected
+
+
+@pytest.mark.medium  # one world build (~0.3 s) dominates
+def test_rejected_scorer_leaves_no_ghost_and_retry_works():
+    # a cfg the C++ side rejects (unknown ptstate) must not leave a ghost
+    # entry in the scorer registry: such an entry made an honest retry fail
+    # with a false "already registered" ValueError, and a later
+    # gatherHistData hit the unbridged getHist lookup (uncatchable abort).
+    sim = Prompt(seed=1)
+    world = Volume('world', Box(50, 50, 200), 'void.ncmat')
+    dtt = Volume('detector', Box(10, 10, 1))
+
+    bad = WlSpectrum()
+    bad.cfg_name = 'GhostSp'
+    bad.cfg_min = 1
+    bad.cfg_max = 2
+    bad.cfg_numbin = 20
+    bad.cfg_ptstate = 'BOGUS'
+    with pytest.raises(RuntimeError, match='BOGUS'):
+        dtt.addScorer(bad)
+    assert 'GhostSp' not in Volume.scorer_dict  # registry stayed clean
+
+    good = WlSpectrum()
+    good.cfg_name = 'GhostSp'
+    good.cfg_min = 1
+    good.cfg_max = 2
+    good.cfg_numbin = 20
+    dtt.addScorer(good)  # retry: no false duplicate-name error
+    assert Volume.scorer_dict['GhostSp'] == good.cfg
+
+    # the retried scorer is genuinely registered and its histogram reachable
+    world.placeChild('detectorPhy', dtt)
+    sim.setWorld(world)
+    assert sim.gatherHistData('GhostSp').getHit().size == 20
+    sim.clear()  # documented hygiene: no world left for the next test
+
+
+def test_promptmpi_gather_cloneless_hist_raises_clear_runtimeerror(monkeypatch):
+    # PromptMPI.gatherHistData writes the reduced content into hist.clone();
+    # an object without clone() (stale core library pre-pt_HistBase_clone, or
+    # not a fresh Hist) must raise a RuntimeError explaining the rebuild, not
+    # a bare AttributeError.
+    class _ClonelessHist:
+        def __init__(self):
+            self.weight = np.ones(2)
+            self.hit = np.ones(2)
+            self.ww = np.ones(2)
+
+        def getWeight(self):
+            return self.weight
+
+        def getHit(self):
+            return self.hit
+
+        def getWW(self):
+            return self.ww
+
+    monkeypatch.setattr(Prompt, 'gatherHistData',
+                        lambda self, cfg, raw=False: _ClonelessHist())
+    sim0, _ = _fake_mpi_promptmpi(monkeypatch, rank=0, size=2)
+    with pytest.raises(RuntimeError) as ei:
+        sim0.gatherHistData('S')  # root rank hits the clone
+    # not a bare AttributeError, and the remedy is named explicitly
+    assert 'no clone' in str(ei.value)
+    assert 'rebuild' in str(ei.value)
+    assert 'pt_HistBase_clone' in str(ei.value)

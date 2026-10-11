@@ -55,7 +55,9 @@ void Prompt::HistBase::merge(const Prompt::HistBase &hist)
     m_data[i] += hist.m_data[i];
     m_hit[i] += hist.m_hit[i];
     //m_ww stores sum(w^2), so merging adds the variances (errors combine
-    //in quadrature), consistent with the MPI reduce which sums ww
+    //in quadrature), consistent with the MPI reduce which sums ww. Est1D
+    //breaks this pattern: its sdev lives in m_hit (m_ww stays 0), so it
+    //overrides merge to quadrature that channel instead of adding it.
     m_ww[i] += hist.m_ww[i];
   }
 
@@ -63,6 +65,18 @@ void Prompt::HistBase::merge(const Prompt::HistBase &hist)
   m_overflow += hist.m_overflow;
   m_sumW += hist.m_sumW;
 
+}
+
+
+void Prompt::HistBase::copyTrivialFrom(const Prompt::HistBase &other)
+{
+  m_data = other.m_data;
+  m_hit = other.m_hit;
+  m_ww = other.m_ww;
+  m_sumW = other.m_sumW;
+  m_underflow = other.m_underflow;
+  m_overflow = other.m_overflow;
+  m_note = other.m_note;
 }
 
 
@@ -93,8 +107,14 @@ void Prompt::HistBase::setWW(double *data, size_t n)
 void Prompt::HistBase::scale(double scalefact)
 {
 
+  //m_ww is sum(w^2): the variance scales with the factor squared, so
+  //getSdev() (=sqrt(m_ww)) scales with |scalefact| like the content
+  const double wwfact = scalefact*scalefact;
   for(unsigned i=0;i<m_nbins;i++)
+  {
     m_data[i] *= scalefact;
+    m_ww[i] *= wwfact;
+  }
 
   m_sumW *= scalefact;
   m_underflow *= scalefact;

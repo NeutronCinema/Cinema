@@ -70,7 +70,8 @@ v_est.plot( label='V')
 
 
 plt.figure()
-plt.plot(d2o_q, np.divide(d2o_s, v_s, where=v_s!=0.))
+plt.plot(d2o_q, np.divide(d2o_s, v_s, where=v_s!=0.,
+                          out=np.zeros_like(d2o_s, dtype=float)))
 
 plt.figure()
 errp = ErrorPropagator(d2o_est.getWeight(),  d2o_est.getCentre(), error = d2o_est.getError())

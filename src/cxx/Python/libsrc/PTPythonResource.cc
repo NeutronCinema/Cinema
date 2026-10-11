@@ -1,5 +1,7 @@
 #include "PTScorer.hh"
 #include "PTResourceManager.hh"
+#include "PTParticleProcess.hh"
+#include "PTHistBase.hh"
 
 #include <exception>
 #include <string>
@@ -18,7 +20,15 @@ int pt_ResourceManager_addScorer(unsigned volID, const char* cfg, void* scorer);
 int pt_ResourceManager_addSurface(unsigned volID, const char* cfg);
 void pt_ResourceManager_cfgVolPhysics(unsigned volID, const char* cfg);
 void* pt_ResourceManager_getHist(const char* cfg);
+void* pt_HistBase_clone(const void* obj);
 void pt_ResourceManager_clear();
+// checked variants completing the int-status family below. The hist-module
+// merge bridges in PTPythonHist.cc (pt_HistBase_merge/pt_Hist2D_merge) have
+// since been converted to the same protocol in place; the unchecked
+// pt_makeModelCollection in PTPyCompoundModel.cc remains only as the
+// stale-library fallback of compoundModel.py.
+int pt_makeModelCollection_checked(const char* cfg, void** out);
+int pt_HistBase_merge_checked(void* obj, void* obj2);
 }
 
 // Error protocol of the bridged wrappers (shared with PTPythonLauncher.cc)
@@ -119,7 +129,78 @@ void* pt_ResourceManager_getHist(const char* cfg)
     return static_cast<void*>(pt::Singleton<pt::ResourceManager>::getInstance().getHist(cfg));
 }
 
+// Heap clone of a histogram, for callers that need to own an independent copy
+// of a scorer histogram. PromptMPI.gatherHistData writes the MPI-reduced
+// content into this clone; writing it into the live scorer histogram instead
+// made every later gather (and the re-gather inside save_all_scorers)
+// cumulatively inflate the scored data. Dispatches on dimension(): the
+// histograms reachable through pt_ResourceManager_getHist are exactly Hist1D
+// or Hist2D (scorers own unique_ptr<Hist1D>/<Hist2D>). Returns nullptr when
+// the dimension is unknown or the allocation throws; python raises on the
+// null result.
+void* pt_HistBase_clone(const void* obj)
+{
+    try {
+        auto *hist = static_cast<const pt::HistBase*>(obj);
+        switch (hist->dimension()) {
+        case 1:
+            return new pt::Hist1D(*static_cast<const pt::Hist1D*>(hist));
+        case 2:
+            return new pt::Hist2D(*static_cast<const pt::Hist2D*>(hist));
+        default:
+            return nullptr;
+        }
+    }
+    catch (...) {
+        return nullptr;
+    }
+}
+
 void pt_ResourceManager_clear()
 {
    pt::Singleton<pt::ResourceManager>::getInstance().clear();
+}
+
+// Checked creation of the physics model behind compoundModel.ModelCollection:
+// the ParticleProcess constructor evaluates the whole cfg string (unknown
+// physics= name, missing or unreadable nccfg file, a material without number
+// density, ...) and any rejection used to escape as a C++ exception through
+// the ctypes boundary and abort the host process. Same protocol as
+// pt_ResourceManager_addScorer: 0 ok, 1 Prompt::Error, 2 other, message via
+// pt_last_error(); the new object (never null on status 0) goes through the
+// out parameter so the status can carry the failure information.
+int pt_makeModelCollection_checked(const char* cfg, void** out)
+{
+    if (out)
+        *out = nullptr;
+    if (!cfg || !out) {
+        bridgeLastErrorBuf() = "pt_makeModelCollection_checked: null cfg or out pointer";
+        return 2;
+    }
+    try {
+        *out = static_cast<void *>(new pt::ParticleProcess(cfg));
+        return 0;
+    }
+    catch (...) {
+        return pt_bridge_record_error();
+    }
+}
+
+// Checked merge for the histogram-module merge() entry points. HistBase::merge
+// throws on mismatched xmin/xmax/nbins and Hist2D::merge (the override reached
+// here through virtual dispatch) adds its own binning checks plus a reference
+// dynamic_cast that throws std::bad_cast on a cross-type argument; all of that
+// must surface as a nonzero status instead of an abort. The call goes through
+// a HistBase* so the virtual merge of the actual derived class runs (this is
+// what keeps the histogram-core Est1D::merge override effective for callers of
+// this bridge).
+int pt_HistBase_merge_checked(void* obj, void* obj2)
+{
+    try {
+        static_cast<pt::HistBase *>(obj)->merge(*static_cast<pt::HistBase *>(obj2));
+        return 0;
+    }
+    catch (...) {
+        return pt_bridge_record_error();
+    }
 }

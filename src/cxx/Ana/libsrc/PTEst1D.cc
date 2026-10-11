@@ -64,3 +64,35 @@ void Prompt::Est1D::fill(double val, double w, double error)
   m_data[i] += w;
   m_hit[i] =  std::sqrt(error*error+m_hit[i]*m_hit[i]); //fixme: should convert error back to hit
 }
+
+void Prompt::Est1D::merge(const Prompt::HistBase &hist)
+{
+  //The error channel of an Est1D is the per-bin sdev stored in m_hit (its
+  //m_ww stays 0), while HistBase::merge treats m_hit as a fill counter and
+  //adds it linearly. Snapshot the own sdev, let the base merge sum the
+  //contents/totals (its m_hit add is overwritten below), then combine the
+  //two sdev channels in quadrature - the same result the MPI reduce of two
+  //independent runs would give.
+  const Prompt::Est1D *ref = dynamic_cast<const Prompt::Est1D*>(&hist);
+  if(!ref)
+    PROMPT_THROW2(CalcError, "cannot merge Est1D " << m_name << " with non-Est1D histogram " << hist.getName());
+
+  const std::vector<double> ownErr = m_hit;
+
+  HistBase::merge(hist);
+
+  for(size_t i=0;i<m_nbins;i++)
+    m_hit[i] = std::sqrt(ownErr[i]*ownErr[i] + ref->m_hit[i]*ref->m_hit[i]);
+}
+
+void Prompt::Est1D::scale(double scalefact)
+{
+  //The content and the weight totals follow the base treatment (m_ww is 0
+  //here and its squared scaling is a no-op); the sdev channel in m_hit is
+  //linear in the data, so it rescales by the absolute factor.
+  HistBase::scale(scalefact);
+
+  const double afactor = std::abs(scalefact);
+  for(unsigned i=0;i<m_nbins;i++)
+    m_hit[i] *= afactor;
+}

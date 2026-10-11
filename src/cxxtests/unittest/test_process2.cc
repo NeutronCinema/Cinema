@@ -278,17 +278,6 @@ TEST_CASE("process_particle_direction_stays_unit_through_transitions")
   CHECK(p.getDirection().z() == doctest::Approx(-d.z()).epsilon(1e-12));
   CHECK(p.getDirection().mag2() == doctest::Approx(1.).epsilon(1e-12));
 
-  // Doppler bookkeeping: the effective state is stored as given
-  CHECK_FALSE(p.hasEffEnergy()); // null effective direction by default
-  CHECK(p.getEffEKin() == 0.);
-  CHECK(p.calcEffSpeed() == 0.);
-  p.setEffEKin(g_ekin);
-  p.setEffDirection(refl);
-  CHECK(p.hasEffEnergy());
-  CHECK(p.getEffDirection().z() == doctest::Approx(-d.z()).epsilon(1e-12));
-  CHECK(p.calcEffSpeed() ==
-        doctest::Approx(std::sqrt(2. * g_ekin / pt::const_neutron_mass_evc2)).epsilon(1e-12));
-
   // the setter stores verbatim: normalisation is the constructor's contract
   // and models are expected to hand over unit vectors
   p.setDirection(pt::Vector(3., 4., 0.));

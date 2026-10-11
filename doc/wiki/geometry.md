@@ -177,7 +177,9 @@ Inspection and scipy interop:
   property `euler_xyz` → extrinsic xyz angles in degrees.
 - `setRotByAlignment(rotated, original)` **replaces** the rotation, setting it from **exactly
   two** vector pairs per argument (scipy `Rotation.align_vectors`); it returns `self`. The
-  classmethod `from_alignment(rotated=..., original=..., rot=...)` builds a frame with it
+  resulting rotation **maps `original` onto `rotated`** (`R @ original[i] == rotated[i]`, like
+  `scipyRot.align_vectors(rotated, original)`). The classmethod
+  `from_alignment(x=0., y=0., z=0., rotated=..., original=...)` builds a frame with it
   directly. The old spellings `setRotByAlignement`/`from_alignement` still work but emit a
   `DeprecationWarning`.
 - `applyRotbyMatrix(refMatrix)` multiplies in a 3×3 matrix and returns `self`, so it can be

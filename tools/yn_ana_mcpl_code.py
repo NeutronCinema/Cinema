@@ -89,15 +89,23 @@ class McplAnalysor2D(PromptFileReader):
         plt.show()
   
     
-# McplAnalysor2D example     
-# psd = McplAnalysor2D('/home/yangni/gitlabDev/cinema/gdml/scorer/ScorerPSD_NeutronHistMap_seed4096.mcpl.gz')
-# x_hist, y_hist, content_hist, hit_hist = psd.getHist() 
+# McplAnalysor2D example
+# psd = McplAnalysor2D('<sim-data-dir>/gdml/scorer/ScorerPSD_NeutronHistMap_seed4096.mcpl.gz')
+# x_hist, y_hist, content_hist, hit_hist = psd.getHist()
 # print(x_hist.shape)
-# print(y_hist.shape) 
+# print(y_hist.shape)
 # print(content_hist.shape)
-# psd.plotHist(x_hist, y_hist, content_hist, hit_hist)  
+# psd.plotHist(x_hist, y_hist, content_hist, hit_hist)
 
-psd = McplAnalysor2D('/home/yangni/gitlabDev/cinema/gd3/*ScorerPSD_NeutronHistMapM300_seed*.mcpl.gz')
+# Base directory holding the simulated-output folders (the 'gd3' folder lives
+# directly inside it): point CINEMA_MPI2022_SIMDATA at it; when unset, the
+# folder is resolved relative to the working directory, with a warning.
+data_base = os.environ.get('CINEMA_MPI2022_SIMDATA')
+if not data_base:
+    print('Warning: CINEMA_MPI2022_SIMDATA is not set - falling back to the '
+          "relative default 'gd3'")
+    data_base = 'gd3'
+psd = McplAnalysor2D(os.path.join(data_base, '*ScorerPSD_NeutronHistMapM300_seed*.mcpl.gz'))
 x_hist, y_hist, content_hist, hit_hist = psd.getHistMany(seedStart=1, seedEnd=15) 
 print(x_hist.shape)
 print(y_hist.shape)

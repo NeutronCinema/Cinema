@@ -18,7 +18,7 @@ inputfile = "bl6.mcpl"
 cutoutput = "bl6_cut.mcpl"
 cutoff_eV = 10
 
-# !/home/xxcai1/git/cinema/cinemabin/bin/mcpl_cut $inputfile $output $cutoff_eV
+# !<cinema-build>/bin/mcpl_cut $inputfile $output $cutoff_eV
 
 # !pymcpltool --stats --pdf $output
 # !mv mcpl.pdf mcpl_cut_res.pdf
@@ -87,7 +87,10 @@ resN=1000000
 resampled = "resampled"
 gzext = ".mcpl.gz"
 
-get_ipython().system('time /home/xxcai1/git/cinema/external/KDSource/install/bin/kdtool resample source.xml -o $resampled -n $resN')
+# kdtool ships in the KDSource build prefix under $CINEMAPATH/external/KDSource
+kdtool = os.path.join(os.environ.get('CINEMAPATH', '.'),
+                      'external', 'KDSource', 'install', 'bin', 'kdtool')
+get_ipython().system(f'time {kdtool} resample source.xml -o $resampled -n $resN')
 get_ipython().system('pymcpltool --stats --pdf resampled.mcpl.gz')
 get_ipython().system('mv mcpl.pdf mcpl_res.pdf')
 # os.system('')

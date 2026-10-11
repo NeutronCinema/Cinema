@@ -7,6 +7,18 @@
 #    evaluates to -0.0 above the cutoff every such hit transmitted: a mirror
 #    wall acted as a window. Now the reflectivity is clamped at zero and the
 #    roulette loser is absorbed.
+# 3. ActiveVolume::getNormal passed a world frame point to
+#    VPlacedVolume::Normal, which expects a mother frame point and returns a
+#    mother frame normal. That only works for direct children of an identity
+#    world: a Mirror wall nested inside a translated or rotated container got
+#    a wrong normal and every neutron leaked through. getNormal now goes
+#    through the full navigation chain transformation (NavStateIndex::TopMatrix
+#    like BVHNavigator does) and returns a lab frame normal for any nesting.
+#
+# The nested-container tests (test_nested_mirror_*) are EXPECTED-FAIL until
+# the round-2 gate rebuild: the tracked cinemabin library is stale and still
+# contains the old frame-buggy getNormal, against which every neutron leaks
+# through the nested wall (back hits 0). Green after round-2 gate rebuild.
 #
 # Each test runs its own simulation (the Launcher state is process global,
 # the pytest run uses --forked), with a parallel beam hitting the front face
@@ -56,6 +68,94 @@ def _makeMirrorWorld():
     world.placeChild("back", back, Transformation3D(0, 0, -95))
 
     return world
+
+
+def _makeNestedMirrorWorld(rotY90, surfaceCfg='physics=Mirror'):
+    """World with a Mirror wall nested one level deep inside a container
+    placed at z=+50 (rotated 90 degrees about Y when rotY90), plus ENTRY
+    detectors behind the wall (trans, z=+80) and behind the gun (back,
+    z=-95). The wall is deliberately off-origin: at the world origin the
+    frame error in the old getNormal cancels and masks the bug."""
+    world = Volume("world", Box(20, 20, 100), matCfg='vacuum.ncmat')
+
+    # identity-placed wall inside the container; the RotY(90) of the
+    # container turns the wall's local x axis into the world -z axis, so
+    # the beam still hits its front face head on (from z=40 side)
+    cont = Volume("cont", Box(12, 12, 17), matCfg='vacuum.ncmat')
+    slab = Volume("slab", Box(10, 10, 15), matCfg='vacuum.ncmat',
+                  surfaceCfg=surfaceCfg)
+    cont.placeChild("slab", slab)
+    transf = Transformation3D(0, 0, 50)
+    if rotY90:
+        transf.applyRotY(90)
+    world.placeChild("cont", cont, transf)
+
+    trans = Volume("trans", Box(10, 10, 1), matCfg='vacuum.ncmat')
+    WlSpectrumHelper("transwl", min=100, max=1000, numbin=10,
+                     ptstate='ENTRY').make(trans)
+    world.placeChild("trans", trans, Transformation3D(0, 0, 80))
+
+    # behind the gun (src_z=-90), so only reflected neutrons ever cross it
+    back = Volume("back", Box(10, 10, 1), matCfg='vacuum.ncmat')
+    WlSpectrumHelper("backwl", min=100, max=1000, numbin=10,
+                     ptstate='ENTRY').make(back)
+    world.placeChild("back", back, Transformation3D(0, 0, -95))
+
+    return world
+
+
+@pytest.mark.medium
+def test_nested_mirror_rotated_container_reflects():
+    sim = Prompt(seed=4096)
+    sim.setWorld(_makeNestedMirrorWorld(rotY90=True))
+    sim.simulate(GUN_CFG.format(600.0), NUM_BEAM)
+
+    reflected = sim.gatherHistData('backwl')
+    np.testing.assert_allclose(reflected.getHit().sum(), NUM_BEAM)
+    # every reflection carries the full R0 = 0.99 weight
+    np.testing.assert_allclose(reflected.getTotalWeight(),
+                               NUM_BEAM * 0.99, rtol=1e-12)
+
+    leaked = sim.gatherHistData('transwl')
+    assert leaked.getHit().sum() == 0
+    assert leaked.getTotalWeight() == 0
+
+
+@pytest.mark.medium
+def test_nested_mirror_translated_container_reflects():
+    # no rotation at all, the pure translation of the container already
+    # breaks the old mother-frame assumption
+    sim = Prompt(seed=4096)
+    sim.setWorld(_makeNestedMirrorWorld(rotY90=False))
+    sim.simulate(GUN_CFG.format(600.0), NUM_BEAM)
+
+    reflected = sim.gatherHistData('backwl')
+    np.testing.assert_allclose(reflected.getHit().sum(), NUM_BEAM)
+    np.testing.assert_allclose(reflected.getTotalWeight(),
+                               NUM_BEAM * 0.99, rtol=1e-12)
+
+    leaked = sim.gatherHistData('transwl')
+    assert leaked.getHit().sum() == 0
+    assert leaked.getTotalWeight() == 0
+
+
+@pytest.mark.medium
+def test_nested_mirror_silent_variant_reflects():
+    # m=-1 reflects unconditionally with no weight cut, so the same frame
+    # bug used to leak all 500 neutrons through at full weight, silently
+    sim = Prompt(seed=4096)
+    sim.setWorld(_makeNestedMirrorWorld(rotY90=True,
+                                        surfaceCfg='physics=Mirror;m=-1'))
+    sim.simulate(GUN_CFG.format(600.0), NUM_BEAM)
+
+    reflected = sim.gatherHistData('backwl')
+    np.testing.assert_allclose(reflected.getHit().sum(), NUM_BEAM)
+    np.testing.assert_allclose(reflected.getTotalWeight(),
+                               NUM_BEAM, rtol=1e-12)
+
+    leaked = sim.gatherHistData('transwl')
+    assert leaked.getHit().sum() == 0
+    assert leaked.getTotalWeight() == 0
 
 
 @pytest.mark.medium

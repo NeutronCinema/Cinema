@@ -4,8 +4,8 @@ from openmc.data import K_BOLTZMANN, NEUTRON_MASS
 import numpy as np
 import matplotlib.pyplot as plt
 
-# export PATH="/home/caixx/git/openmc/build/bin:$PATH"
-# (cinemavirenv) caixx@x:~/git/cinema/rundir/del$ export OPENMC_CROSS_SECTIONS=~/git/openmc/build/data/endfb-viii.0-hdf5/cross_sections.xml
+# export PATH="<openmc-build-dir>/bin:$PATH"
+# $ export OPENMC_CROSS_SECTIONS=<openmc-build-dir>/data/endfb-viii.0-hdf5/cross_sections.xml
 
 
 def run(energy, numPart):

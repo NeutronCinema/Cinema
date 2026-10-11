@@ -11,13 +11,16 @@ from Cinema.Prompt.gun import UniModeratorGun
 from Cinema.Prompt.GidiSetting import GidiSetting 
 
 import numpy as np
+import os
 
+# gidi input data is expected under $CINEMAPATH/external/ptdata
+ptdata = os.path.join(os.environ.get('CINEMAPATH', '.'), 'external', 'ptdata')
 cdata=GidiSetting()
 cdata.setGidiThreshold(5)
 cdata.setEnableGidi(True)
 cdata.setGammaTransport(False)
-cdata.setGidiPops("/home/zypan/XS/ptdata/pops.xml")
-cdata.setGidiMap("/home/zypan/XS/ptdata/all.map")
+cdata.setGidiPops(os.path.join(ptdata, 'pops.xml'))
+cdata.setGidiMap(os.path.join(ptdata, 'all.map'))
 
 class MySim(PromptMPI):
     def __init__(self, seed=4096) -> None:
