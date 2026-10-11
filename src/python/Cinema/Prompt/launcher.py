@@ -32,11 +32,14 @@ from .histogram import Hist1D, Hist2D, _pt_HistBase_dimension
 
 _pt_Launcher_getInstance = importFunc('pt_Launcher_getInstance', type_voidp, [] )
 _pt_Launcher_setSeed = importFunc('pt_Launcher_setSeed', None, [type_voidp, type_sizet] )
-_pt_Launcher_loadGeometry = importFunc('pt_Launcher_loadGeometry', None, [type_voidp, type_cstr] )
+# loadGeometry/go/setGun are bridged (int status + pt_last_error message,
+# surfaced through raiseOnBridgeError) so a C++ cfg rejection raises a normal
+# RuntimeError instead of aborting the process at the ctypes boundary
+_pt_Launcher_loadGeometry = importFunc('pt_Launcher_loadGeometry', type_int, [type_voidp, type_cstr] )
 _pt_Launcher_getTrajSize = importFunc('pt_Launcher_getTrajSize', type_sizet, [type_voidp])
 _pt_Launcher_getTrajectory = importFunc('pt_Launcher_getTrajectory', None, [type_voidp, type_npdbl2d])
-_pt_Launcher_go = importFunc('pt_Launcher_go', None, [type_voidp, type_sizet, type_dbl, type_bool, type_bool, type_bool])
-_pt_Launcher_setGun = importFunc('pt_Launcher_setGun', None, [type_voidp, type_cstr])
+_pt_Launcher_go = importFunc('pt_Launcher_go', type_int, [type_voidp, type_sizet, type_dbl, type_bool, type_bool, type_bool])
+_pt_Launcher_setGun = importFunc('pt_Launcher_setGun', type_int, [type_voidp, type_cstr])
 _pt_Launcher_goWithSecondStack = importFunc('pt_Launcher_goWithSecondStack', type_sizet, [type_voidp, type_sizet])
 
 _pt_ResourceManager_getHist = importFunc('pt_ResourceManager_getHist', type_voidp, [type_cstr])
@@ -118,7 +121,7 @@ class Launcher():
         _pt_Launcher_setSeed(self.cobj, seed)
 
     def loadGeometry(self, fileName):
-        _pt_Launcher_loadGeometry(self.cobj, fileName.encode('utf-8'))
+        raiseOnBridgeError(_pt_Launcher_loadGeometry(self.cobj, fileName.encode('utf-8')))
 
     def setWorld(self, logicalvol):
         if self.worldExist:
@@ -167,7 +170,7 @@ class Launcher():
             v.show()
 
     def setGun(self, cfg):
-        _pt_Launcher_setGun(self.cobj, cfg.encode('utf-8'))      
+        raiseOnBridgeError(_pt_Launcher_setGun(self.cobj, cfg.encode('utf-8')))
         
 
     def getTrajSize(self):
@@ -190,7 +193,7 @@ class Launcher():
             warnings.warn("Launcher.go() argument 'save2Dis' is a typo, use 'save2Disk' (alias kept for backward compatibility)",
                           DeprecationWarning, stacklevel=2)
             save2Disk = save2Dis
-        _pt_Launcher_go(self.cobj, numPrimary, printPercent, recordTrj, timer, save2Disk)
+        raiseOnBridgeError(_pt_Launcher_go(self.cobj, numPrimary, printPercent, recordTrj, timer, save2Disk))
 
     def goWithSecondStack(self, numPrimary):
         return _pt_Launcher_goWithSecondStack(self.cobj, numPrimary)

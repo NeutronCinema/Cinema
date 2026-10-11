@@ -74,6 +74,24 @@ def importFunc(funcName, resType, argType):
     func.argtypes = argType
     return func
 
+# Status protocol of the bridged extern "C" wrappers (Launcher.setGun/go/
+# loadGeometry, Volume.addScorer/setSurface): a C++ cfg rejection must not
+# propagate as a C++ exception across the ctypes boundary (that ends in
+# std::terminate and aborts the whole python process), so those wrappers
+# catch, record the message in a thread-local C-side buffer and return a
+# nonzero status instead. raiseOnBridgeError turns a nonzero status into a
+# normal RuntimeError carrying the C++ message text. c_char_p restype: ctypes
+# copies the buffer into an immutable bytes object at call time.
+_pt_last_error = importFunc('pt_last_error', type_cstr, [])
+
+
+def raiseOnBridgeError(status):
+    """Raise RuntimeError with the recorded C++ message when a bridged
+    extern "C" wrapper reported failure (nonzero status); pass on status 0
+    (and None, so stubbed bindings in tests keep working)."""
+    if status:
+        raise RuntimeError(_pt_last_error().decode('utf-8', 'replace'))
+
 def plotStyle(fontSize=16):
     import matplotlib.style
     import matplotlib, sys

@@ -18,11 +18,44 @@
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "PTPython.hh"
+#include "PromptCore.hh"
 #include "PTLauncher.hh"
+
+#include <cstddef>
+#include <cstdint>
+#include <string>
 
 namespace pt = Prompt;
 
+// These wrappers are bound from python by symbol name through ctypes, so
+// they keep C linkage and are declared here directly. They used to be
+// declared in PTPython.hh with void returns; that header is no longer
+// included because the bridged subset below returns an int status instead
+// (no other translation unit calls these functions from C++, so the stale
+// declarations in PTPython.hh stay harmless).
+//
+// The error protocol is documented next to pt_last_error() in
+// PTPythonResource.cc, which also implements pt_bridge_record_error: a
+// bridged wrapper catches any escaping C++ exception, records its message in
+// a thread-local buffer and returns a nonzero status (0 = ok, 1 =
+// Prompt::Error::Exception, 2 = other std::exception or unknown) instead of
+// letting the exception cross the extern "C" boundary into ctypes, where it
+// would abort the whole python process with SIGABRT.
+extern "C" {
+double pt_rand_generate();
+void* pt_Launcher_getInstance();
+void pt_Launcher_setSeed(void* obj, uint64_t seed);
+int pt_Launcher_loadGeometry(void* obj, const char* fileName);
+size_t pt_Launcher_getTrajSize(void* obj);
+void pt_Launcher_getTrajectory(void* obj, double *trj);
+int pt_Launcher_go(void* obj, uint64_t numParticle, double printPrecent, bool recordTrj, bool timer, bool save2Disk);
+int pt_Launcher_setGun(void *obj, const char* cfg);
+void pt_Launcher_simOneEvent(void *obj, bool recordTrj);
+size_t pt_Launcher_goWithSecondStack(void *obj, uint64_t numParticle);
+
+const char* pt_last_error();
+int pt_bridge_record_error();
+}
 
 double pt_rand_generate()
 {
@@ -40,9 +73,17 @@ void pt_Launcher_setSeed(void* obj, uint64_t seed)
   static_cast<pt::Launcher *>(obj)->setSeed(seed);
 }
 
-void pt_Launcher_loadGeometry(void* obj, const char* fileName)
+// Bridged: an unreadable or broken geometry file is reported as a nonzero
+// status plus pt_last_error() instead of aborting the host process.
+int pt_Launcher_loadGeometry(void* obj, const char* fileName)
 {
-  static_cast<pt::Launcher *>(obj)->loadGeometry(std::string(fileName));
+  try {
+    static_cast<pt::Launcher *>(obj)->loadGeometry(std::string(fileName));
+    return 0;
+  }
+  catch (...) {
+    return pt_bridge_record_error();
+  }
 }
 
 size_t pt_Launcher_getTrajSize(void* obj)
@@ -61,20 +102,37 @@ void pt_Launcher_getTrajectory(void* obj, double *trj)
   }
 }
 
-void pt_Launcher_go(void* obj, uint64_t numParticle, double printPrecent, bool recordTrj, bool timer, bool save2Disk)
+// Bridged: a bad numParticle/printPrecent combination (e.g. go(0) with the
+// timer enabled, rejected by ProgressMonitor) is reported as a nonzero
+// status plus pt_last_error() instead of aborting the host process.
+int pt_Launcher_go(void* obj, uint64_t numParticle, double printPrecent, bool recordTrj, bool timer, bool save2Disk)
 {
-  static_cast<pt::Launcher *>(obj)->go(numParticle, printPrecent, recordTrj, timer, save2Disk);
+  try {
+    static_cast<pt::Launcher *>(obj)->go(numParticle, printPrecent, recordTrj, timer, save2Disk);
+    return 0;
+  }
+  catch (...) {
+    return pt_bridge_record_error();
+  }
+}
+
+// Bridged: an unknown gun= key (or any other cfg rejection in the gun
+// factory) is reported as a nonzero status plus pt_last_error() instead of
+// aborting the host process.
+int pt_Launcher_setGun(void *obj, const char* cfg)
+{
+  try {
+    static_cast<pt::Launcher *>(obj)->setGun(cfg);
+    return 0;
+  }
+  catch (...) {
+    return pt_bridge_record_error();
+  }
 }
 
 size_t pt_Launcher_goWithSecondStack(void *obj, uint64_t numParticle)
 {
   return static_cast<pt::Launcher *>(obj)->goWithSecondStack(numParticle);
-}
-
-
-void pt_Launcher_setGun(void *obj, const char* cfg)
-{
-  static_cast<pt::Launcher *>(obj)->setGun(cfg);
 }
 
 
