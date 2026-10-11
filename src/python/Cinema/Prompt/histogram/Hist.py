@@ -43,7 +43,9 @@ _pt_Hist2D_getWeight = importFunc('pt_Hist2D_getWeight', None, [type_voidp, type
 _pt_Hist2D_getHit = importFunc('pt_Hist2D_getHit', None, [type_voidp, type_npdbl2d])
 _pt_Hist2D_getDensity = importFunc('pt_Hist2D_getDensity', None, [type_voidp, type_npdbl2d])
 _pt_Hist2D_fill = importFunc('pt_Hist2D_fill', None, [type_voidp, type_dbl, type_dbl, type_dbl])
-_pt_Hist2D_merge = importFunc('pt_Hist2D_merge', None, [type_voidp, type_voidp])
+# Bridged with an int status (0 ok / nonzero error, message via pt_last_error):
+# Hist2D::merge rejects mismatched binnings and cross-type arguments.
+_pt_Hist2D_merge = importFunc('pt_Hist2D_merge', type_int, [type_voidp, type_voidp])
 _pt_Hist2D_fill_many = importFunc('pt_Hist2D_fillmany', None, [type_voidp, type_sizet, type_npdbl1d, type_npdbl1d, type_npdbl1d])
 _pt_Hist2D_getWeight = importFunc('pt_Hist2D_getWeight', None, [type_voidp, type_npdbl2d])
 _pt_Hist2D_getYMin = importFunc('pt_Hist2D_getYMin', type_dbl, [type_voidp])
@@ -52,7 +54,9 @@ _pt_Hist2D_getNBinX = importFunc('pt_Hist2D_getNBinX', type_uint, [type_voidp])
 _pt_Hist2D_getNBinY = importFunc('pt_Hist2D_getNBinY', type_uint, [type_voidp])
 
 # Prompt::HistBase
-_pt_HistBase_merge = importFunc('pt_HistBase_merge', None, [type_voidp, type_voidp])
+# Bridged with an int status like pt_Hist2D_merge: HistBase::merge rejects
+# mismatched xmin/xmax/nbins.
+_pt_HistBase_merge = importFunc('pt_HistBase_merge', type_int, [type_voidp, type_voidp])
 _pt_HistBase_getXMin = importFunc('pt_HistBase_getXMin', type_dbl, [type_voidp])
 _pt_HistBase_getXMax = importFunc('pt_HistBase_getXMax', type_dbl, [type_voidp])
 _pt_HistBase_getTotalWeight = importFunc('pt_HistBase_getTotalWeight', type_dbl, [type_voidp])
@@ -94,8 +98,8 @@ class HistBase():
     def merge(self, anotherhist):
         if self.getNote() != anotherhist.getNote():
             raise RuntimeError(f'histogram {self.getName()} note {self.getNote()} != {anotherhist.getNote()}')
-        
-        _pt_HistBase_merge(self.cobj, anotherhist.cobj)
+
+        raiseOnBridgeError(_pt_HistBase_merge(self.cobj, anotherhist.cobj))
         
 
     def setWeight(self, w: np.ndarray):
@@ -483,7 +487,7 @@ class Hist2D(HistBase):
     def merge(self, hist2):
         if id(self.cobj) == id(hist2.cobj):
             raise RuntimeError('merging a histogram with itself. The histogram can be scaled up by 2 instead')
-        _pt_Hist2D_merge(self.cobj, hist2.cobj)
+        raiseOnBridgeError(_pt_Hist2D_merge(self.cobj, hist2.cobj))
 
 
 _pt_Est1D_new = importFunc('pt_Est1D_new', type_voidp, [type_dbl, type_dbl, type_uint, type_bool])
