@@ -102,7 +102,16 @@ void Prompt::ActiveVolume::getNormal(const Vector& pos, Vector &normal) const
 {
   const auto &vegpos = *reinterpret_cast<const vecgeom::Vector3D<vecgeom::Precision>*>(&pos);
   auto &vegnormal = *reinterpret_cast<vecgeom::Vector3D<vecgeom::Precision>*>(&normal);
-   m_currState->Top()->Normal(vegpos, vegnormal);
+  // VPlacedVolume::Normal expects the point in the mother frame and returns the
+  // normal in the mother frame, so calling it directly with a world point only
+  // works for direct children of an identity world. Use the full navigation
+  // chain transformation instead (the same one BVHNavigator uses for its
+  // global-to-local conversion) to get a lab frame normal for any nesting.
+  vecgeom::Transformation3D m;
+  m_currState->TopMatrix(m);
+  vecgeom::Vector3D<vecgeom::Precision> ln;
+  m_currState->Top()->GetUnplacedVolume()->Normal(m.Transform(vegpos), ln);
+  m.InverseTransformDirection(ln, vegnormal);
 }
 
 
