@@ -17,9 +17,11 @@ import mcpl
 
 
 @pytest.mark.slow  # >0.7 s body: excluded from the pre-push hook, runs in cimbuild -t
-def test_mcplgun():
+def test_mcplgun(tmp_path):
+    # write under tmp_path: MCPLBinaryWrite must never pollute the CWD
+    f = str(tmp_path / 'test.mcpl')
     par = MCPLParticle(0.0253,  2,3,4,  5,6,7., 0.,1., 0)
-    wrt = MCPLBinaryWrite('test.mcpl')
+    wrt = MCPLBinaryWrite(f)
     wrt.write(par)
     par.direction_x = 1.
     par.direction_y = 0.
@@ -27,7 +29,7 @@ def test_mcplgun():
     wrt.write(par)
     del wrt
 
-    myfile = mcpl.MCPLFile("test.mcpl.gz", blocklength=10)
+    myfile = mcpl.MCPLFile(f + ".gz", blocklength=10)
     print(myfile.nparticles)
     for p in myfile.particle_blocks:
        print( p.ekin, p.polarisation, p.direction )
