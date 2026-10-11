@@ -179,8 +179,8 @@ if __name__ == "__main__":
 5. **`simulate(gun, N)`** — the event loop. Config-string guns go through the C++
    `go()` main loop; a `PythonGun` is driven event-batch by event-batch from Python.
    Scorers accumulate weight/hit/Σw² in C++ histograms.
-6. **Gather and save** — `sim.gatherHistData('name')` returns a live `Hist1D`/`Hist2D`
-   view for plotting in the same script (`hist.savefig(...)`); `sim.save_all_scorers()`
+6. **Gather and save** — `sim.gatherHistData('name')` returns an independent `Hist1D`/`Hist2D`
+   copy for plotting in the same script (`hist.savefig(...)`); `sim.save_all_scorers()`
    writes every scorer to disk. Details in
    [Scoring](scorers) and [section 7](#7-what-a-run-writes).
 7. **`clear()`** (only if you want another simulation in the same process) — resets the

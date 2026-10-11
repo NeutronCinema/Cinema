@@ -66,6 +66,18 @@ void Prompt::HistBase::merge(const Prompt::HistBase &hist)
 }
 
 
+void Prompt::HistBase::copyTrivialFrom(const Prompt::HistBase &other)
+{
+  m_data = other.m_data;
+  m_hit = other.m_hit;
+  m_ww = other.m_ww;
+  m_sumW = other.m_sumW;
+  m_underflow = other.m_underflow;
+  m_overflow = other.m_overflow;
+  m_note = other.m_note;
+}
+
+
 
 void Prompt::HistBase::setWeight(double *data, size_t n)
 {

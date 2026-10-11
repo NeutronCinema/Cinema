@@ -331,6 +331,13 @@ class _FakeHist:
         self.ww = np.asarray(w, dtype=float)
         self.set_calls.append('ww')
 
+    def clone(self):
+        # PromptMPI.gatherHistData writes the reduced content into an
+        # independent clone (fix wave 2), so the fake must clone like the
+        # real Hist: fresh object, copied arrays, empty setter log.
+        # type(self) keeps subclass behaviour (e.g. _SavingHist.save).
+        return type(self)(self.weight.copy(), self.hit.copy(), self.ww.copy())
+
 
 def _fake_mpi_promptmpi(monkeypatch, rank, size, bus=None):
     comm = _FakeComm(rank, size, bus)
@@ -413,7 +420,11 @@ def test_promptmpi_gather_one_real_rank_is_identity(monkeypatch):
     np.testing.assert_array_equal(out.getWeight(), [1., 2., 3.])
     np.testing.assert_array_equal(out.getHit(), [4., 5., 6.])
     np.testing.assert_array_equal(out.getWW(), [0., 0.25, 0.5])
-    assert hist.set_calls == ['hit', 'weight', 'ww']  # documented setter order
+    # root returns an independent clone: the setters write the reduced content
+    # into the clone (documented setter order), the original stays untouched —
+    # that untouched original is what keeps repeated gathers idempotent.
+    assert out.set_calls == ['hit', 'weight', 'ww']
+    assert hist.set_calls == []
 
 
 def test_promptmpi_gather_two_fake_ranks_sum_into_root(monkeypatch):

@@ -77,6 +77,14 @@ _pt_HistBase_setWW  = importFunc('pt_HistBase_setWW', None, [type_voidp, type_np
 _pt_HistBase_getNote = importFunc('pt_HistBase_getNote', type_cstr, [type_voidp])
 _pt_HistBase_addNote = importFunc('pt_HistBase_addNote', None, [type_voidp, type_cstr])
 
+# Bound defensively, unlike the imports above: pt_HistBase_clone only exists
+# in libraries rebuilt after its introduction, and a missing symbol here must
+# not break importing this module (clone() raises a clear error instead).
+try:
+    _pt_HistBase_clone = importFunc('pt_HistBase_clone', type_voidp, [type_voidp])
+except AttributeError:
+    _pt_HistBase_clone = None
+
 
 
 class HistBase():
@@ -165,6 +173,31 @@ class HistBase():
 
     def getNote(self):
         return _pt_HistBase_getNote(self.cobj).decode('utf-8')
+
+    def clone(self):
+        """Independent copy of this histogram as a fresh C++ object.
+
+        The returned wrapper owns (and on deletion frees) the copy, unlike
+        histograms obtained through Launcher.getHist, whose cobj is borrowed
+        from the live scorer. PromptMPI.gatherHistData relies on the
+        independence: it writes the reduced content into a clone so that
+        gathers never mutate the scorer histogram itself.
+        """
+        if _pt_HistBase_clone is None:
+            raise RuntimeError('libprompt_core.so lacks pt_HistBase_clone; rebuild Cinema to use clone()')
+        dim = self.dimension()
+        cobj = _pt_HistBase_clone(self.cobj)
+        if not cobj:
+            raise RuntimeError(f'failed to clone the histogram {self.getName()}')
+        if dim == 1:
+            newhist = Hist1D(cobj=cobj)
+        elif dim == 2:
+            newhist = Hist2D(cobj=cobj)
+        else:
+            raise RuntimeError(f'clone not implemented for dimension {dim}')
+        # the clone is fresh heap memory, so the wrapper must free it
+        newhist.managedBySelf = True
+        return newhist
     
 
     

@@ -18,6 +18,7 @@ int pt_ResourceManager_addScorer(unsigned volID, const char* cfg, void* scorer);
 int pt_ResourceManager_addSurface(unsigned volID, const char* cfg);
 void pt_ResourceManager_cfgVolPhysics(unsigned volID, const char* cfg);
 void* pt_ResourceManager_getHist(const char* cfg);
+void* pt_HistBase_clone(const void* obj);
 void pt_ResourceManager_clear();
 }
 
@@ -117,6 +118,33 @@ void pt_ResourceManager_cfgVolPhysics(unsigned volID, const char* cfg)
 void* pt_ResourceManager_getHist(const char* cfg)
 {
     return static_cast<void*>(pt::Singleton<pt::ResourceManager>::getInstance().getHist(cfg));
+}
+
+// Heap clone of a histogram, for callers that need to own an independent copy
+// of a scorer histogram. PromptMPI.gatherHistData writes the MPI-reduced
+// content into this clone; writing it into the live scorer histogram instead
+// made every later gather (and the re-gather inside save_all_scorers)
+// cumulatively inflate the scored data. Dispatches on dimension(): the
+// histograms reachable through pt_ResourceManager_getHist are exactly Hist1D
+// or Hist2D (scorers own unique_ptr<Hist1D>/<Hist2D>). Returns nullptr when
+// the dimension is unknown or the allocation throws; python raises on the
+// null result.
+void* pt_HistBase_clone(const void* obj)
+{
+    try {
+        auto *hist = static_cast<const pt::HistBase*>(obj);
+        switch (hist->dimension()) {
+        case 1:
+            return new pt::Hist1D(*static_cast<const pt::Hist1D*>(hist));
+        case 2:
+            return new pt::Hist2D(*static_cast<const pt::Hist2D*>(hist));
+        default:
+            return nullptr;
+        }
+    }
+    catch (...) {
+        return nullptr;
+    }
 }
 
 void pt_ResourceManager_clear()

@@ -366,7 +366,14 @@ class PromptMPI(Prompt):
         self.comm.Reduce(ww, recww, op=MPI.SUM, root=dst)
 
         if self.rank == dst:
-            hist.setHit(recvh)
-            hist.setWeight(recvw)
-            hist.setWW(recww)
+            # The reduced content goes into an independent clone: writing it
+            # into the live scorer histogram would corrupt the scorer, so this
+            # and every later gather (save_all_scorers re-gathers) would
+            # cumulatively inflate the data. The scorer keeps its rank-local
+            # content, keeping gathers idempotent.
+            hist2 = hist.clone()
+            hist2.setHit(recvh)
+            hist2.setWeight(recvw)
+            hist2.setWW(recww)
+            return hist2
         return hist

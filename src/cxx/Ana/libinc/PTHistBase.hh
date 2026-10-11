@@ -105,6 +105,14 @@ namespace Prompt {
     size_t m_nbins;
     std::string m_mcpl_file_name;
 
+    //Copy the scored state (bin content, hit counts, sum(w^2), the totals and
+    //the note) from another histogram of identical geometry; the state notion
+    //is the one of merge(). Used by the derived copy constructors, which stay
+    //allowed although copying the base itself is forbidden: the MPI gather
+    //needs an independent histogram so that reduction results never overwrite
+    //the live scorer histogram.
+    void copyTrivialFrom(const HistBase &other);
+
   private:
     //Copy/assignment are forbidden to avoid troubles
     // Move initialization
