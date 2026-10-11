@@ -12,7 +12,10 @@
 # singleton (one world per process), so these tests rely on the pytest
 # --forked run mode like every other test that touches the Launcher. None of
 # them runs a simulation or writes to disk (save2Disk=False throughout), so
-# they are all fast tier (no marker).
+# they are all fast tier (no marker). The MCPL case does call go(), but the
+# gun rejection fires at the first primary, before any transport starts.
+
+import struct
 
 import pytest
 
@@ -79,3 +82,43 @@ def test_go_zero_particles_with_timer_raises_instead_of_abort():
     # recovery: the same call without the timer runs through (zero
     # primaries, nothing saved)
     sim.l.go(0, timer=False, save2Disk=False)
+
+
+# ---------------------------------------------------------------------- MCPL
+
+# A valid, header-only MCPL file with zero particles: 52 bytes, byte layout
+# lifted verbatim from the round-1 adversarial verifier's known-good empty
+# file (the MCPL library opens it cleanly and reports 0 particles).
+_EMPTY_MCPL_BYTES = (
+    b"MCPL003L"
+    + struct.pack("<Q", 0)      # offset of the data block (none yet)
+    + struct.pack("<Q", 0)      # ...
+    + struct.pack("<II", 1, 1)  # format version words
+    + struct.pack("<Q", 0)      # ...
+    + struct.pack("<Q", 52)     # total file size in bytes
+    + b"\x00" * 4)              # header padding up to the stated size
+assert len(_EMPTY_MCPL_BYTES) == 52
+
+
+def _writeEmptyMCPL(tmp_path):
+    fn = tmp_path / "empty.mcpl"
+    fn.write_bytes(_EMPTY_MCPL_BYTES)
+    return str(fn)
+
+
+def test_mcplgun_zero_particle_file_raises_and_process_survives(tmp_path):
+    # MCPLGun on a header-only 0-particle MCPL file. The reader used to carry
+    # the zero into the first readOneParticle, whose pt_assert_always then
+    # fired mid-simulation ("Assertion failure: m_parNum", message without the
+    # file name); the guard in the reader constructor now names the file at
+    # gun-construction time. The match accepts both texts so the test is green
+    # against the stale (pre-rebuild) library and the gate-rebuilt one alike.
+    sim = Prompt(seed=SEED)
+    fn = _writeEmptyMCPL(tmp_path)
+    with pytest.raises(RuntimeError, match=r'm_parNum|0 particles'):
+        sim.l.setGun(f'gun=MCPLGun;mcplfile={fn}')  # raises on the fixed lib
+        sim.l.go(10, timer=False, save2Disk=False)  # raises on the stale lib
+
+    # recovery: the process is alive and the Launcher accepts a valid gun
+    # after the rejected one
+    sim.l.setGun('gun=SimpleThermalGun;energy=0.0253;position=0,0,-500;direction=0,0,1')
