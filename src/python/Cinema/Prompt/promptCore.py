@@ -20,6 +20,8 @@
 ##                                                                            ##
 ################################################################################
 
+import functools
+
 import numpy as np
 from .launcher import Launcher, _WORLD_EXIST_MSG
 from .geo import Volume
@@ -34,6 +36,60 @@ except ImportError:
 
 _pt_ResourceManager_clear = importFunc('pt_ResourceManager_clear', None, [])
 __all__ = ["Prompt", "PromptMPI"]
+
+
+def _guard_second_make_world(func):
+    """Wrap a makeWorld override with the one-world-per-process fail-fast.
+
+    A second makeWorld in the same process used to build a whole throwaway
+    geometry into the already-closed world (VecGeom logs "Logical Volume
+    created after geometry is closed") before hitting the worldExist guard in
+    setWorld - or an unrelated mid-build error instead of the documented
+    exception. The wrapper raises the same RuntimeError as setWorld (the
+    promise of doc/wiki/simulation-lifecycle.md) immediately, before any
+    Volume is constructed. clear() resets the flag, so the documented
+    clear() -> makeWorld() rebuild loop keeps working.
+    """
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if self.l.worldExist:
+            raise RuntimeError(_WORLD_EXIST_MSG)
+        return func(self, *args, **kwargs)
+    wrapper._second_world_guard = True
+    return wrapper
+
+
+def _no_ghost_registry_entries():
+    """Keep Volume.scorer_dict free of entries for rejected registrations.
+
+    Volume.addScorer (geo.py) writes the scorer into the python-side registry
+    before the bridged C++ call, so a rejected cfg used to leave a ghost
+    entry: an honest retry with the same name then failed with a false
+    "already registered" ValueError, and the poisoned registry later sent
+    gatherHistData/save_all_scorers into the unbridged getHist lookup, whose
+    C++ exception cannot be caught from python (process abort). Restoring the
+    pre-call registry when addScorer raises removes the ghost again. This is
+    a safety net at the Prompt layer and a no-op once geo.addScorer inserts
+    only after the C++ call succeeded.
+    """
+    original = Volume.addScorer
+
+    @functools.wraps(original)
+    def addScorer(*args, **kwargs):
+        registry = args[0].__class__.scorer_dict
+        snapshot = dict(registry)
+        try:
+            return original(*args, **kwargs)
+        except Exception:
+            registry.clear()
+            registry.update(snapshot)
+            raise
+
+    Volume.addScorer = addScorer
+
+
+_no_ghost_registry_entries()
+
 
 class Prompt:
     """
@@ -84,11 +140,36 @@ class Prompt:
     def makeWorld(self):
         """
         Build the geometry world (abstract method, must be implemented in subclass).
-        
+
         Raises:
             NotImplementedError: Must be implemented in subclass
+            RuntimeError: On the second makeWorld in one process without an
+                intervening clear() (see setWorld; one world per process)
+
+        Note:
+            Subclass overrides are wrapped by __init_subclass__ with the same
+            fail-fast guard that setWorld applies, so the second attempt
+            raises before any geometry is built.
         """
-        raise NotImplementedError('') 
+        raise NotImplementedError('')
+
+    def __init_subclass__(cls, **kwargs):
+        """Install the second-world guard on every makeWorld override.
+
+        The most-derived makeWorld found on the new class (its own or
+        inherited from a mixin) is wrapped with _guard_second_make_world,
+        except Prompt's own abstract placeholder above. Already wrapped
+        functions (subclasses that do not override) are left alone.
+        """
+        super().__init_subclass__(**kwargs)
+        for klass in cls.__mro__:
+            if klass is Prompt:  # the abstract placeholder stays unwrapped
+                break
+            makeWorld = klass.__dict__.get('makeWorld')
+            if makeWorld is not None:
+                if not getattr(makeWorld, '_second_world_guard', False):
+                    cls.makeWorld = _guard_second_make_world(makeWorld)
+                break
     
     def scorerNameConfig(self, name):
         """
@@ -242,10 +323,22 @@ class Prompt:
             gatherHistData is called by every rank (it is collective under
             MPI, so gating it would deadlock); only the file writes are
             done on rank 0. Works on plain Prompt (serial) too.
+            A scorer whose histogram lookup fails (e.g. a stale registry
+            entry left behind by a rejected registration) is skipped with a
+            RuntimeWarning instead of aborting the whole save. The registry
+            is identical on every rank, so all ranks skip the same names and
+            stay collective.
         """
         rank = getattr(self, 'rank', 0)
         for scname in self.scorer:
-            sc_value = self.gatherHistData(scname)
+            try:
+                sc_value = self.gatherHistData(scname)
+            except Exception as exc:  # keep going: one bad scorer must not
+                # discard the results of every other scorer
+                warnings.warn(f"skipping scorer '{scname}': could not gather "
+                              f"its histogram ({exc})", RuntimeWarning,
+                              stacklevel=2)
+                continue
             if rank == 0:
                 if savepdf:
                     sc_value.savefig(f"{scname}.pdf", log=False)
@@ -371,6 +464,12 @@ class PromptMPI(Prompt):
             # and every later gather (save_all_scorers re-gathers) would
             # cumulatively inflate the data. The scorer keeps its rank-local
             # content, keeping gathers idempotent.
+            if not callable(getattr(hist, 'clone', None)):
+                raise RuntimeError(
+                    f"the histogram of scorer {cfg!r} provides no clone(): "
+                    "the loaded Cinema core library is stale (built before "
+                    "pt_HistBase_clone) or the object is not a fresh Hist; "
+                    "rebuild the library and rerun the simulation")
             hist2 = hist.clone()
             hist2.setHit(recvh)
             hist2.setWeight(recvw)

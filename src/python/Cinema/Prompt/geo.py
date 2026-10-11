@@ -674,10 +674,14 @@ class Volume:
             ValueError: A scorer with the same name is already registered,
                 on this or any other volume of the world.
         """
+        # The registry entry is written only AFTER the C++ bridge accepts the
+        # cfg: a rejected registration must leave no ghost behind (a ghost
+        # would fail a same-name retry with a false "already registered" and
+        # send later gathers into an unregistered scorer).
         if isinstance(cppScorer, int):
             self._raiseIfScorerNameTaken(scorer.name)
-            self.__class__.scorer_dict[scorer.name] = scorer.name
             raiseOnBridgeError(_pt_ResourceManager_addScorer(self.volid, scorer.name.encode('utf-8'), cppScorer))
+            self.__class__.scorer_dict[scorer.name] = scorer.name
         else:
             import re
             if isinstance(scorer, str):
@@ -687,14 +691,14 @@ class Volume:
                 name = re.search(r'=.*', name)
                 name = re.sub(r'=', '', name.group()).strip()
                 self._raiseIfScorerNameTaken(name)
-                self.__class__.scorer_dict[name] = scorer
                 raiseOnBridgeError(_pt_ResourceManager_addScorer(self.volid, scorer.encode('utf-8'), cppScorer))
+                self.__class__.scorer_dict[name] = scorer
             else:
                 cfg = scorer.cfg
                 _validateNccfgFiles(cfg)
                 self._raiseIfScorerNameTaken(scorer.cfg_name)
-                self.__class__.scorer_dict[scorer.cfg_name] = cfg
                 raiseOnBridgeError(_pt_ResourceManager_addScorer(self.volid, cfg.encode('utf-8'), cppScorer))
+                self.__class__.scorer_dict[scorer.cfg_name] = cfg
 
     def setSurface(self, cfg: str):
         """
