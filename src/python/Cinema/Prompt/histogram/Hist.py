@@ -496,7 +496,13 @@ _pt_Est1D_fill = importFunc('pt_Est1D_fill', None, [type_voidp, type_dbl, type_d
 
 class Est1D(Hist1D):
     def __init__(self, xmin, xmax, num, linear=True):
-        super().__init__(xmin, xmax, num, linear)
+        # A real pt::Est1D, not the pt::Hist1D that Hist1D.__init__ would
+        # create from the geometry arguments: the error-channel behaviour
+        # (quadrature merge, |f|-linear scale) lives in the derived-class
+        # vtable, and the pt_Est1D_delete in __del__ must pair with
+        # pt_Est1D_new instead of deleting a base-constructed object.
+        super().__init__(cobj=_pt_Est1D_new(xmin, xmax, num, linear))
+        self.managedBySelf = True
 
     def __del__(self):
         _pt_Est1D_delete(self.cobj)
