@@ -150,7 +150,7 @@ Source builds (with apt or conda prerequisites) are documented on
 
 - This wiki documents **Cinema 2.0.0a5**, as reported by `Cinema.__version__`
   (`src/python/Cinema/__init__.py`). That dynamic version is what package builds use; the
-  plain-text `Version` file at the repository root currently reads `v2.0.0` and may disagree with
+  plain-text `Version` file at the repository root currently reads `v2.0.1` and may disagree with
   it — trust `Cinema.__version__`.
 - Source repository: <https://code.ihep.ac.cn/cinema-developers/cinema>
   (`git clone https://code.ihep.ac.cn/cinema-developers/cinema.git`).
