@@ -183,8 +183,13 @@ const Prompt::SampledResult& Prompt::GIDIModel::sampleReaction(double ekin, cons
       totalekin += gidi_ekin_ev; // accumulate the energy that will be carried by a particle in the later simulation. 
 
       // make secondary
-      const Particle & primary = m_launcher.getCurrentParticle(); 
-      // m_launcher.copyCurrentParticle(primary); 
+      // Offline sampling (ModelCollection::generate through the checked bridge)
+      // runs without a current particle; a null m_curParicle would segfault
+      // here, so fall back to a stub particle sitting at the origin.
+      Particle offlineStub(0., Vector{0., 0., 1.}, Vector{0., 0., 0.});
+      const Particle & primary = m_launcher.hasCurrentParticle()
+          ? m_launcher.getCurrentParticle() : offlineStub;
+      // m_launcher.copyCurrentParticle(primary);
       if(aproduct.m_userProductIndex==const_neutron_pgd)
       {
         #ifdef DEBUG

@@ -46,6 +46,9 @@ namespace Prompt {
     const std::vector<Vector> &getTrajectory() { return m_trajectory; }
     size_t getTrajSize() { return m_trajectory.size(); }
     const Particle &getCurrentParticle() const {return *m_curParicle.get(); }
+    // offline sampling (ModelCollection::xs/generate through the checked
+    // bridges) runs without a current particle
+    bool hasCurrentParticle() const { return m_curParicle != nullptr; }
     void registerDeposition (double edp) {m_curParicle->setDeposition(edp); }
 
   private:

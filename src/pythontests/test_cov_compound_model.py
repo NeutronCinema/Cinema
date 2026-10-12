@@ -121,6 +121,69 @@ def test_generate_rejects_null_direction():
         mc.generate(EKIN, dir=(0., 0., 0.))
 
 
+# ------------------------------------------------------------------- gidi arm
+#
+# Offline gidi sampling has no Launcher current particle: the checked
+# pt_ModelCollection_generate bridge runs without any transport event, so
+# GIDIModel::sampleReaction used to dereference the Launcher's null
+# m_curParicle when building secondaries (signal 11 at offset 0x20, confirmed
+# 2026-10-12 with gidi enabled and ekin above the gidi threshold). The fix is
+# the hasCurrentParticle()/offlineStub fallback in PTLauncher.hh/PTGIDIModel.cc;
+# this test pins it. Like the NCrystal arm above, the call runs in a subprocess
+# with a hard timeout so a reintroduced crash fails instead of wedging pytest
+# (pytest itself runs --forked, but the worker keeps the traceback readable).
+
+import os as _os
+
+def _ptdata_paths():
+    ptdata = _os.path.join(_os.environ.get('CINEMAPATH', '.'), 'external', 'ptdata')
+    pops = _os.path.join(ptdata, 'pops.xml')
+    gmap = _os.path.join(ptdata, 'all.map')
+    if not (_os.path.isfile(pops) and _os.path.isfile(gmap)):
+        return None
+    return pops, gmap
+
+GIDI_EKIN = 10.0  # eV, above the 5 eV gidi threshold: the sampled model is gidi
+
+GIDI_WORKER = """
+import sys
+from Cinema.Prompt.compoundModel import ModelCollection
+from Cinema.Prompt.GidiSetting import GidiSetting
+
+pops, gmap = sys.argv[1], sys.argv[2]
+GidiSetting().setEnableGidi(True)
+GidiSetting().setGidiThreshold(5)
+GidiSetting().setGammaTransport(False)
+GidiSetting().setGidiPops(pops)
+GidiSetting().setGidiMap(gmap)
+
+mc = ModelCollection({cfg!r})
+out = [mc.generate({ekin!r}) for _ in range(10)]
+print('result', out, flush=True)
+""".format(cfg="physics=ncrystal;nccfg='freegas::H1/0.1gcm3/H_is_1_H1'",
+           ekin=GIDI_EKIN)
+
+
+@pytest.mark.medium
+def test_gidi_bare_generate_above_threshold_does_not_crash():
+    """Offline generate() with gidi enabled above the gidi threshold must
+    sample through GIDIModel::sampleReaction without a current particle:
+    it used to segfault on the null Launcher particle deref."""
+    paths = _ptdata_paths()
+    if paths is None:
+        pytest.skip("gidi data not available under $CINEMAPATH/external/ptdata")
+    res = subprocess.run([sys.executable, "-c", GIDI_WORKER, paths[0], paths[1]],
+                         capture_output=True, text=True, timeout=120)
+    # a segfault (returncode -11) or any abort must fail here
+    assert res.returncode == 0, res.stderr[-2000:]
+    lines = [l for l in res.stdout.splitlines() if l.startswith('result')]
+    values = ast.literal_eval(lines[0].split('result', 1)[1])
+    assert len(values) == 10
+    # free H1 elastic at 10 eV can end anywhere in (0, 2*ekin]; capture keeps
+    # the stale value (>= 0). NaN would fail both comparisons like any NaN bound.
+    assert all(0.0 <= v <= 4.0 * GIDI_EKIN for v in values), values
+
+
 # ---------------------------------------------------------------- bridge pins
 #
 # EXPECTED-FAIL LEDGER (wave 2b, cluster b2): red against the stale cinemabin
