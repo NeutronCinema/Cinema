@@ -44,13 +44,16 @@ TEST_CASE("ModelCollection")
   // };
   std::vector<double> expectedXS;
   #ifdef ENABLE_GIDI
+  // 2026-10-12: re-recorded for gidiplus 3.35 (P1.2/P1.4); the ~3e-9 relative
+  // shifts vs the 3.28.22 values are float rounding of the stored cross
+  // sections (3.33+ default). The 3.28 .so still reproduces the old pins.
   expectedXS={
-    1.680228126153258,
-    1.638541715024224,
-    1.600408252103404,
-    1.565449983578320,
-    1.533417449071772,
-    1.612889632139340
+    1.680228132414198,
+    1.638541721755857,
+    1.600408256094284,
+    1.565449984589237,
+    1.533417454259506,
+    1.612889637197345
     };
   #else
   expectedXS={

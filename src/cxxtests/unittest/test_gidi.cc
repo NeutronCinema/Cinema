@@ -70,7 +70,10 @@ TEST_CASE("GIDIfactory")
   {
     std::cout.precision(15);
     std::cout << "Info: xs " << v->getCrossSection(1e6) * 1e24 << std::endl; // in cm^2
-    CHECK(Prompt::floateq(v->getCrossSection(1e6) * 1e24, 296.096663564745484));
+    // 2026-10-12: re-recorded for gidiplus 3.35 (was 296.096663564745484 on the
+    // 3.28.22 baseline, which the archived 3.28 .so still reproduces). The 1.6e-8
+    // relative shift is float rounding: 3.33+ stores cross sections as float.
+    CHECK(Prompt::floateq(v->getCrossSection(1e6) * 1e24, 296.096658706665039));
     auto res = v->sampleReaction(1e6, in);
     std::cout << "Sampled result: " << int(res.dispeared) << std::endl; // in MeV
     CHECK(Prompt::floateq(float(res.dispeared), 1.));
