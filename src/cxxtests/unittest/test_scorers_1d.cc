@@ -267,16 +267,17 @@ TEST_CASE("scorer_deltamomentum_invalid_method_throws_on_score")
 
 TEST_CASE("scorer_volfluence_content_and_weight_uniformity_guard")
 {
-  const double volume = 100.0;
-  pt::ScorerVolFluence scorer("sflux", 0.0, 1.0, 10, volume, pt::const_neutron_pgd);
+  // the scorer accumulates raw track length (weight*step); the volume
+  // normalization is applied by the caller after the run
+  pt::ScorerVolFluence scorer("sflux", 0.0, 1.0, 10, pt::const_neutron_pgd);
 
   pt::Particle p(0.5, pt::Vector(0., 0., 1.), pt::Vector(0., 0., 0.));
   p.moveForward(10.0); // step length 10, unchanged weight 1
   scorer.score(p);
 
   const pt::HistBase *hist = scorer.getHist();
-  CHECK(hist->getRaw()[5] == doctest::Approx(10.0 / volume)); // ekin 0.5 -> bin 5
-  CHECK(hist->getTotalWeight() == doctest::Approx(10.0 / volume));
+  CHECK(hist->getRaw()[5] == doctest::Approx(10.0)); // ekin 0.5 -> bin 5
+  CHECK(hist->getTotalWeight() == doctest::Approx(10.0));
 
   // a second particle with a different weight breaks the unit-bias assumption
   pt::Particle biased(0.5, pt::Vector(0., 0., 1.), pt::Vector(0., 0., 0.));
@@ -284,7 +285,16 @@ TEST_CASE("scorer_volfluence_content_and_weight_uniformity_guard")
   REQUIRE_THROWS_AS(scorer.score(biased), pt::Error::LogicError);
 
   // the throwing fill must not have modified the histogram
-  CHECK(hist->getTotalWeight() == doctest::Approx(10.0 / volume));
+  CHECK(hist->getTotalWeight() == doctest::Approx(10.0));
+
+  // PROPAGATE_PRE/POST only see interaction-ending segments, so they would
+  // silently undercount the flux; the ctor rejects them (PEA_PRE default)
+  REQUIRE_THROWS_AS(pt::ScorerVolFluence("bad", 0.0, 1.0, 10, pt::const_neutron_pgd,
+                                         pt::Scorer::ScorerType::PROPAGATE_PRE),
+                    pt::Error::BadInput);
+  REQUIRE_THROWS_AS(pt::ScorerVolFluence("bad", 0.0, 1.0, 10, pt::const_neutron_pgd,
+                                         pt::Scorer::ScorerType::PROPAGATE_POST),
+                    pt::Error::BadInput);
 }
 
 TEST_CASE("est1d_fills_throw_but_3arg_fill_accumulates_and_espectrum_bins_energy")

@@ -120,13 +120,10 @@ void Prompt::ResourceManager::addScorer(size_t volID, const std::string& cfg, Sc
   if(it==m_globelScorers.end())
   {
 
-    auto &geoManager = vecgeom::GeoManager::Instance();
-    auto volume = geoManager.FindLogicalVolume(volID);
-    double capacity = volume->GetUnplacedVolume()->Capacity();
     if(scorer==nullptr)
     {
       auto &scorerFactory = Singleton<ScorerFactory>::getInstance();
-      sc = scorerFactory.createScorer(cfg, capacity );
+      sc = scorerFactory.createScorer(cfg);
       m_globelScorers[cfg] = sc;
     }
     else

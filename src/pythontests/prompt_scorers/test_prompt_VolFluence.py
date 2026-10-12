@@ -10,9 +10,14 @@ import numpy as np
 
 def test_simulation():
     np.set_printoptions(precision=15)
-    expVolumicFluence = [0.0, 0.00040370556043401335, 0.01899477087453266, 0.03214924896436379, 
-                         0.13510268869534098, 0.8982104324640051, 3.8846990007307407, 12.238864358921791, 
-                         16.39096777093097, 0.8855484982591313]
+    # Since 2026-10-12 the scorer accumulates RAW track length (weight*step):
+    # the volume normalization moved out of the scorer, so these pins are the
+    # pre-2026-10-12 expVolumicFluence values multiplied by the detector
+    # volume V = (2*10)*(2*10)*(2*1) = 800 mm^3 (Box takes half-lengths).
+    # Divide this histogram by vol.getCapacity() to recover the fluence.
+    expTrackLength = [0.0, 0.32296444834721066, 15.195816699626127, 25.71939917149103,
+                      108.0821509562728, 718.5683459712034, 3107.759200584599, 9791.091487137539,
+                      13112.774216745142, 708.438798607301]
 
 
     class MySim(Prompt):
@@ -39,4 +44,4 @@ def test_simulation():
     sim.simulate(gunCfg, 1e4)
     wlhist = sim.gatherHistData('testObj')
     print(list(wlhist.getWeight()), sep=',')
-    np.testing.assert_allclose(wlhist.getWeight(), expVolumicFluence, rtol=1e-15)
+    np.testing.assert_allclose(wlhist.getWeight(), expTrackLength, rtol=1e-15)

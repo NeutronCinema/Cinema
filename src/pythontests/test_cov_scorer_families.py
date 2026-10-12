@@ -23,7 +23,7 @@
 #   ESpectrum scores EKin (or EKin0-EKin with energyTransfer),
 #   Deposition scores getDeposition() (always 0 unless a process
 #   registers one - no production process does);
-# - VolFluence (PEA_PRE) weights each fill with step_length/V, so the
+# - VolFluence (PEA_PRE) weights each fill with the raw step_length, so the
 #   total weight of a straight-through beam is exactly N*L/V;
 # - DeltaMomentum (DirectSqHelper) fills weight/Q, skipping Q == 0;
 # - DirectSqw's x axis is Q (num_qbin bins) and its y axis is the energy
@@ -255,10 +255,11 @@ def test_espectrum_energy_transfer_is_zero_in_vacuum():
 
 @pytest.mark.medium
 def test_volfluence_track_length_integral_exact():
-    # VolFluence weights each PEA_PRE fill with step/V, so a beam of N
-    # particles traversing the plate thickness L in a volume V integrates
-    # to exactly N*L/V = 2000*4/1600 = 5, independent of the binning; the
-    # x axis is the energy, one bin for a monoenergetic beam
+    # VolFluence accumulates raw track length (weight*step), so a beam of N
+    # particles traversing the plate thickness L integrates to exactly N*L =
+    # 2000*4 = 8000 mm, independent of the binning; the volume normalization
+    # is deliberately left to the caller (divide by vol.getCapacity() after
+    # the run); the x axis is the energy, one bin for a monoenergetic beam
     sim, world, plate = _straight_world()
     VolFluenceHelper('vf_lin', min=0.01, max=0.05, numbin=40,
                      log=False).make(plate)
@@ -267,17 +268,17 @@ def test_volfluence_track_length_integral_exact():
     sim.simulate(_PencilGun(vectorized=500), NPRIM)
 
     h = sim.gatherHistData('vf_lin')
-    assert h.getTotalWeight() == pytest.approx(NPRIM * THICK / 1600.0, rel=1e-6)
-    assert h.getTotalWeight() == pytest.approx(5.0, rel=1e-6)
+    assert h.getTotalWeight() == pytest.approx(NPRIM * THICK, rel=1e-6)
+    assert h.getTotalWeight() == pytest.approx(8000.0, rel=1e-6)
     assert h.getTotalHit() == NPRIM           # exactly one score per particle
     idx, wbin, hits = _single_bin(h)
     assert idx == _bin_linear(E0, 0.01, 0.05, 40) == 14
-    assert wbin == pytest.approx(5.0, rel=1e-6)
+    assert wbin == pytest.approx(8000.0, rel=1e-6)
 
 
 @pytest.mark.medium
 def test_volfluence_log_binning_same_integral():
-    # default VolFluenceHelper binning is logarithmic; the N*L/V identity
+    # default VolFluenceHelper binning is logarithmic; the N*L identity
     # must not depend on the binning shape
     sim, world, plate = _straight_world()
     VolFluenceHelper('vf_log', min=0.01, max=0.05, numbin=40).make(plate)
@@ -286,7 +287,7 @@ def test_volfluence_log_binning_same_integral():
     sim.simulate(_PencilGun(vectorized=500), NPRIM)
 
     h = sim.gatherHistData('vf_log')
-    assert h.getTotalWeight() == pytest.approx(NPRIM * THICK / 1600.0, rel=1e-6)
+    assert h.getTotalWeight() == pytest.approx(NPRIM * THICK, rel=1e-6)
     idx, _, _ = _single_bin(h)
     assert idx == _bin_log(E0, 0.01, 0.05, 40) == 22
 

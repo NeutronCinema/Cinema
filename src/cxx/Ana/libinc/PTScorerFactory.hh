@@ -38,7 +38,7 @@ namespace Prompt {
   class ScorerFactory  {
   public:
     //used in GeoManager::initFromGDML
-    Scorer * createScorer(const std::string &cfg, double v);
+    Scorer * createScorer(const std::string &cfg);
   private:
     std::map<const std::string, Scorer*> m_multiScatcorers;
     friend class Singleton<ScorerFactory>;

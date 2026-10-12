@@ -76,18 +76,56 @@ codes:
 | Value | Name             | Fires when |
 |------:|------------------|------------|
 | 0     | `SURFACE`        | An interaction at the volume *surface*, e.g. surface transmission or optics physics (mirror, chopper). |
-| 1     | `ENTRY`          | The particle enters the volume (state *before* any physics happens in it). |
-| 2     | `PROPAGATE_PRE`  | Immediately *before* a bulk-scattering interaction in the volume. |
-| 3     | `PROPAGATE_POST` | Immediately *after* the bulk scattering — energy and momentum are already updated. |
-| 4     | `EXIT`           | The particle exits the volume. |
+| 1     | `ENTRY`          | The particle crosses *into* the volume at a boundary (state *before* any physics happens in it). Never fires for the gun's first step. |
+| 2     | `PROPAGATE_PRE`  | Once per in-volume collision, at the collision point *before* the reaction is sampled: bins the **pre-collision** energy, step = the flight that ended there. Also fires for the flight that ends in an absorption. |
+| 3     | `PROPAGATE_POST` | Once per in-volume collision, *after* the reaction — but **only if the particle survived it**: a capture/fission event fires `PROPAGATE_PRE` and then nothing. Bins the **post-collision** energy. |
+| 4     | `EXIT`           | The particle exits the volume through a boundary. Step = the exit chord (negligible tolerance overswing); the step counter is cleared right after. |
 | 5     | `PEA_PRE`        | Fires once per track segment: propagate_pre before each in-volume interaction — the absorbing one included — plus once at exit. The pre-hit "account for everything in this volume" variant. |
 | 6     | `PEA_POST`       | The same trio (propagate_post, exit, absorb), post-hit variant. |
 | 7     | `ABSORB`         | The particle is absorbed by *real* physics in the volume. |
+
+Three properties of these hooks matter again and again (all pinned by
+[`test_prompt_ptstate.py`](https://code.ihep.ac.cn/cinema-developers/cinema/-/blob/master/src/pythontests/prompt_scorers/test_prompt_ptstate.py)
+and the scorer unit tests):
+
+- **`PROPAGATE_PRE`/`PROPAGATE_POST` never see the exit leg.** They fire at interaction
+  sites only, so a scorer on those states silently drops every track that leaves the
+  volume without interacting. `PROPAGATE_POST` additionally drops captures (the particle
+  is gone before the post-hit hook). This is why `VolFluenceHelper` rejects both states
+  with an explicit error instead of quietly undercounting.
+- **`ENTRY`/`SURFACE` do not fire on the gun's first step**, and `ENTRY` observes
+  step = 0 (the counter is cleared after every boundary crossing).
+- **The hooks balance exactly.** In a single volume without surface physics:
+  `PROPAGATE_PRE − PROPAGATE_POST = ABSORB`, `PEA_PRE = PROPAGATE_PRE + EXIT`,
+  `PEA_POST = PROPAGATE_POST + EXIT + ABSORB`, and `EXIT + ABSORB = 1` per source
+  particle that reached the volume. If your tallies violate these identities, the setup
+  (biasing, killing scorers, nested volumes) — not the physics — is to blame.
 
 `PEA_PRE`/`PEA_POST` exist so a single scorer can count every particle passing through a
 volume regardless of whether it scattered, exited or was absorbed — use them for fluence-like
 quantities. `ABSORB` fires only on genuine absorption, which is what makes the
 `TOFHelper(..., ptstate='ABSORB')` absorber-channel TOF of `doc/example_basic.py` work.
+
+### Which state for which quantity?
+
+Pick the row that matches what you want to measure — no need to reason about the transport
+loop:
+
+| I want ... | Use | Why |
+|---|---|---|
+| Flux / fluence spectrum in a volume | `VolFluenceHelper` (fixed `PEA_PRE`), then `hist.scale(1.0 / vol.getCapacity())` | every track segment counted once, pre-collision energy; dividing by the volume at the *end* keeps the scorer a pure accumulator |
+| Outgoing energy spectrum of scattered particles | `ESpectrumHelper(..., ptstate='PROPAGATE_POST')` | post-collision energy, one fill per surviving scattering; captures are excluded, which is usually what "outgoing" means |
+| Collision-rate density (φ·Σ, reactions per unit volume) | `ESpectrumHelper(..., ptstate='PROPAGATE_PRE')` | one fill per collision at the pre-collision energy — a reaction-rate density, **not** a flux; do not compare it to a track-length flux tally |
+| Energy spectrum of everything leaving the volume | `ESpectrumHelper(..., ptstate='EXIT')` | fires once per exiting track |
+| TOF of absorbed particles (absorption imaging) | `TOFHelper(..., ptstate='ABSORB')` | fires only on genuine absorption |
+| Exactly one count per source particle | `ABSORB`, `SURFACE`, or a flat (non-nested) volume with `EXIT` | boundary hooks double count in nested geometry (below) |
+| Number of scatterings per particle | `MultiScatCounter` (fixed `PEA_POST`) | purpose-built; see section 5 |
+
+Two further automatic corrections the helpers make for you: an `ESpectrumHelper` with
+`energyTransfer=True` is force-pinned to `EXIT` by the factory (a transfer needs the
+cumulative E_initial − E_final, which only exists at the end of a history), and weights are
+scored as `weight × surviveP`, so implicit-capture runs (`absorp_in_weight`) stay
+normalised — on `ABSORB` this means the hook never fires in that mode, by design.
 
 Helpers accept either the enum member (`ParticleTracingState.EXIT`) or the **exact** string
 (`'EXIT'`), see [gotcha 2](#8-gotchas).
@@ -129,7 +167,7 @@ by default.
 | `WlSpectrumHelper` | Wavelength (Å) | 0.1..10 Å, 100 bins, **log** | `ENTRY` | |
 | `TOFHelper` | Time-of-flight (s) | 0..40e-3 s, 100 bins, linear | `ENTRY` | |
 | `PSDHelper` | 2D position (mm) | ±10 mm, 100x100 bins, linear | `ENTRY` | `psdtype` = `'XY'`/`'XZ'`/`'YZ'`; volume-local frame, global if `isGlobal=True` |
-| `VolFluenceHelper` | Energy-resolved track-length fluence normalised by the volume capacity (1/mm²) | 1e-6..10 eV, 100 bins, **log** | fixed `PEA_PRE` | Divides by `vol.getCapacity()` (mm³) captured at `make()`; **invalid if particle weights change inside the volume** (gotcha 4); absorbed segments count exactly once |
+| `VolFluenceHelper` | Energy-resolved **raw track length** (mm per source particle) | 1e-6..10 eV, 100 bins, **log** | fixed `PEA_PRE` (overriding it to `PROPAGATE_PRE`/`PROPAGATE_POST` raises `ValueError` — those hooks would silently drop the exiting tracks) | Accumulates `weight × step × surviveP`; the histogram is the volume integral of the flux — divide by the volume **after** the run: `hist.scale(1.0 / vol.getCapacity())` gives the fluence in 1/mm². **Invalid if particle weights change inside the volume** (gotcha 4); absorbed segments count exactly once |
 | `DirectSqHelper` | S(Q), momentum transfer Q (Å⁻¹) | none — `qmin`, `qmax`, `numbin` required, **log** | `ENTRY` | Requires `mod_smp_dist` (moderator-to-sample distance, mm); `refDir` incident direction, `samplePos`; `method=0` uses the real energy transfer, `method=1` the static approximation |
 | `DirectSqwHelper` | S(Q,ω), Q (Å⁻¹) x energy transfer ω = E_initial − E_final; positive = neutron energy loss (downscatter), negative = energy gain (eV) | Q 0.1..10 Å⁻¹ in 50 bins; ω −0.1..0.1 eV in 30 bins | `ENTRY` | Requires `mod_smp_dist` (mm) and `mean_ekin` (eV); Q axis is always linearly binned for now (`log=True` warns) |
 | `DepositionHelper` | Deposited energy spectrum, weighted by weight x survival probability | none — `min`, `max`, `numbin`, `pdg`, `ptstate` all required | user-set | |
@@ -323,11 +361,15 @@ Under MPI, `PromptMPI.gatherHistData(name, dst=0)` sums the per-rank histograms 
    `test_prompt_ptstate.py` pins the per-history identity `PEA_PRE == ENTRY + EXIT` on a Cd
    slab. `PEA_POST` fires on propagate_post, exit or absorb — still never twice per segment,
    since propagate_post no longer triggers on absorption.
-4. **`VolFluenceHelper` is only valid where weights do not change.** It divides track length
-   by the volume capacity and assumes unit biasing factor D inside the volume; if a particle
+4. **`VolFluenceHelper` is only valid where weights do not change.** It accumulates raw
+   track length and assumes unit biasing factor D inside the volume; if a particle
    weight changes inside the scored volume it throws a C++ `LogicError` ("The D value for
    the material ... should be unity"). Do not combine it with non-unity
    `scatter_bias`/`abs_bias` in that volume — see [Materials and physics](materials-physics).
+   Since 2026-10 the volume is **not** a parameter of the scorer anymore: the histogram is
+   plain track length, and the fluence is one division on your side,
+   `hist.scale(1.0 / vol.getCapacity())` (older pins in tests and notes are the values
+   here multiplied by the scored volume).
 5. **Log-binned scorers need positive edges.** `ESpectrumHelper`, `WlSpectrumHelper`,
    `VolFluenceHelper` and `DirectSqHelper` default to logarithmic bins (`log=True`); the
    constructor validates the range up front and raises `ValueError`

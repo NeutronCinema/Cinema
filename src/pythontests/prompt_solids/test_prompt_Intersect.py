@@ -63,7 +63,10 @@ def test_simulation():
     # (0.05853522444914256 / 0.06053628305891873) predate NCrystal/gidi drift;
     # their 3.4% spread was RNG-stream vintage, not geometry: sphere(300) n box
     # (100) IS box(100), so sum1 and sumref must agree to numerical noise.
-    np.testing.assert_allclose(sum1, 0.059230226609406245)
+    # 2026-10-12: VolFluence now accumulates raw track length, so the pins are
+    # the 2026-10-11 fluence values times the volume 200^3 = 8e6 mm^3 (Box takes
+    # half-lengths). Divide the histogram by vol.getCapacity() for the fluence.
+    np.testing.assert_allclose(sum1, 473843.23441)
 
     # geo reference
     sim.clear()
@@ -73,8 +76,11 @@ def test_simulation():
     sim.simulate(gun, partnum)
     spct = sim.gatherHistData('spct')
     sumref = spct.getWeight().sum()
-    np.testing.assert_allclose(sumref, 0.059230404300263766)
-    # semantic anchor: SolidIntersection must reproduce the equivalent solid
-    np.testing.assert_allclose(sum1, sumref, rtol=1e-5)
+    np.testing.assert_allclose(sumref, 473843.2344021093)  # 0.059230404300263766 * 8e6
+    # semantic anchor: SolidIntersection must reproduce the equivalent solid.
+    # Tightened from rtol=1e-5 (2026-10-11): the old scorer normalised by the
+    # VecGeom capacity, whose ~3e-6 numerical error for the intersection shape
+    # was baked into sum1; raw track length removes that noise entirely.
+    np.testing.assert_allclose(sum1, sumref, rtol=1e-9)
 
     print(sum1, sumref)

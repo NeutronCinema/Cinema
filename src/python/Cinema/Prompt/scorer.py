@@ -120,7 +120,7 @@ _pt_ScorerDeposition_new = importFunc('pt_ScorerDeposition_new', type_voidp, [ty
 _pt_ScorerESpectrum_new = importFunc('pt_ScorerESpectrum_new', type_voidp, [type_cstr, type_bool, type_dbl, type_dbl, type_uint, type_uint, type_int, type_int, type_bool ])
 _pt_ScorerTOF_new = importFunc('pt_ScorerTOF_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_uint, type_int, type_int ])
 _pt_ScorerWlSpectrum_new = importFunc('pt_ScorerWlSpectrum_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_uint, type_int, type_int, type_bool ])
-_pt_ScorerVolFluence_new = importFunc('pt_ScorerVolFluence_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_dbl, type_uint, type_int, type_bool, type_int])
+_pt_ScorerVolFluence_new = importFunc('pt_ScorerVolFluence_new', type_voidp, [type_cstr, type_dbl, type_dbl, type_uint, type_uint, type_int, type_bool, type_int])
 _pt_ScorerDeltaMomentum_new = importFunc('pt_ScorerDeltaMomentum_new',type_voidp, [type_cstr, type_dbl, type_dbl, type_dbl, type_uint,
                                                                                    type_uint, type_dbl, type_dbl, type_dbl, 
                                                                                    type_dbl, type_dbl, type_dbl, type_int, type_int, type_bool])
@@ -461,6 +461,24 @@ class WlSpectrumHelper(ScorerHelper, MultiScatMixin1D):
         self.cobj = cobj
 
 class VolFluenceHelper(ScorerHelper, MultiScatMixin1D):
+    """Track-length (fluence) scorer, pinned to PEA_PRE.
+
+    Every particle track segment inside the volume - the flight to each
+    collision and the final flight out - is binned by its flight energy with
+    weight ``step_length``. The histogram therefore accumulates **track
+    length** (in mm) per source particle, the estimator of ``integral of
+    flux over the volume``; divide by the volume once after the run to get
+    the fluence (track length per unit volume)::
+
+        hist = sim.gatherHistData('name')
+        hist.scale(1.0 / vol.getCapacity())   # fluence per mm^3
+
+    PEA_PRE is required because it is the only hook that sees *every* track
+    segment: PROPAGATE_PRE/POST fire at interaction sites only, so they
+    would silently drop the boundary-exit tracks (the C++ side rejects
+    those ptstate values for this scorer).
+    """
+
     def __init__(self, name, min = 1e-6, max = 10, numbin = 100, pdg = 2112, linear = None, groupID : int = 0, log = None) -> None:
         super().__init__(name, min, max, numbin, pdg, ptstate = 'PEA_PRE', groupID = groupID)
         # `log` is the canonical binning flag; `linear` stays as a deprecated alias
@@ -469,13 +487,22 @@ class VolFluenceHelper(ScorerHelper, MultiScatMixin1D):
         _checkScorerRange(name, min, max, logBinning=self.log)
 
     def make(self, vol):
-        volCapacity = vol.getCapacity()
+        # pre-check mirroring the C++ constructor guard: the raw ctypes bridge
+        # cannot transport a C++ exception (it would abort the interpreter), so
+        # an overridden ptstate must fail here as a plain Python error instead
+        if self.ptstate.strip().upper() in ('PROPAGATE_PRE', 'PROPAGATE_POST'):
+            raise ValueError(
+                f"VolFluence '{self.name}': ptstate={self.ptstate} is not allowed. "
+                "PROPAGATE_PRE/POST only fire at interaction sites, so the boundary-exit "
+                "tracks would be silently dropped and the flux undercounted. "
+                "Use the default PEA_PRE (every track segment, pre-collision energy) or "
+                "PEA_POST (post-collision energy), and divide the histogram by the volume "
+                "after the run: hist.scale(1.0 / vol.getCapacity()).")
         cobj = _pt_ScorerVolFluence_new(
-            self.name.encode('utf-8'), 
+            self.name.encode('utf-8'),
             self.min,
             self.max,
             self.numbin,
-            volCapacity,
             self.pdg,
             self.ptsNum,
             self.linear,
@@ -1002,10 +1029,12 @@ class TOF(ConfigString):
 
 class VolFluence(ConfigString):
     """
-    Volume fluence scorer for measuring particle flux through volumes.
-    
-    Calculates the particle fluence (particles per unit area) within a volume.
-    
+    Track-length (fluence) scorer for volumes.
+
+    Each fill accumulates the particle track length (weight * step length)
+    binned by flight energy, so the histogram is the volume integral of the
+    flux; divide it by the volume after the run to obtain the fluence.
+
     Attributes:
         cfg_Scorer (str): Scorer type identifier ('VolFluence')
         cfg_name (str): Scorer instance name

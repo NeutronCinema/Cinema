@@ -47,7 +47,7 @@ for reference (full catalogue and semantics on [Scoring](scorers)):
 | `ESpectrumHelper` | kinetic energy, **eV** (energy transfer if `energyTransfer=True`) | 1e-5..1 eV, log bins |
 | `WlSpectrumHelper` | wavelength, **Å** | 0.1..10 Å, log bins |
 | `PSDHelper` | 2D position, **mm** | ±10 mm, linear |
-| `VolFluenceHelper` | fluence, **1/mm²** (capacity in mm³) | 1e-6..10 eV, log bins |
+| `VolFluenceHelper` | raw track length, **mm**; divide by the volume in mm³ after the run for the fluence in 1/mm² | 1e-6..10 eV, log bins |
 | `DirectSqHelper` | momentum transfer Q, **Å⁻¹** | none — `qmin`/`qmax` required, log bins |
 | `DirectSqwHelper` | Q (**Å⁻¹**) x energy transfer ω (**eV**) | Q 0.1..10 Å⁻¹, ω −0.1..0.1 eV |
 

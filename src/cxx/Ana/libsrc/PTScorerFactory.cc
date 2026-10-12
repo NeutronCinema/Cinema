@@ -37,7 +37,7 @@ Prompt::ScorerFactory::ScorerFactory()
 {}
 
 
-Prompt::Scorer* Prompt::ScorerFactory::createScorer(const std::string &cfgstr, double vol)
+Prompt::Scorer* Prompt::ScorerFactory::createScorer(const std::string &cfgstr)
 {
   std::cout << "Parsing scorer with config string: \n";
   std::cout << cfgstr << "\n";
@@ -565,7 +565,7 @@ Prompt::Scorer* Prompt::ScorerFactory::createScorer(const std::string &cfgstr, d
         PROMPT_THROW2(BadInput, "Scorer type VolFluence is missing or with extra config parameters" << ", " << cfg.size() << " are given, but there is " <<   parCount <<" known parameters"  );
       }
 
-      return new ScorerVolFluence(name, xmin, xmax, nxbins, vol, const_neutron_pgd, ptstate, linear);
+      return new ScorerVolFluence(name, xmin, xmax, nxbins, const_neutron_pgd, ptstate, linear);
 
     }
     else if(ScorDef == "Split")

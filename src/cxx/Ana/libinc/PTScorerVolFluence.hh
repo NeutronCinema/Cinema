@@ -28,13 +28,22 @@ namespace Prompt {
 
   class ScorerVolFluence  : public Scorer1D {
   public:
+    // Track-length scorer: each fill is weight*step*surviveP, i.e. the raw
+    // track length binned in the flight energy. Divide by the volume AFTER
+    // the run (hist.scale(1/volume)) to obtain the volume fluence; the
+    // volume is deliberately not taken here so that the scorer stays a pure
+    // statistics accumulator.
+    // stype must be a hook that sees every track segment (PEA_PRE is the
+    // canonical one, PEA_POST bins the incoming length at the outgoing
+    // energy); PROPAGATE_PRE/POST only see interaction-ending segments and
+    // would silently undercount the flux, so they are rejected.
     ScorerVolFluence(const std::string &name, double xmin, double xmax,
-                  unsigned nxbins, double volme, unsigned int pdg, 
+                  unsigned nxbins, unsigned int pdg,
                   ScorerType stype=Scorer::ScorerType::PEA_PRE, bool linear=true, int groupid=0);
     virtual ~ScorerVolFluence();
     virtual void score(Particle &particle) override;
   private:
-    double m_iVol, m_weight;
+    double m_weight;
   };
 }
 #endif

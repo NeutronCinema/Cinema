@@ -58,8 +58,8 @@ TEST_CASE("scorerfactory_ptstate_string_maps_to_all_8_scorer_types")
   {
     auto scorer = std::unique_ptr<pt::Scorer>(
       pt::Singleton<pt::ScorerFactory>::getInstance().createScorer(
-        "Scorer=TOF; name=pts_" + st.first + "; min=0.; max=1.; numbin=4; ptstate=" + st.first,
-        1000.0));
+        "Scorer=TOF; name=pts_" + st.first + "; min=0.; max=1.; numbin=4; ptstate=" + st.first)
+        );
     MESSAGE("ptstate=", st.first);
     CHECK(scorer->getType() == st.second);
   }
@@ -68,7 +68,7 @@ TEST_CASE("scorerfactory_ptstate_string_maps_to_all_8_scorer_types")
 TEST_CASE("scorerfactory_unknown_ptstate_throws_badinput")
 {
   REQUIRE_THROWS_AS(pt::Singleton<pt::ScorerFactory>::getInstance().createScorer(
-    "Scorer=TOF; name=pts_bogus; min=0.; max=1.; numbin=4; ptstate=bogus", 1000.0),
+    "Scorer=TOF; name=pts_bogus; min=0.; max=1.; numbin=4; ptstate=bogus"),
     pt::Error::BadInput);
 }
 
@@ -77,8 +77,8 @@ TEST_CASE("scorerfactory_create_espectrum_hist_type_and_name")
   auto scorer = std::unique_ptr<pt::Scorer>(
     pt::Singleton<pt::ScorerFactory>::getInstance().createScorer(
       // ESpectrum is always log-binned (no linear key exists), so min>0 is required
-      "Scorer=ESpectrum; name=detector; min=1e-5; max=0.0253; numbin=120; ptstate=ENTRY",
-      1000.0));
+      "Scorer=ESpectrum; name=detector; min=1e-5; max=0.0253; numbin=120; ptstate=ENTRY")
+        );
 
   CHECK(scorer->getName() == "ScorerESpectrum_detector");
   CHECK(scorer->getType() == pt::Scorer::ScorerType::ENTRY);
@@ -96,8 +96,8 @@ TEST_CASE("scorerfactory_scoretransfer_forces_exit_ptstate")
   auto scorer = std::unique_ptr<pt::Scorer>(
     pt::Singleton<pt::ScorerFactory>::getInstance().createScorer(
       "Scorer=ESpectrum; name=transfer; min=1e-5; max=1.0; numbin=10; "
-      "scoreTransfer=true; ptstate=ENTRY",
-      1000.0));
+      "scoreTransfer=true; ptstate=ENTRY")
+        );
 
   CHECK(scorer->getName() == "ScorerESpectrum_transfer");
   CHECK(scorer->getType() == pt::Scorer::ScorerType::EXIT);
@@ -107,12 +107,12 @@ TEST_CASE("scorerfactory_malformed_cfg_throws_badinput")
 {
   // no "Scorer" key at all
   REQUIRE_THROWS_AS(pt::Singleton<pt::ScorerFactory>::getInstance().createScorer(
-    "name=lonely; min=0.; max=1.", 1000.0),
+    "name=lonely; min=0.; max=1."),
     pt::Error::BadInput);
 
   // unknown scorer type
   REQUIRE_THROWS_AS(pt::Singleton<pt::ScorerFactory>::getInstance().createScorer(
-    "Scorer=Bogus; name=x", 1000.0),
+    "Scorer=Bogus; name=x"),
     pt::Error::BadInput);
 
   // DeltaMomentum accepts exactly 12 keys (incl. "Scorer"); one extra key
@@ -120,7 +120,7 @@ TEST_CASE("scorerfactory_malformed_cfg_throws_badinput")
   REQUIRE_THROWS_AS(pt::Singleton<pt::ScorerFactory>::getInstance().createScorer(
     "Scorer=DeltaMomentum; name=SofQ; sample_pos=0,0,1; beam_dir=0,0,1; dist=-100; "
     "min=0.5; max=50; numbin=1000; ptstate=ENTRY; linear=yes; method=0; scatnum=-1; "
-    "Qtrue=yes", 1000.0),
+    "Qtrue=yes"),
     pt::Error::BadInput);
 }
 
@@ -129,8 +129,8 @@ TEST_CASE("scorerfactory_psd_hist_dims_and_yrange")
   auto scorer = std::unique_ptr<pt::Scorer>(
     pt::Singleton<pt::ScorerFactory>::getInstance().createScorer(
       "Scorer=PSD; name=psd1; xmin=-10; xmax=10; ymin=-20; ymax=20; "
-      "numbin_x=12; numbin_y=22; ptstate=ENTRY; type=XY",
-      1000.0));
+      "numbin_x=12; numbin_y=22; ptstate=ENTRY; type=XY")
+        );
 
   const pt::HistBase *hist = scorer->getHist();
   REQUIRE(hist != nullptr);
@@ -151,8 +151,8 @@ TEST_CASE("scorerfactory_psd_hist_dims_and_yrange")
   auto scorerYZ = std::unique_ptr<pt::Scorer>(
     pt::Singleton<pt::ScorerFactory>::getInstance().createScorer(
       "Scorer=PSD; name=psd2; xmin=-10; xmax=10; ymin=-20; ymax=20; "
-      "numbin_x=12; numbin_y=22; ptstate=ENTRY; type=YZ",
-      1000.0));
+      "numbin_x=12; numbin_y=22; ptstate=ENTRY; type=YZ")
+        );
   CHECK(scorerYZ->getHist()->getDataSize() == 12u * 22u);
   const auto *hist2dYZ = dynamic_cast<const pt::Hist2D *>(scorerYZ->getHist());
   REQUIRE(hist2dYZ != nullptr);
@@ -166,7 +166,7 @@ TEST_CASE("scorerfactory_multiscat_edges_and_1d_scorer_dims")
   // per allowed scattering number
   auto ms = std::unique_ptr<pt::Scorer>(
     pt::Singleton<pt::ScorerFactory>::getInstance().createScorer(
-      "Scorer=MultiScat; name=D2O; min=1; max=5; linear=yes", 1000.0));
+      "Scorer=MultiScat; name=D2O; min=1; max=5; linear=yes"));
   CHECK(ms->getName() == "ScorerMultiScat_D2O");
   CHECK(ms->getType() == pt::Scorer::ScorerType::PEA_POST);
   REQUIRE(ms->getHist() != nullptr);
@@ -176,20 +176,20 @@ TEST_CASE("scorerfactory_multiscat_edges_and_1d_scorer_dims")
 
   auto vf = std::unique_ptr<pt::Scorer>(
     pt::Singleton<pt::ScorerFactory>::getInstance().createScorer(
-      "Scorer=VolFluence; name=sflux; min=0; max=1; numbin=10; ptstate=PEA_PRE; linear=yes",
-      1000.0));
+      "Scorer=VolFluence; name=sflux; min=0; max=1; numbin=10; ptstate=PEA_PRE; linear=yes")
+        );
   CHECK(vf->getType() == pt::Scorer::ScorerType::PEA_PRE);
   CHECK(vf->getHist()->getDataSize() == 10u);
 
   auto tof = std::unique_ptr<pt::Scorer>(
     pt::Singleton<pt::ScorerFactory>::getInstance().createScorer(
-      "Scorer=TOF; name=tofdim; min=0.; max=0.04; numbin=100; ptstate=ENTRY", 1000.0));
+      "Scorer=TOF; name=tofdim; min=0.; max=0.04; numbin=100; ptstate=ENTRY"));
   CHECK(tof->getHist()->getDataSize() == 100u);
   CHECK(tof->getHist()->getXMax() == doctest::Approx(0.04));
 
   auto wl = std::unique_ptr<pt::Scorer>(
     pt::Singleton<pt::ScorerFactory>::getInstance().createScorer(
-      "Scorer=WlSpectrum; name=wldim; min=0.5; max=5; numbin=77; ptstate=ENTRY", 1000.0));
+      "Scorer=WlSpectrum; name=wldim; min=0.5; max=5; numbin=77; ptstate=ENTRY"));
   CHECK(wl->getHist()->getDataSize() == 77u);
 }
 
@@ -198,6 +198,6 @@ TEST_CASE("scorerfactory_wlangle_invalid_method_throws_badinput")
   REQUIRE_THROWS_AS(pt::Singleton<pt::ScorerFactory>::getInstance().createScorer(
     "Scorer=WlAngle; name=wla; sample_pos=0,0,0; beam_dir=0,0,1; dist=1000; "
     "wl_min=0.5; wl_max=5; angle_min=0; angle_max=3; numbin_wl=10; numbin_angle=10; "
-    "method=3", 1000.0),
+    "method=3"),
     pt::Error::BadInput);
 }

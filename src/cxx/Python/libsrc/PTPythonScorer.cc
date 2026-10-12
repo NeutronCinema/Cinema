@@ -59,10 +59,10 @@ void* pt_ScorerWlSpectrum_new(const char* name, double xmin, double xmax, unsign
   return static_cast<void *>(new pt::ScorerWlSpectrum(name, xmin, xmax, nxbins, pdg, t, groupid, linear));
 }
 
-void* pt_ScorerVolFluence_new(const char* name, double xmin, double xmax, unsigned nbins, double volme, unsigned pdg, int type, bool linear, int groupid)
+void* pt_ScorerVolFluence_new(const char* name, double xmin, double xmax, unsigned nbins, unsigned pdg, int type, bool linear, int groupid)
 {
-  pt::ScorerVolFluence::ScorerType t = static_cast<pt::ScorerVolFluence::ScorerType>(type); 
-  return static_cast<void *>(new pt::ScorerVolFluence(name, xmin, xmax, nbins, volme, pdg, t, linear, groupid));
+  pt::ScorerVolFluence::ScorerType t = static_cast<pt::ScorerVolFluence::ScorerType>(type);
+  return static_cast<void *>(new pt::ScorerVolFluence(name, xmin, xmax, nbins, pdg, t, linear, groupid));
 }
 
 void* pt_ScorerMultiScat_new(const char* name, double xmin, double xmax, unsigned nbins, unsigned pdg, int type, int groupid)

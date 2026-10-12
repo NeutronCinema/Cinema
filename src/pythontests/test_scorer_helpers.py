@@ -238,7 +238,9 @@ def test_tof_and_wlspectrum_make_argument_order(monkeypatch):
     assert linear is True and linear == w.linear
 
 
-def test_volfluence_make_forwards_volume_capacity(monkeypatch):
+def test_volfluence_make_argument_order(monkeypatch):
+    # the scorer no longer receives the volume: the histogram accumulates raw
+    # track length and the caller divides by vol.getCapacity() after the run
     seen = {}
 
     def fake_new(*args):
@@ -249,15 +251,28 @@ def test_volfluence_make_forwards_volume_capacity(monkeypatch):
     vol = _RecordingVol(capacity=987.65)
     h = VolFluenceHelper('vf', min=0.1, max=5.0, numbin=12, pdg=2112, groupID=1, log=False)
     h.make(vol)
-    name, mn, mx, numbin, capacity, pdg, ptsNum, linear, groupID = seen['args']
+    name, mn, mx, numbin, pdg, ptsNum, linear, groupID = seen['args']
     assert name == b'vf'
     assert (mn, mx, numbin) == (0.1, 5.0, 12)
-    assert capacity == pytest.approx(987.65)  # forwarded from vol.getCapacity()
     assert pdg == 2112
     assert ptsNum == ParticleTracingState.PEA_PRE.value_num == 5
     assert linear is True and linear == h.linear
     assert groupID == 1
     assert vol.calledWith == (h, _COBJ)
+
+
+@pytest.mark.parametrize('bad_state', ['PROPAGATE_PRE', 'PROPAGATE_POST'])
+def test_volfluence_make_rejects_propagate_ptstate(monkeypatch, bad_state):
+    # Python-side mirror of the C++ ctor guard: overriding ptstate to an
+    # interaction-site hook must raise ValueError before the raw ctypes call
+    def exploding_new(*args):
+        raise AssertionError('bridge must not be reached with a PROPAGATE ptstate')
+
+    monkeypatch.setattr(scorer_mod, '_pt_ScorerVolFluence_new', exploding_new)
+    h = VolFluenceHelper('vf', min=0.1, max=5.0, numbin=12, log=False)
+    h.ptstate = bad_state
+    with pytest.raises(ValueError, match='PEA_PRE'):
+        h.make(_RecordingVol())
 
 
 def test_deposition_make_argument_order(monkeypatch):

@@ -9,7 +9,6 @@ from Cinema.Prompt.gun import IsotropicGun
 from Cinema.Prompt.GidiSetting import GidiSetting 
 from testsuite import *
 import numpy as np
-import numpy.testing as npt
 
 
 def test_simulation():
@@ -57,7 +56,12 @@ def test_simulation():
     # Re-recorded again 2026-10-12 for gidiplus 3.35 (P1.2/P1.4): dual-library
     # check confirms the 3.28 .so still reproduces the 2026-10-11 pin; the 3e-11
     # relative shift is attributed to the 3.35 sampling-internal restructure.
-    npt.assert_array_almost_equal(spct.getWeight().sum(), 0.0004055407043858582, decimal = 15)
+    # Re-recorded a third time 2026-10-12: VolFluence now accumulates RAW track
+    # length, so the pin is the old fluence 0.0004055407043858582 times the
+    # sphere volume 4/3*pi*300^3 (the 9e-9 relative residual of that product is
+    # the old code's VecGeom capacity lookup vs the analytic volume). Divide the
+    # histogram by vol.getCapacity() to recover the old fluence scale.
+    np.testing.assert_allclose(spct.getWeight().sum(), 45865.57311468873, rtol=1e-15)
 
 
 def test_simulation_pure_ncrystal():
@@ -97,4 +101,6 @@ def test_simulation_pure_ncrystal():
 
     spct = sim.gatherHistData('spct')
 
-    npt.assert_array_almost_equal(spct.getWeight().sum(), 0.0004468548744264139, decimal = 15)
+    # 2026-10-12 re-pin for raw-track-length VolFluence: old fluence pin
+    # 0.0004468548744264139 x 4/3*pi*300^3 (see the twin test above)
+    np.testing.assert_allclose(spct.getWeight().sum(), 50538.0956658772, rtol=1e-15)
