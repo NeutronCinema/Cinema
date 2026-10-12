@@ -32,15 +32,16 @@ namespace Prompt::Plugin {
 
 namespace {
 
-// Same semantics as PhysicsFactory::nccalNumDensity, which the host keeps
-// calling for m_numdensity; the model-side value exists so the host can
+// Same NCrystal call as PhysicsFactory::nccalNumDensity, but WITHOUT the
+// /Unit::Aa3 conversion: the plugin ABI's number density is atoms/A^3 at
+// the boundary (the host converts). The value exists so the host can
 // cross-check the plugin contract against the legacy path.
 PluginNumDensity ncrystalNumberDensity(const std::string& nccfg)
 {
   NCrystal::MatCfg matcfg(nccfg);
   auto info = NCrystal::createInfo(matcfg);
   if(info->hasNumberDensity())
-    return info->getNumberDensity().get() / Unit::Aa3;
+    return info->getNumberDensity().get();
   PROMPT_THROW2(CalcError, "material has no number density " << nccfg);
 }
 

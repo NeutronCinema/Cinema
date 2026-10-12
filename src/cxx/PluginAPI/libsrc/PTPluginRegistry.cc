@@ -33,10 +33,15 @@ namespace {
 
 bool isValidNamespace(const std::string& ns)
 {
-  if(ns.empty() || !(ns[0]>='a' && ns[0]<='z'))
+  // The namespace IS the cfg value of physics=<ns>, so the rule cannot be
+  // tighter than CfgParser value shapes: the builtin namespaces are frozen
+  // legacy cfg keys (idealElaScat is camelCase), and external plugins must
+  // not be forced into a different dialect. Still rejects empty names,
+  // leading digits and punctuation (shell/quote hazards).
+  if(ns.empty() || !(ns[0]>='a' && ns[0]<='z') && !(ns[0]>='A' && ns[0]<='Z'))
     return false;
   for(char c : ns)
-    if(!((c>='a' && c<='z') || (c>='0' && c<='9') || c=='_'))
+    if(!((c>='a' && c<='z') || (c>='A' && c<='Z') || (c>='0' && c<='9') || c=='_'))
       return false;
   return true;
 }
@@ -119,7 +124,7 @@ void PluginRegistry::registerFactory(std::unique_ptr<ModelFactory> factory)
   const std::string ns = factory->ns();
   if(!isValidNamespace(ns))
     PROMPT_THROW2(BadInput, "cinplugin: factory namespace '" << ns
-                  << "' is invalid (need lowercase [a-z][a-z0-9_]*)");
+                  << "' is invalid (need [A-Za-z][A-Za-z0-9_]*)");
 
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
   if(m_loaded)

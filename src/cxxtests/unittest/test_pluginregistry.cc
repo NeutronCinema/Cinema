@@ -23,10 +23,12 @@
 #include "PTPluginModel.hh"
 #include "PTPluginRegistry.hh"
 #include "PTException.hh"
+#include "PTUnitSystem.hh"
 
 #include <cstdlib>
 #include <iostream>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -148,4 +150,78 @@ TEST_CASE("test_pluginregistry")
 
   // Unknown namespaces look up to null with a clean error path elsewhere.
   CHECK(reg.lookup("no_such_namespace") == nullptr);
+}
+
+TEST_CASE("test_pluginregistry_builtins")
+{
+  // The builtin factories reach the registry through the same bootstrap as
+  // external plugins (the first lookup triggers ensureLoaded). idealElaScat
+  // doubles as the proof that legacy camelCase cfg namespaces pass the
+  // registry's namespace rule - its namespace is a frozen public cfg key.
+  auto &reg = pt::Plugin::PluginRegistry::instance();
+  const auto *ies = reg.lookup("idealElaScat");
+  REQUIRE(ies != nullptr);
+  CHECK(std::string(ies->ns()) == "idealElaScat");
+
+  // Legacy-exact defaults: xs_barn=1, density_per_aa3=0.05.
+  auto model = ies->produce(pt::Plugin::CfgView("physics=idealElaScat"));
+  REQUIRE(model != nullptr);
+  CHECK(model->crossSection(1.0, nullptr) == doctest::Approx(1.0 * pt::Unit::barn));
+  CHECK(model->numberDensity() == doctest::Approx(0.05));
+
+  // produceAll re-applies the legacy non-zero rule on scatter_bias, and the
+  // emitted model is UNBIASED at the ABI boundary: 20.5 barn, not 51.25 -
+  // the host adapter owns the bias factor.
+  pt::Plugin::HostBias bias25;
+  bias25.scatter = 2.5;
+  std::vector<std::pair<pt::Plugin::ModelRole, double>> emitted;
+  ies->produceAll(pt::Plugin::CfgView("physics=idealElaScat;xs_barn=20.5"), bias25,
+    [&emitted](std::unique_ptr<pt::Plugin::ScatterModel> m, pt::Plugin::ModelRole role)
+    { emitted.emplace_back(role, m->crossSection(1.0, nullptr)); });
+  REQUIRE(emitted.size() == 1);
+  CHECK(emitted[0].first == pt::Plugin::ModelRole::Scatter);
+  CHECK(emitted[0].second == doctest::Approx(20.5 * pt::Unit::barn));
+
+  pt::Plugin::HostBias zero;
+  zero.scatter = 0.0;
+  CHECK_THROWS_AS(ies->produceAll(pt::Plugin::CfgView("physics=idealElaScat"), zero,
+                  [](std::unique_ptr<pt::Plugin::ScatterModel>, pt::Plugin::ModelRole) {}),
+                  pt::Error::BadInput);
+
+  // Unknown keys are rejected after the value checks (legacy order).
+  CHECK_THROWS_AS(ies->produce(pt::Plugin::CfgView("physics=idealElaScat;nonsense=1")),
+                  pt::Error::BadInput);
+}
+
+TEST_CASE("test_pluginregistry_namespace_rule")
+{
+  class NamedFactory final : public pt::Plugin::ModelFactory {
+  public:
+    explicit NamedFactory(std::string ns) : m_ns(std::move(ns)) {}
+    const char* ns() const override { return m_ns.c_str(); }
+    std::unique_ptr<pt::Plugin::ScatterModel> produce(const pt::Plugin::CfgView&) const override
+    { return nullptr; }
+  private:
+    std::string m_ns;
+  };
+
+  auto &reg = pt::Plugin::PluginRegistry::instance();
+  // Leading digits and punctuation stay rejected (the camelCase-positive
+  // path is pinned by the builtin lookup above). The message check pins the
+  // reason: after the file-loading test case ran, the registry is closed, so
+  // a bare CHECK_THROWS_AS could not distinguish "invalid" from "closed".
+  auto rejected = [&](const char* ns) {
+    try
+    {
+      reg.registerFactory(std::make_unique<NamedFactory>(ns));
+    }
+    catch(const pt::Error::BadInput& e)
+    { return std::string(e.what()); }
+    CHECK_MESSAGE(false, "registerFactory accepted the namespace " << ns);
+    return std::string();
+  };
+  CHECK(rejected("").find("is invalid") != std::string::npos);
+  CHECK(rejected("1bad").find("is invalid") != std::string::npos);
+  CHECK(rejected("bad-name").find("is invalid") != std::string::npos);
+  CHECK(rejected("spa ce").find("is invalid") != std::string::npos);
 }

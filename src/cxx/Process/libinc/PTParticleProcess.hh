@@ -47,6 +47,11 @@ namespace Prompt {
     // plugin registry: the builtin NCrystalFactory emits the same Abs/Scat
     // channels in the legacy order and each becomes a PluginModelAdapter.
     void cfgNCrystalViaPlugin(const std::string &cfgstr, double scatter_bias, double abs_bias);
+    // Generic plugin route (PhysicsType::PLUGIN): any parsed physics=<ns>
+    // without a dedicated host branch resolves through the registry; unknown
+    // namespaces surface here as "unknown physics".
+    void cfgPluginViaRegistry(const std::string &cfgstr, const std::string &ns,
+                              double scatter_bias, double abs_bias);
     std::string m_name;
     SingletonPTRand &m_rng;
     std::unique_ptr<ModelCollection> m_discretModels;

@@ -36,7 +36,9 @@ namespace Prompt {
       NC_ABSORB,
       NC_SCATTER_ABSORB,
       NC_RAW,
-      NC_IDEALSCAT,
+      // any parsed cfg whose physics=<ns> is not a host branch: resolved
+      // through the plugin registry (idealElaScat ships as plugin #1)
+      PLUGIN,
       ENDF_SCATTER,
       ENDF_ABSORB
     };
@@ -47,8 +49,6 @@ namespace Prompt {
 
     std::shared_ptr<SurfaceProcess> createSurfaceProcess(const std::string &cfgstr);
 
-    std::shared_ptr<DiscreteModel> createIdealElaScat(const std::string &cfgstr);
-    std::unique_ptr<ModelCollection> createParticleProcess(const std::string &cfgstr);
     PhysicsType checkPhysicsType(const std::string &cfgstr) const;
 
   private:

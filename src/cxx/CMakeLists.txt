@@ -26,9 +26,6 @@ message(STATUS "FOUND HDF5:  ${HDF5_INCLUDE_DIR}")
 # Add an option to enable/disable GIDI
 option(ENABLE_GIDI "Enable the GIDI module" ON)
 
-# Add an option to enable/disable  Catima
-option(ENABLE_CATIMA "Enable the  Catima module" ON)
-
 option(DEBUG_PTS "Enable the GIDI module" OFF)
 
 option(BUILD_WITH_OPENMP "Build OpenMP" ON)
@@ -50,19 +47,13 @@ file(GLOB PYN_SRC "${PROJECT_SOURCE_DIR}/Python/libsrc/*.cc")
 file(GLOB RAC_SRC "${PROJECT_SOURCE_DIR}/Process/libsrc/*.cc")
 file(GLOB MCPL_SRC "${PROJECT_SOURCE_DIR}/MCPL/libsrc/*.cc" )
 file(GLOB NC_SRC "${PROJECT_SOURCE_DIR}/ModelBulk/NCrystal/libsrc/*.cc")
-file(GLOB CT_SRC "${PROJECT_SOURCE_DIR}/ModelBulk/Catima/libsrc/*.cc")
 file(GLOB GD_SRC "${PROJECT_SOURCE_DIR}/ModelBulk/Gidi/libsrc/*.cc")
 file(GLOB PLUGIN_SRC "${PROJECT_SOURCE_DIR}/PluginAPI/libsrc/*.cc")
 
 ADD_LIBRARY(${PROJECT_NAME} SHARED ${MCPL_SRC} ${COR_SRC} ${RAC_SRC} ${SUR_SRC} ${RND_SRC} 
                                 ${UTL_SRC} ${RTR_SRC} ${ANA_SRC} ${PAR_SRC} ${BUK_SRC} 
                                 ${GEO_SRC} ${MAT_SRC} ${PYN_SRC} ${GUN_SRC}
-                                ${NC_SRC} ${CT_SRC} ${GD_SRC} ${PLUGIN_SRC}) 
-
-# Add the definition based on the option value for the library target
-if(ENABLE_CATIMA)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC ENABLE_CATIMA)
-endif()
+                                ${NC_SRC} ${GD_SRC} ${PLUGIN_SRC})
 
 if(ENABLE_GIDI)
     target_compile_definitions(${PROJECT_NAME} PUBLIC ENABLE_GIDI)
@@ -91,7 +82,6 @@ target_include_directories( ${PROJECT_NAME}
     ${PROJECT_SOURCE_DIR}/Ana/libinc
     ${PROJECT_SOURCE_DIR}/Particles/libinc
     ${PROJECT_SOURCE_DIR}/ModelBulk/NCrystal/libinc
-    ${PROJECT_SOURCE_DIR}/ModelBulk/Catima/libinc
     ${PROJECT_SOURCE_DIR}/ModelBulk/Gidi/libinc
     ${PROJECT_SOURCE_DIR}/ModelBulk/libinc
     ${PROJECT_SOURCE_DIR}/PluginAPI/libinc

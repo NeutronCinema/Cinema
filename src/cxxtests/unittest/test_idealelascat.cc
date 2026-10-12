@@ -22,18 +22,19 @@
 
 #include "../doctest.h"
 
-#include "PTIdealElaScat.hh"
+#include "PTIdealElaScatPlugin.hh"
 #include "PTUnitSystem.hh"
 #include "PTRandCanonical.hh"
 
 namespace pt = Prompt;
+namespace pp = pt::Plugin;
 
 namespace {
 
-// Fixed model parameters shared by all the cases below.
+// Fixed model parameters shared by all the cases below. The plugin model is
+// unbiased by construction: the host adapter owns scatter_bias.
 constexpr double g_xsBarn = 81.7;        // [barn]
 constexpr double g_densityPerAa3 = 0.05; // [atoms/Aa^3]
-constexpr double g_bias = 1.3;
 constexpr double g_ekinTransfer = 0.5;   // [eV]
 
 // Seeded singleton RNG. resetSeed() is needed since setSeed() throws
@@ -45,92 +46,135 @@ void reseedRNG(uint64_t seed)
   rng.setSeed(seed);
 }
 
+// Binds the shared transport RNG stream to the plugin Rng interface, the
+// same bridge the host PluginModelAdapter builds internally.
+struct SingletonRng final : public pp::Rng {
+  double next() override
+  { return pt::Singleton<pt::SingletonPTRand>::getInstance().generate(); }
+};
+
 } // namespace
+
+TEST_CASE("test_idealelascat_metadata_abi_units")
+{
+  pt::Plugin::IdealElaScatModel model(g_xsBarn, g_densityPerAa3, g_ekinTransfer);
+
+  // legacy IdealElaScat carried the DiscreteModel validity range
+  CHECK(model.emin() == std::numeric_limits<double>::min());
+  CHECK(model.emax() == std::numeric_limits<double>::max());
+  CHECK(model.oriented() == false);
+  CHECK(model.declaresAbsorption() == false);
+  CHECK(model.producesSecondaries() == false);
+
+  // number density in the ABI boundary unit atoms/A^3 (the host divides by
+  // Unit::Aa3 itself)
+  CHECK(model.numberDensity() == doctest::Approx(g_densityPerAa3).scale(0.));
+}
 
 TEST_CASE("test_idealelascat_xs_energy_independent")
 {
-  pt::IdealElaScat model(g_xsBarn, g_densityPerAa3, g_bias, g_ekinTransfer);
-  const double expected = g_xsBarn * pt::Unit::barn * g_bias;
+  pt::Plugin::IdealElaScatModel model(g_xsBarn, g_densityPerAa3, g_ekinTransfer);
+  const double expected = g_xsBarn * pt::Unit::barn;
 
   const double ekins[] = { 1e-3, 0.0253, 1.0 };
   for (double ekin : ekins)
-    CHECK(model.getCrossSection(ekin) == doctest::Approx(expected));
+    CHECK(model.crossSection(ekin, nullptr) == doctest::Approx(expected));
 
   // The stored cross section does not depend on the probe energy at all.
-  CHECK(model.getCrossSection(1.0) == model.getCrossSection(1e-3));
-  CHECK(model.getCrossSection(1.0) == model.getCrossSection(100.0));
-
-  CHECK(model.getNumberDensity() == doctest::Approx(g_densityPerAa3 / pt::Unit::Aa3));
+  CHECK(model.crossSection(1.0, nullptr) == model.crossSection(1e-3, nullptr));
+  CHECK(model.crossSection(1.0, nullptr) == model.crossSection(100.0, nullptr));
 }
 
 TEST_CASE("test_idealelascat_xs_direction_independent")
 {
-  pt::IdealElaScat model(g_xsBarn, g_densityPerAa3, g_bias, g_ekinTransfer);
-  const double expected = g_xsBarn * pt::Unit::barn * g_bias;
+  pt::Plugin::IdealElaScatModel model(g_xsBarn, g_densityPerAa3, g_ekinTransfer);
+  const double expected = g_xsBarn * pt::Unit::barn;
 
-  const pt::Vector dirs[] = { { 1.0, 0.0, 0.0 }, { 0.0, 1.0, 0.0 },
-                              { 0.0, 0.0, 1.0 }, { -1.0, 2.0, -0.5 } };
+  const double dirs[][3] = { { 1.0, 0.0, 0.0 }, { 0.0, 1.0, 0.0 },
+                             { 0.0, 0.0, 1.0 }, { -1.0, 2.0, -0.5 } };
   const double ekins[] = { 1e-3, 0.0253, 1.0 };
   for (double ekin : ekins) {
     for (const auto &dir : dirs)
-      CHECK(model.getCrossSection(ekin, dir) == doctest::Approx(expected));
+      CHECK(model.crossSection(ekin, dir) == doctest::Approx(expected));
   }
 }
 
 TEST_CASE("test_idealelascat_sample_below_threshold_noop")
 {
-  pt::IdealElaScat model(g_xsBarn, g_densityPerAa3, g_bias, g_ekinTransfer);
+  pt::Plugin::IdealElaScatModel model(g_xsBarn, g_densityPerAa3, g_ekinTransfer);
+  SingletonRng rng;
 
-  // ekin strictly below the transfer energy: the reaction is a no-op.
+  // ekin strictly below the transfer energy: the reaction is a no-op and
+  // consumes no random numbers.
   const double ekin = 0.25;
-  const pt::Vector dir(0.6, 0.0, 0.8);
-  const auto &res = model.sampleReaction(ekin, dir);
-  CHECK(res.final_ekin == ekin);
-  CHECK(res.deposition == 0.0);
-  CHECK(res.final_dir == dir);
+  const double dir[3] = { 0.6, 0.0, 0.8 };
+  reseedRNG(113u);
+  pp::SampleResult out{};
+  model.sample(ekin, dir, rng, out, nullptr);
+  CHECK(out.final_ekin == ekin);
+  CHECK(out.deposition == 0.0);
+  CHECK(out.final_dir[0] == dir[0]);
+  CHECK(out.final_dir[1] == dir[1]);
+  CHECK(out.final_dir[2] == dir[2]);
+  CHECK(out.absorbed == false);
+
+  // the no-op branch drew nothing: a second sample lands on identical values
+  pp::SampleResult out2{};
+  model.sample(ekin, dir, rng, out2, nullptr);
+  CHECK(out2.final_dir[0] == out.final_dir[0]);
 }
 
 TEST_CASE("test_idealelascat_sample_above_threshold_ekin_transfer")
 {
-  pt::IdealElaScat model(g_xsBarn, g_densityPerAa3, g_bias, g_ekinTransfer);
+  pt::Plugin::IdealElaScatModel model(g_xsBarn, g_densityPerAa3, g_ekinTransfer);
+  SingletonRng rng;
 
-  const pt::Vector dir(0.0, 0.0, 1.0);
+  const double dir[3] = { 0.0, 0.0, 1.0 };
   const double ekins[] = { 0.5, 2.5, 100.0 };
   for (double ekin : ekins) {
     reseedRNG(113u);
-    const auto &res = model.sampleReaction(ekin, dir);
+    pp::SampleResult out{};
+    model.sample(ekin, dir, rng, out, nullptr);
     // final_ekin == ekin - transfer exactly (same floating point expression
     // as the implementation). The first entry pins the strict '<' of the
     // threshold comparison: ekin == transfer goes through the transfer branch.
-    CHECK(res.final_ekin == ekin - g_ekinTransfer);
+    CHECK(out.final_ekin == ekin - g_ekinTransfer);
   }
 }
 
 TEST_CASE("test_idealelascat_sample_deposition")
 {
-  pt::IdealElaScat model(g_xsBarn, g_densityPerAa3, g_bias, g_ekinTransfer);
+  pt::Plugin::IdealElaScatModel model(g_xsBarn, g_densityPerAa3, g_ekinTransfer);
+  SingletonRng rng;
 
   reseedRNG(113u);
   const double ekin = 2.5;
-  const auto &res = model.sampleReaction(ekin, pt::Vector(0.0, 0.0, 1.0));
-  CHECK(res.deposition == g_ekinTransfer);
+  const double dir[3] = { 0.0, 0.0, 1.0 };
+  pp::SampleResult out{};
+  model.sample(ekin, dir, rng, out, nullptr);
+  CHECK(out.deposition == g_ekinTransfer);
   // The deposited energy is exactly the lost kinetic energy.
-  CHECK(res.final_ekin + res.deposition == ekin);
+  CHECK(out.final_ekin + out.deposition == ekin);
+  CHECK(out.absorbed == false);
 }
 
 TEST_CASE("test_idealelascat_sample_final_dir_unit_10k")
 {
-  pt::IdealElaScat model(g_xsBarn, g_densityPerAa3, g_bias, g_ekinTransfer);
+  pt::Plugin::IdealElaScatModel model(g_xsBarn, g_densityPerAa3, g_ekinTransfer);
+  SingletonRng rng;
   reseedRNG(113u);
 
-  const pt::Vector indir(0.0, 0.0, 1.0);
+  const double indir[3] = { 0.0, 0.0, 1.0 };
   constexpr unsigned N = 10000;
   unsigned nTransfered = 0;
   double maxDev = 0.0;
   for (unsigned i = 0; i < N; ++i) {
-    const auto &res = model.sampleReaction(2.5, indir);
+    pp::SampleResult out{};
+    model.sample(2.5, indir, rng, out, nullptr);
     ++nTransfered;
-    const double dev = std::fabs(res.final_dir.mag2() - 1.0);
+    const double dev = std::fabs(out.final_dir[0]*out.final_dir[0]
+                               + out.final_dir[1]*out.final_dir[1]
+                               + out.final_dir[2]*out.final_dir[2] - 1.0);
     if (dev > maxDev)
       maxDev = dev;
   }
@@ -140,18 +184,20 @@ TEST_CASE("test_idealelascat_sample_final_dir_unit_10k")
 
 TEST_CASE("test_idealelascat_sample_final_dir_isotropy_10k")
 {
-  pt::IdealElaScat model(g_xsBarn, g_densityPerAa3, g_bias, g_ekinTransfer);
+  pt::Plugin::IdealElaScatModel model(g_xsBarn, g_densityPerAa3, g_ekinTransfer);
+  SingletonRng rng;
   reseedRNG(113u);
 
-  const pt::Vector indir(0.0, 0.0, 1.0);
+  const double indir[3] = { 0.0, 0.0, 1.0 };
   constexpr unsigned N = 10000;
   double sumMu = 0.0, sumMu2 = 0.0, sumPhi = 0.0;
   unsigned nPosMu = 0;
   for (unsigned i = 0; i < N; ++i) {
-    const auto &res = model.sampleReaction(2.5, indir);
+    pp::SampleResult out{};
+    model.sample(2.5, indir, rng, out, nullptr);
     // Polar cosine along the first component, azimuth from the other two.
-    const double mu = res.final_dir.x();
-    double phi = std::atan2(res.final_dir.z(), res.final_dir.y());
+    const double mu = out.final_dir[0];
+    double phi = std::atan2(out.final_dir[2], out.final_dir[1]);
     if (phi < 0.0)
       phi += 2.0 * M_PI;
     sumMu += mu;

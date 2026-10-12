@@ -25,7 +25,6 @@
 #include <limits>
 #include <memory>
 #include "NCrystal/NCrystal.hh"
-#include "PTIdealElaScat.hh"
 #include "PTPhysicsFactory.hh"
 #include "PTActiveVolume.hh"
 #include "PTNCrystalScat.hh"
@@ -250,11 +249,25 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
       cfgNCrystalViaPlugin(cfgstr, scatter_bias, abs_bias);
     }
   }
-  else if (type == PhysicsFactory::PhysicsType::NC_IDEALSCAT)
+  else if (type == PhysicsFactory::PhysicsType::PLUGIN)
   {
-    auto idsct = pfact.createIdealElaScat(cfgstr);
-    m_discretModels->addPhysicsModel(idsct);
-    m_numdensity =  reinterpret_cast<IdealElaScat *>(idsct.get())->getNumberDensity();
+    // generic plugin route: physics=<ns> without a dedicated host branch.
+    // The host consumes only the reserved keys (absorp_in_weight above, the
+    // biases below); every other key belongs to the factory, which validates
+    // its own key set. Replaces the former hardwired idealElaScat branch.
+    CfgParser::StringCfg cfg = Singleton<CfgParser>::getInstance().parse(cfgstr);
+
+    std::string ns;
+    if(!cfg.getStringIfExist("physics", ns))
+      PROMPT_THROW(BadInput, "\"physics\" keyword is not defined. ");
+
+    double scatter_bias = 1.0;
+    cfg.getDoubleIfExist("scatter_bias", scatter_bias);
+
+    double abs_bias = 1.0;
+    cfg.getDoubleIfExist("abs_bias", abs_bias);
+
+    cfgPluginViaRegistry(cfgstr, ns, scatter_bias, abs_bias);
   }
 
 }
@@ -277,11 +290,11 @@ void Prompt::ParticleProcess::cfgNCrystalViaPlugin(const std::string &cfgstr, do
       // Cross-check the plugin number-density contract against m_numdensity
       // (the host keeps calling nccalNumDensity; both values go through the
       // identical NCrystal call, so a mismatch means a lying plugin, not a
-      // unit problem).
+      // unit problem). The ABI delivers atoms/A^3; m_numdensity is atoms/mm^3.
       if(!numdensityChecked)
       {
         numdensityChecked = true;
-        double mdd = model->numberDensity();
+        double mdd = model->numberDensity() / Unit::Aa3;
         if(mdd > 0. && std::abs(mdd - m_numdensity) > 1e-12*std::abs(m_numdensity))
           PROMPT_THROW2(CalcError, "plugin number density " << mdd
                         << " disagrees with the material density " << m_numdensity);
@@ -290,5 +303,38 @@ void Prompt::ParticleProcess::cfgNCrystalViaPlugin(const std::string &cfgstr, do
       double bias = (role == Plugin::ModelRole::Absorption) ? abs_bias : scatter_bias;
       m_discretModels->addPhysicsModel(
         std::make_shared<PluginModelAdapter>(std::move(model), "ncrystal", bias));
+    });
+}
+
+void Prompt::ParticleProcess::cfgPluginViaRegistry(const std::string &cfgstr, const std::string &ns,
+                                                   double scatter_bias, double abs_bias)
+{
+  auto *factory = Plugin::PluginRegistry::instance().lookup(ns);
+  if(!factory)
+    PROMPT_THROW2(BadInput, "unknown physics " << ns);
+
+  Plugin::HostBias hb;
+  hb.scatter = scatter_bias;
+  hb.abs = abs_bias;
+
+  bool numdensitySet = false;
+  factory->produceAll(Plugin::CfgView(cfgstr), hb,
+    [this,ns,scatter_bias,abs_bias,&numdensitySet](std::unique_ptr<Plugin::ScatterModel> model,
+                                                   Plugin::ModelRole role)
+    {
+      // The first emission decides the process number density. The ABI
+      // delivers atoms/A^3; the host keeps atoms/mm^3. A value <= 0 means
+      // the plugin reports a macroscopic xs (it scales xs itself), so the
+      // neutral factor 1.0 is stored.
+      if(!numdensitySet)
+      {
+        numdensitySet = true;
+        double nd = model->numberDensity();
+        m_numdensity = nd > 0. ? nd / Unit::Aa3 : 1.0;
+      }
+
+      double bias = (role == Plugin::ModelRole::Absorption) ? abs_bias : scatter_bias;
+      m_discretModels->addPhysicsModel(
+        std::make_shared<PluginModelAdapter>(std::move(model), ns, bias));
     });
 }

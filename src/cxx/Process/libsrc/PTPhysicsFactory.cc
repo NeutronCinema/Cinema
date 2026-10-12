@@ -25,10 +25,10 @@
 #include "PTDiskChopper.hh"
 #include "PTEnergyReflector.hh"
 
+// NCrystal for MatCfg/createInfo in nccalNumDensity/showNCComposition; the
+// concrete model classes used to live here too but moved behind the plugin
+// registry (ModelBulk/NCrystal + builtins), so the host no longer links them
 #include "NCrystal/NCrystal.hh"
-#include "PTNCrystalScat.hh"
-#include "PTNCrystalAbs.hh"
-#include "PTIdealElaScat.hh"
 
 bool Prompt::PhysicsFactory::rawNCrystalCfg(const std::string &cfgstr)
 {
@@ -87,175 +87,6 @@ void Prompt::PhysicsFactory::showNCComposition(const std::string &nccfgstr)
     const auto& atom = v.atom.data();
     std::cout << atom.elementName() << ": A " << atom.A() << ", Z " << atom.Z() << ", fraction " << frac << std::endl;
   }
-
-}
-
-
-std::shared_ptr<Prompt::DiscreteModel> Prompt::PhysicsFactory::createIdealElaScat(const std::string &cfgstr)
-{
-  std::cout << "Parsing config string for a ModelCollection: \n";
-  CfgParser::StringCfg cfg = Singleton<CfgParser>::getInstance().parse(cfgstr);
-  cfg.print();
-
-  std::unique_ptr<Prompt::ModelCollection> compmod;
-  std::string physDef = cfg.find("physics");
-  if(physDef.empty())
-  {
-    PROMPT_THROW2(BadInput, "Config string " << cfgstr << " does not define the scorer by the key \"physics\" ")
-  }
-  else if(physDef == "idealElaScat")
-  {
-    int parCount = 5; 
-
-    double scatter_bias = 1.;
-    if(!cfg.getDoubleIfExist("scatter_bias", scatter_bias))
-      parCount--;
-
-
-    if(!scatter_bias)  
-    {
-      PROMPT_THROW2(BadInput, "\"scatter_bias\" should be non-zero" );
-    }
-
-    double xs = 1.;
-    if(!cfg.getDoubleIfExist("xs_barn", xs))
-      parCount--;
-    if(!xs)  
-    {
-      PROMPT_THROW2(BadInput, "\"xs_barn\" should be non-zero" );
-    }
-
-    double density_per_aa3 = 0.05;
-    if(!cfg.getDoubleIfExist("density_per_aa3", density_per_aa3))
-      parCount--;
-    if(!density_per_aa3)  
-    {
-      PROMPT_THROW2(BadInput, "\"density_per_aa3\" should be non-zero" );
-    }
-
-    double ekin_transfer = 0.;
-    if(!cfg.getDoubleIfExist("energy_transfer_eV", ekin_transfer))
-      parCount--;
-
-    if(parCount!=cfg.size())
-    {
-      PROMPT_THROW2(BadInput, "Physics type \"idealElaScat\" is missing or with extra config parameters " << cfg.size() << " " << parCount );
-    }
-
-    return std::make_shared<IdealElaScat>(xs, density_per_aa3, scatter_bias, ekin_transfer);
-  }
-    
-  
-  PROMPT_THROW2(LogicError, "The physics type is not IdealElaScat " << physDef );
-
-}
-
-
-std::unique_ptr<Prompt::ModelCollection> Prompt::PhysicsFactory::createParticleProcess(const std::string &cfgstr)
-{
-  std::cout << "Parsing config string for a ModelCollection: \n";
-  CfgParser::StringCfg cfg = Singleton<CfgParser>::getInstance().parse(cfgstr);
-  cfg.print();
-
-  std::unique_ptr<Prompt::ModelCollection> compmod;
-  std::string physDef = cfg.find("physics");
-
-  if(physDef.empty())
-  {
-    PROMPT_THROW2(BadInput, "Config string " << cfgstr << " does not define the scorer by the key \"physics\" ")
-  }
-  else
-  {
-    // example cfg
-    // physics=ncrystal; nccfg="LiquidHeavyWaterD2O_T293.6K.ncmat;density=1.0gcm3";scatter_bias=1.0;abs_bias=1.0;absorp_in_weight=true;
-    if(physDef == "ncrystal")
-    {
-      int parCount = 3;  
-      std::string nccfg = cfg.find("nccfg", true);
-
-      double scatter_bias = 1.;
-      if(!cfg.getDoubleIfExist("scatter_bias", scatter_bias))
-        parCount--;
-
-      double abs_bias = 1.;
-      if(!cfg.getDoubleIfExist("abs_bias", abs_bias))
-        parCount--;
-
-
-      if(!scatter_bias && !abs_bias)  
-      {
-        PROMPT_THROW2(BadInput, "At least one of the \"scatter_bias\" and \"abs_bias\" key should be set to a non-zero positive value" );
-      }
-
-      compmod = std::make_unique<ModelCollection> (2112);
-      if(scatter_bias)
-      {
-        compmod->addPhysicsModel(std::make_shared<NCrystalScat>(nccfg, scatter_bias));
-      }
-
-      if(abs_bias)
-      {
-        compmod->addPhysicsModel(std::make_shared<NCrystalAbs>(nccfg, abs_bias));
-      }
-
-      if(parCount!=cfg.size())
-      {
-        PROMPT_THROW2(BadInput, "Physics type \"ncrystal\" is missing or with extra config parameters" << cfg.size() << " " << parCount );
-      }
-
-      return compmod;   
-    }
-
-    else if(physDef == "idealElaScat")
-    {
-      int parCount = 5; 
-
-      double scatter_bias = 1.;
-      if(!cfg.getDoubleIfExist("scatter_bias", scatter_bias))
-        parCount--;
-
-
-      if(!scatter_bias)  
-      {
-        PROMPT_THROW2(BadInput, "\"scatter_bias\" should be non-zero" );
-      }
-
-      double xs = 1.;
-      if(!cfg.getDoubleIfExist("xs_barn", xs))
-        parCount--;
-      if(!xs)  
-      {
-        PROMPT_THROW2(BadInput, "\"xs_barn\" should be non-zero" );
-      }
-
-      double density_per_aa3 = 0.05;
-      if(!cfg.getDoubleIfExist("density_per_aa3", density_per_aa3))
-        parCount--;
-      if(!density_per_aa3)  
-      {
-        PROMPT_THROW2(BadInput, "\"density_per_aa3\" should be non-zero" );
-      }
-
-      double ekin_transfer = 0.;
-      if(!cfg.getDoubleIfExist("energy_transfer_eV", ekin_transfer))
-        parCount--;
-
-      if(parCount!=cfg.size())
-      {
-        PROMPT_THROW2(BadInput, "Physics type \"idealElaScat\" is missing or with extra config parameters " << cfg.size() << " " << parCount );
-      }
-
-      compmod = std::make_unique<ModelCollection> (2112);
-      compmod->addPhysicsModel(std::make_shared<IdealElaScat>(xs, density_per_aa3, scatter_bias, ekin_transfer));
-      return compmod;   
-    }
-    
-  
-    PROMPT_THROW2(LogicError, "The physics type is unknown" << physDef );
-  }
- 
-  PROMPT_THROW2(LogicError, "The physics type is unknown"  );
-  return compmod;   
 
 }
 
@@ -395,17 +226,17 @@ Prompt::PhysicsFactory::PhysicsType Prompt::PhysicsFactory::checkPhysicsType(con
   {
     return PhysicsType::NC_RAW;
   }
-  
+
   std::string physName;
   if( ! cfg.getStringIfExist("physics", physName))
       PROMPT_THROW(BadInput, "\"physics\" keyword is not defined. ")
 
+  // ncrystal keeps a host branch (its cfg carries the NCrystal material, the
+  // host computes the number density and gidi remains legacy there); every
+  // other parsed namespace is the generic plugin route - unknown namespaces
+  // surface as "unknown physics" from the registry lookup in ParticleProcess
   if(physName=="ncrystal")
     return PhysicsType::NC_SCATTER;
-  else if(physName=="idealElaScat")
-    return PhysicsType::NC_IDEALSCAT;
-
-  PROMPT_THROW2(BadInput, "unknown physics "<< physName);
-
+  return PhysicsType::PLUGIN;
 
 }
