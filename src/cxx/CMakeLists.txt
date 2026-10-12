@@ -52,11 +52,12 @@ file(GLOB MCPL_SRC "${PROJECT_SOURCE_DIR}/MCPL/libsrc/*.cc" )
 file(GLOB NC_SRC "${PROJECT_SOURCE_DIR}/ModelBulk/NCrystal/libsrc/*.cc")
 file(GLOB CT_SRC "${PROJECT_SOURCE_DIR}/ModelBulk/Catima/libsrc/*.cc")
 file(GLOB GD_SRC "${PROJECT_SOURCE_DIR}/ModelBulk/Gidi/libsrc/*.cc")
+file(GLOB PLUGIN_SRC "${PROJECT_SOURCE_DIR}/PluginAPI/libsrc/*.cc")
 
 ADD_LIBRARY(${PROJECT_NAME} SHARED ${MCPL_SRC} ${COR_SRC} ${RAC_SRC} ${SUR_SRC} ${RND_SRC} 
                                 ${UTL_SRC} ${RTR_SRC} ${ANA_SRC} ${PAR_SRC} ${BUK_SRC} 
                                 ${GEO_SRC} ${MAT_SRC} ${PYN_SRC} ${GUN_SRC}
-                                ${NC_SRC} ${CT_SRC} ${GD_SRC}) 
+                                ${NC_SRC} ${CT_SRC} ${GD_SRC} ${PLUGIN_SRC}) 
 
 # Add the definition based on the option value for the library target
 if(ENABLE_CATIMA)
@@ -93,6 +94,7 @@ target_include_directories( ${PROJECT_NAME}
     ${PROJECT_SOURCE_DIR}/ModelBulk/Catima/libinc
     ${PROJECT_SOURCE_DIR}/ModelBulk/Gidi/libinc
     ${PROJECT_SOURCE_DIR}/ModelBulk/libinc
+    ${PROJECT_SOURCE_DIR}/PluginAPI/libinc
     ${PROJECT_SOURCE_DIR}/ModelRayTracing/libinc
     ${PROJECT_SOURCE_DIR}/ModelSurface/libinc
     ${PROJECT_SOURCE_DIR}/Geometry/libinc

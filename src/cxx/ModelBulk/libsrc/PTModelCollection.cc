@@ -235,8 +235,14 @@ Prompt::SampledResult& Prompt::ModelCollection::pickAndSample(double ekin, const
 {
   if(!sameInquiryAsLastTime(ekin, dir))
   {
-    //fixme:!!
+    // Rejected pre-collision sampling when the cached inquiry went stale
+    // (see the boundary-exit note in ParticleProcess::sampleFinalState).
+    // The warning used to printf on every hit: on a hot transport loop this
+    // was a stdout hazard measurable in the profile, so it now only shows
+    // under the DEBUG_PTS build.
+#ifdef DEBUG_PTS
     printf("WARNING, sampling event with different incident energy and/or direction\n");
+#endif
     m_res.final_ekin = ekin;
     m_res.final_dir = dir;
     return m_res;

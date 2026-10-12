@@ -2,6 +2,7 @@
 #include "PTResourceManager.hh"
 #include "PTParticleProcess.hh"
 #include "PTHistBase.hh"
+#include "PTPluginRegistry.hh"
 
 #include <exception>
 #include <string>
@@ -29,6 +30,9 @@ void pt_ResourceManager_clear();
 // stale-library fallback of compoundModel.py.
 int pt_makeModelCollection_checked(const char* cfg, void** out);
 int pt_HistBase_merge_checked(void* obj, void* obj2);
+int pt_ResourceManager_cfgVolPhysics_checked(unsigned volID, const char* cfg);
+int pt_PluginRegistry_load(const char* path);
+int pt_PluginRegistry_list(const char** out);
 }
 
 // Error protocol of the bridged wrappers (shared with PTPythonLauncher.cc)
@@ -122,6 +126,62 @@ int pt_ResourceManager_addSurface(unsigned volID, const char* cfg)
 void pt_ResourceManager_cfgVolPhysics(unsigned volID, const char* cfg)
 {
     pt::Singleton<pt::ResourceManager>::getInstance().cfgVolPhysics(volID, cfg);
+}
+
+// Checked sibling of pt_ResourceManager_cfgVolPhysics for the python side to
+// migrate to: a rejected material cfg (unknown physics namespace, bad plugin
+// cfg key, ...) comes back as a nonzero status plus pt_last_error() instead
+// of a Prompt::Error escaping through the extern "C" boundary and aborting
+// the host process with SIGABRT. The unchecked variant stays until every
+// caller has moved over. (Plugin cfg errors must be testable, and once
+// plugins can fail to load, an abort would be unacceptable.)
+int pt_ResourceManager_cfgVolPhysics_checked(unsigned volID, const char* cfg)
+{
+    try {
+        pt::Singleton<pt::ResourceManager>::getInstance().cfgVolPhysics(volID, cfg);
+        return 0;
+    }
+    catch (...) {
+        return pt_bridge_record_error();
+    }
+}
+
+// dlopen one physics-model plugin file (checked protocol; 0 = ok). Goes
+// through PluginRegistry::loadFile: either the plugin's factories are
+// registered or the caller gets a diagnostic naming the file and the
+// missing/bad symbol.
+int pt_PluginRegistry_load(const char* path)
+{
+    try {
+        pt::Plugin::PluginRegistry::instance().loadFile(path);
+        return 0;
+    }
+    catch (...) {
+        return pt_bridge_record_error();
+    }
+}
+
+// One line per registered factory: "ns\tdescription\n", in a thread-local
+// static buffer (fine for the list/selftest CLI use case; not for long-term
+// storage). Checked protocol: 0 = ok with *out set, nonzero = failure.
+int pt_PluginRegistry_list(const char** out)
+{
+    try {
+        static thread_local std::string buf;
+        buf.clear();
+        for(auto &pr : pt::Plugin::PluginRegistry::instance().list())
+        {
+            buf += pr.first;
+            buf += '\t';
+            buf += pr.second;
+            buf += '\n';
+        }
+        *out = buf.c_str();
+        return 0;
+    }
+    catch (...) {
+        return pt_bridge_record_error();
+    }
 }
 
 void* pt_ResourceManager_getHist(const char* cfg)

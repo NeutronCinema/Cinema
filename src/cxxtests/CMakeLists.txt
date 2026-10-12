@@ -30,3 +30,19 @@ foreach(TS ${TESTFILES})
   target_link_libraries( ${EXCNAME} pthread prompt_core)
   add_test(NAME ${EXCNAME} COMMAND ${EXCNAME} )
 endforeach(TS ${TESTFILES})
+
+# Fake physics-model plugins for test_pluginregistry, built as MODULE
+# libraries (dlopen targets) and passed to the test through the environment.
+# plugins/ stays out of the test glob above: these are loaded, not executed.
+add_library(cinplugin_testhello MODULE unittest/plugins/plugin_test_hello.cc)
+target_link_libraries(cinplugin_testhello prompt_core)
+target_compile_definitions(cinplugin_testhello PRIVATE CINPLUGIN_NAME=TestHello)
+set_target_properties(cinplugin_testhello PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+
+add_library(cinplugin_testbadabi MODULE unittest/plugins/plugin_test_badabi.cc)
+target_link_libraries(cinplugin_testbadabi prompt_core)
+set_target_properties(cinplugin_testbadabi PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+
+set_property(TEST test_pluginregistry PROPERTY ENVIRONMENT
+  "CINPLUGIN_TEST_HELLO=$<TARGET_FILE:cinplugin_testhello>;CINPLUGIN_TEST_BADABI=$<TARGET_FILE:cinplugin_testbadabi>")
+set_property(TEST test_pluginregistry PROPERTY DEPENDS cinplugin_testhello cinplugin_testbadabi)
