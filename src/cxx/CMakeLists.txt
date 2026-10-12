@@ -48,7 +48,6 @@ file(GLOB GUN_SRC "${PROJECT_SOURCE_DIR}/Gun/libsrc/*.cc")
 file(GLOB MAT_SRC "${PROJECT_SOURCE_DIR}/Material/libsrc/*.cc")
 file(GLOB PYN_SRC "${PROJECT_SOURCE_DIR}/Python/libsrc/*.cc")
 file(GLOB RAC_SRC "${PROJECT_SOURCE_DIR}/Process/libsrc/*.cc")
-file(GLOB TRJ_SRC "${PROJECT_SOURCE_DIR}/Trj/libsrc/*.cc")
 file(GLOB MCPL_SRC "${PROJECT_SOURCE_DIR}/MCPL/libsrc/*.cc" )
 file(GLOB NC_SRC "${PROJECT_SOURCE_DIR}/ModelBulk/NCrystal/libsrc/*.cc")
 file(GLOB CT_SRC "${PROJECT_SOURCE_DIR}/ModelBulk/Catima/libsrc/*.cc")
@@ -56,7 +55,7 @@ file(GLOB GD_SRC "${PROJECT_SOURCE_DIR}/ModelBulk/Gidi/libsrc/*.cc")
 
 ADD_LIBRARY(${PROJECT_NAME} SHARED ${MCPL_SRC} ${COR_SRC} ${RAC_SRC} ${SUR_SRC} ${RND_SRC} 
                                 ${UTL_SRC} ${RTR_SRC} ${ANA_SRC} ${PAR_SRC} ${BUK_SRC} 
-                                ${GEO_SRC} ${MAT_SRC} ${PYN_SRC} ${GUN_SRC} ${TRJ_SRC} 
+                                ${GEO_SRC} ${MAT_SRC} ${PYN_SRC} ${GUN_SRC}
                                 ${NC_SRC} ${CT_SRC} ${GD_SRC}) 
 
 # Add the definition based on the option value for the library target
@@ -101,7 +100,6 @@ target_include_directories( ${PROJECT_NAME}
     ${PROJECT_SOURCE_DIR}/Gun/libinc
     ${PROJECT_SOURCE_DIR}/Process/libinc
     ${PROJECT_SOURCE_DIR}/Python/libinc
-    ${PROJECT_SOURCE_DIR}/Trj/libinc
     ${PROJECT_SOURCE_DIR}/MCPL/libinc
     ${VECGEOM_INCLUDE_DIRS}
     ${NCrystal_INCDIR}
