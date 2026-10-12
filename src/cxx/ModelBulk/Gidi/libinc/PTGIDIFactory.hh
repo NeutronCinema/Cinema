@@ -23,7 +23,10 @@
 
 #include <string>
 #include <memory>
+#include <functional>
+#include <map>
 #include <set>
+#include <tuple>
 
 #include "PromptCore.hh"
 #include "PTDiscreteModel.hh"
@@ -64,13 +67,14 @@ namespace MCGIDI
 {
   class DomainHash;
   class Protare;
+  class ProtareSingle;
   class URR_protareInfos;
   namespace Sampling
   {
     class StdVectorProductHandler;
     class Input;
   }
-}  
+}
 
 namespace Prompt {
 
@@ -79,12 +83,19 @@ namespace Prompt {
 
   class GIDIFactory {
   public:
+    // GidiSetting snapshots (enable/threshold) are taken by ParticleProcess at
+    // material-configuration time; the heavy GNDS session (PoPI database, map,
+    // particle lists, domain hash) is no longer paid in the constructor but on
+    // first use, so merely touching the singleton stays free until gidi data
+    // is actually needed (P2.1 idempotent lazy initialisation).
+    void ensureInitialised() const;
+
     std::vector<std::shared_ptr<GIDIModel>> createNeutronGIDIModel(const std::vector<IsotopeComposition>& iso,  double temperature,
-                            double bias=1. , 
+                            double bias=1. ,
                             double elasticThreshold=0,
                             double minEKin=0, double maxEKin=std::numeric_limits<double>::max()) const;
 
-    std::vector<std::shared_ptr<GIDIModel>> createPhotonGIDIModel(const std::vector<IsotopeComposition>& iso,  double bias=1. , 
+    std::vector<std::shared_ptr<GIDIModel>> createPhotonGIDIModel(const std::vector<IsotopeComposition>& iso,  double bias=1. ,
                             double minEKinElastic=0, double maxEKinElastic=std::numeric_limits<double>::max(),
                             double minEKinNonelastic=0, double maxEKinNonelastic=std::numeric_limits<double>::max()) const;
 
@@ -92,26 +103,43 @@ namespace Prompt {
     int getHashID(double energy) const;
     bool available() const;
     GidiSetting &getGidiSetting() const {return m_ctrdata;};
-    const PoPI::Database &getPoPs() const {return *m_pops;};
-    inline bool NCrystal4Elastic(double ekin) const 
+    const PoPI::Database &getPoPs() const;
+    inline bool NCrystal4Elastic(double ekin) const
     {
       return ekin < m_ctrdata.getGidiThreshold();
     };
 
 
   private:
-  
+
     friend class Singleton<GIDIFactory>;
     GIDIFactory();
     ~GIDIFactory();
 
+    std::shared_ptr<MCGIDI::ProtareSingle> cachedProtare(const std::string &name, const std::string &tempLabel,
+                                                         const char *mode,
+                                                         const std::function<std::shared_ptr<MCGIDI::ProtareSingle>()> &builder) const;
+
+    // Cache key of a built MCGIDI::ProtareSingle: isotope name, the heated
+    // cross-section label of the selected temperature (encodes both the file
+    // and the temperature), and the reaction-exclusion mode ("elas" keeps
+    // elastic, "nonelas" keeps non-elastic, "all" excludes nothing). Sharing
+    // one ProtareSingle across repeated isotopes is safe for sampling: the
+    // per-event URR probabilities are refreshed from (energy, temperature,
+    // RNG) before every use, never carried across calls.
+    using ProtareCacheKey = std::tuple<std::string, std::string, const char *>;
+
     GidiSetting &m_ctrdata;
-    PoPI::Database *m_pops;
-    GIDI::Map::Map *m_map;
-    GIDI::Transporting::Particles *m_particles;
-    GIDI::Construction::Settings *m_construction;
-    MCGIDI::DomainHash *m_domainHash;
+    // mutable: the accessors are const but must be able to run the one-time
+    // lazy initialisation; the factory is thread_local, so no locking.
+    mutable PoPI::Database *m_pops;
+    mutable GIDI::Map::Map *m_map;
+    mutable GIDI::Transporting::Particles *m_particles;
+    mutable GIDI::Construction::Settings *m_construction;
+    mutable MCGIDI::DomainHash *m_domainHash;
     LUPI::StatusMessageReporting *m_smr1;
+    mutable bool m_initialised;
+    mutable std::map<ProtareCacheKey, std::shared_ptr<MCGIDI::ProtareSingle>> m_protareCache;
 
   };
 }

@@ -34,15 +34,22 @@
 
 Prompt::GIDIFactory::GIDIFactory()
 :m_ctrdata(Singleton<Prompt::GidiSetting>::getInstance()),
-m_pops(new PoPI::Database( m_ctrdata.getGidiPops())),
-m_map (new GIDI::Map::Map( m_ctrdata.getGidiMap(), *m_pops )),
-m_particles(new GIDI::Transporting::Particles()),
-m_construction(new GIDI::Construction::Settings ( GIDI::Construction::ParseMode::all, 
-                                              GIDI::Construction::PhotoMode::nuclearAndAtomic )),
-m_domainHash(new MCGIDI::DomainHash ( 4000, 1e-8, 20 ) ),
-m_smr1()
-{ 
- 
+m_pops(nullptr), m_map(nullptr), m_particles(nullptr), m_construction(nullptr),
+m_domainHash(nullptr), m_smr1(nullptr), m_initialised(false)
+{}
+
+void Prompt::GIDIFactory::ensureInitialised() const
+{
+  if( m_initialised )
+    return;
+
+  m_pops = new PoPI::Database( m_ctrdata.getGidiPops());
+  m_map = new GIDI::Map::Map( m_ctrdata.getGidiMap(), *m_pops );
+  m_particles = new GIDI::Transporting::Particles();
+  m_construction = new GIDI::Construction::Settings ( GIDI::Construction::ParseMode::all,
+                                                GIDI::Construction::PhotoMode::nuclearAndAtomic );
+  m_domainHash = new MCGIDI::DomainHash ( 4000, 1e-8, 20 );
+
   GIDI::Transporting::Particle neutron(PoPI::IDs::neutron, GIDI::Transporting::Mode::MonteCarloContinuousEnergy);
   m_particles->add(neutron);
   if(m_ctrdata.getGammaTransport())
@@ -51,14 +58,7 @@ m_smr1()
     m_particles->add( photon );
   }
 
-  // m_pops->print(true);
-  // m_pops->isMetaStableAlias();
-
-  // std::cout << "!!!!!!!!!!!!!! "<<(*m_pops)["n"] << std::endl;
-  // std::cout << (*m_pops)["He3"] << std::endl;
-  // std::cout << (*m_pops)["O16"] << std::endl;
-  // std::cout << (*m_pops)["O16"] << std::endl;
-
+  m_initialised = true;
 }
 
 Prompt::GIDIFactory::~GIDIFactory()
@@ -72,12 +72,35 @@ Prompt::GIDIFactory::~GIDIFactory()
 
 int Prompt::GIDIFactory::getHashID(double energy) const
 {
+  ensureInitialised();
   return m_domainHash->index(energy);
 }
 
 bool Prompt::GIDIFactory::available() const
 {
   return true;
+}
+
+const PoPI::Database &Prompt::GIDIFactory::getPoPs() const
+{
+  ensureInitialised();
+  return *m_pops;
+}
+
+std::shared_ptr<MCGIDI::ProtareSingle>
+Prompt::GIDIFactory::cachedProtare(const std::string &name, const std::string &tempLabel, const char *mode,
+                                   const std::function<std::shared_ptr<MCGIDI::ProtareSingle>()> &builder) const
+{
+  ProtareCacheKey key( name, tempLabel, mode );
+  auto iter = m_protareCache.find( key );
+  if( iter != m_protareCache.end() ) {
+    std::cout << "Reusing the cached MCGIDI tables for isotope " << name
+              << " (" << mode << ", temperature label " << tempLabel << ")" << std::endl;
+    return iter->second;
+  }
+  auto protare = builder();
+  m_protareCache.emplace( std::move(key), protare );
+  return protare;
 }
 
 // todo: fixme: factory should pass the shared pointer of ncrystal sca to the gidi model, alone with the elastic the hold. below the threslhold replace the xs of mt2, but cache the  total xs calculate by mt2 for sampling reaction. if mt2 is leaked at the end, use the mcstas for secondary.
@@ -87,7 +110,9 @@ std::vector<std::shared_ptr<Prompt::GIDIModel>> Prompt::GIDIFactory::createNeutr
 double temperature, double bias, double elasticThreshold, double minEKin, double maxEKin) const
 {
   std::vector<std::shared_ptr<GIDIModel>> gidimodels;
-  
+
+  ensureInitialised();
+
   // auto gdcomp = new GIDI::ProtareComposite( *m_construction);
   // auto mcpro_comp = new MCGIDI::ProtareComposite();
 
@@ -158,12 +183,16 @@ double temperature, double bias, double elasticThreshold, double minEKin, double
     GIDI::Styles::TemperatureInfos selectedTempinfo;
     size_t nearestIndex = findNearestTemperatureIndex(availableTemp);
     selectedTempinfo.push_back(tempinfos[nearestIndex]);
-    double selectedTemp_K = selectedTempinfo.back().temperature().value()*Unit::MeV / const_boltzmann; 
+    double selectedTemp_K = selectedTempinfo.back().temperature().value()*Unit::MeV / const_boltzmann;
     std::cout <<"The specified temperature is  " << temperature << " Kelvin, the selected data is at " << availableTemp[nearestIndex]  << " Kelvin\n";
 
-   
-    MCGIDI::Transporting::MC MC ( *m_pops, gidiprotare->projectile().ID(), 
-                                  &gidiprotare->styles(), name, delay, 
+    // The heated cross-section label pins the data file and temperature; it is
+    // the cache key component that keeps two materials at different
+    // temperatures from sharing the same MCGIDI tables.
+    std::string selectedLabel( tempinfos[nearestIndex].heatedCrossSection() );
+
+    MCGIDI::Transporting::MC MC ( *m_pops, gidiprotare->projectile().ID(),
+                                  &gidiprotare->styles(), name, delay,
                                   static_cast<GIDI::ProtareSingle const &>( *gidiprotare).projectileEnergyMax());
     // MC.setNuclearPlusCoulombInterferenceOnly( true );
     MC.sampleNonTransportingParticles( m_ctrdata.getGidiSampleNTP() );
@@ -181,9 +210,9 @@ double temperature, double bias, double elasticThreshold, double minEKin, double
     std::cout <<"Isotope " << name << " has " << numberOfReactions << " reactions in total"<< "\n";
 
 
-    if(elasticThreshold>0.) {      
+    if(elasticThreshold>0.) {
       GIDI::ExcludeReactionsSet nonElastic, elastic;
-      for( int i = 0; i < numberOfReactions; ++i ) 
+      for( int i = 0; i < numberOfReactions; ++i )
       {
         // The type of ENDF_MT can be found at https://t2.lanl.gov/nis/endf/mts.html
         if(gidiprotare->reaction(i)->ENDF_MT()==2)
@@ -197,32 +226,40 @@ double temperature, double bias, double elasticThreshold, double minEKin, double
         }
       }
 
-      auto mcprotare = std::make_shared<MCGIDI::ProtareSingle>(*m_smr1, static_cast<GIDI::ProtareSingle const &>( *gidiprotare), *m_pops, MC, 
-                                                                  *m_particles, *m_domainHash, selectedTempinfo, nonElastic );
-    // customize neutron index to consistent with pdg, neutron_pdg = 2112
-      mcprotare->setUserParticleIndex(mcprotare->projectileIndex(), const_neutron_pgd);
-      if(m_ctrdata.getGammaTransport())
-        mcprotare->setUserParticleIndex(mcprotare->photonIndex(), const_photon_pgd);
+      auto mcprotare = cachedProtare( name, selectedLabel, "elas", [&]() {
+        auto protare = std::make_shared<MCGIDI::ProtareSingle>(*m_smr1, static_cast<GIDI::ProtareSingle const &>( *gidiprotare), *m_pops, MC,
+                                                                    *m_particles, *m_domainHash, selectedTempinfo, nonElastic );
+        // customize neutron index to consistent with pdg, neutron_pdg = 2112
+        protare->setUserParticleIndex(protare->projectileIndex(), const_neutron_pgd);
+        if(m_ctrdata.getGammaTransport())
+          protare->setUserParticleIndex(protare->photonIndex(), const_photon_pgd);
+        return protare;
+      });
 
       gidimodels.emplace_back(std::make_shared<GIDIModel>(const_neutron_pgd, "n_"+name+"_elas", mcprotare, selectedTemp_K, bias, frac, elasticThreshold, maxEKin));
 
-      
-      auto mcProtare_nonelastic = std::make_shared<MCGIDI::ProtareSingle>(*m_smr1, static_cast<GIDI::ProtareSingle const &>( *gidiprotare), *m_pops, MC, 
-                                                                  *m_particles, *m_domainHash, selectedTempinfo, elastic );
 
-      mcProtare_nonelastic->setUserParticleIndex(mcProtare_nonelastic->projectileIndex(), const_neutron_pgd);
-      if(m_ctrdata.getGammaTransport())
-        mcProtare_nonelastic->setUserParticleIndex(mcProtare_nonelastic->photonIndex(), const_photon_pgd);
+      auto mcProtare_nonelastic = cachedProtare( name, selectedLabel, "nonelas", [&]() {
+        auto protare = std::make_shared<MCGIDI::ProtareSingle>(*m_smr1, static_cast<GIDI::ProtareSingle const &>( *gidiprotare), *m_pops, MC,
+                                                                    *m_particles, *m_domainHash, selectedTempinfo, elastic );
+        protare->setUserParticleIndex(protare->projectileIndex(), const_neutron_pgd);
+        if(m_ctrdata.getGammaTransport())
+          protare->setUserParticleIndex(protare->photonIndex(), const_photon_pgd);
+        return protare;
+      });
 
       gidimodels.emplace_back(std::make_shared<GIDIModel>(const_neutron_pgd, "n_"+name+"_nonelas", mcProtare_nonelastic, selectedTemp_K, bias, frac, 0, maxEKin));
     }
     else {
-      GIDI::ExcludeReactionsSet excludeNone;
-      auto mcprotare = std::make_shared<MCGIDI::ProtareSingle>(*m_smr1, static_cast<GIDI::ProtareSingle const &>( *gidiprotare), *m_pops, MC, 
-                                                                  *m_particles, *m_domainHash, selectedTempinfo, excludeNone );
-      mcprotare->setUserParticleIndex(mcprotare->projectileIndex(), const_neutron_pgd);
-      if(m_ctrdata.getGammaTransport())
-        mcprotare->setUserParticleIndex(mcprotare->photonIndex(), const_photon_pgd);
+      auto mcprotare = cachedProtare( name, selectedLabel, "all", [&]() {
+        GIDI::ExcludeReactionsSet excludeNone;
+        auto protare = std::make_shared<MCGIDI::ProtareSingle>(*m_smr1, static_cast<GIDI::ProtareSingle const &>( *gidiprotare), *m_pops, MC,
+                                                                    *m_particles, *m_domainHash, selectedTempinfo, excludeNone );
+        protare->setUserParticleIndex(protare->projectileIndex(), const_neutron_pgd);
+        if(m_ctrdata.getGammaTransport())
+          protare->setUserParticleIndex(protare->photonIndex(), const_photon_pgd);
+        return protare;
+      });
       gidimodels.emplace_back(std::make_shared<GIDIModel>(const_neutron_pgd, "n_"+name+"_all", mcprotare, selectedTemp_K, bias, frac, elasticThreshold>0. ? elasticThreshold: minEKin, maxEKin));
 
     }
@@ -239,13 +276,15 @@ double bias, double minEKinElastic, double maxEKinElastic, double minEKinNonelas
 {
   std::vector<std::shared_ptr<GIDIModel>> gidimodels;
 
+  ensureInitialised();
+
   // fixme: make shared pointer map to cache MCGIDI::ProtareSingle for repeated isotopes
   // the key should be the label (i.e. iter->heatedCrossSection()) plus the  isotope name
   for(const auto& isotope : vecComp)
   {
     const std::string &name = isotope.name; //.substr(0,1);
     double frac = isotope.frac;
-    
+
     if(!m_map->isProtareAvailable( PoPI::IDs::photon, name))
     {
 
