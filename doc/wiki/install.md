@@ -249,6 +249,18 @@ GIDI-dependent material models require the flag to have been ON for the
 `libprompt_core.so` you actually run. Mixed rebuilds produce libraries with different
 capabilities from the same checkout.
 
+**The GIDI data is strictly optional.** Compiling with `--enablegidi` builds the
+capability; it does not provide the nuclear data. The data package (a `pops.xml`
+PoPI database, an `all.map` map file and the ENDF neutron files they reference,
+shipped in the project's `external/ptdata/` tree) is only ever read by a run that
+explicitly enables GIDI — a user who never does stays completely unaware of it,
+and a build without the data works identically for everything else. Scripts can
+branch on `GidiSetting().available()` (compiled in *and* data readable) before
+`GidiSetting().enable()`; an `enable()` without usable data refuses with an
+actionable `ValueError` instead of failing later mid-run. To point a run at a
+data tree outside the checkout, set `setGidiPops`/`setGidiMap` before any volume
+is created (see [Materials and physics](materials-physics)).
+
 ## 8. Verify your installation
 
 ```bash

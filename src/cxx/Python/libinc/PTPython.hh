@@ -50,8 +50,11 @@ size_t pt_Launcher_getTrajSize(void* obj);
 void pt_Launcher_getTrajectory(void* obj, double *trj);
 int pt_Launcher_go(void* obj, uint64_t numParticle, double printPrecent, bool recordTrj, bool timer, bool save2Disk);
 int pt_Launcher_setGun(void *obj, const char* cfg);
-void pt_Launcher_simOneEvent(void *obj, bool recordTrj);
-size_t pt_Launcher_goWithSecondStack(void *obj, uint64_t numParticle);
+// Both report through the int-status + pt_last_error() bridge protocol
+// (implemented in PTPythonLauncher.cc); the result of goWithSecondStack goes
+// through the out-pointer.
+int pt_Launcher_simOneEvent(void *obj, bool recordTrj);
+int pt_Launcher_goWithSecondStack(void *obj, uint64_t numParticle, size_t *out);
 
 // Prompt::HistBase
 // merge bridges return an int status (0 ok / nonzero error, message via
@@ -131,6 +134,10 @@ void* pt_makeModelCollection(const char * cfg);
 void pt_deleteModelCollection(void* obj);
 double pt_ModelCollection_getxs(void* obj, int pdg, double ekin);
 double pt_ModelCollection_generate(void* obj, double ekin, double dx, double dy, double dz);
+// checked variants: 0 ok / nonzero error via pt_last_error(), result through
+// the out-pointer (implemented in PTPyCompoundModel.cc)
+int pt_ModelCollection_getxs_checked(void* obj, int pdg, double ekin, double *out);
+int pt_ModelCollection_generate_checked(void* obj, double ekin, double dx, double dy, double dz, double *out);
 
 // Prompt::GidiSetting
 void* pt_GidiSetting_getInstance();

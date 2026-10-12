@@ -90,12 +90,18 @@ namespace Prompt {
     // is actually needed (P2.1 idempotent lazy initialisation).
     void ensureInitialised() const;
 
+    // gammaTransport and sampleNTP are the configuration-time snapshots
+    // carried by the caller's PendingGidi (P2.2) — never read from the live
+    // GidiSetting here, or a setting changed between configuration and the
+    // first transport event would silently rebuild different physics.
     std::vector<std::shared_ptr<GIDIModel>> createNeutronGIDIModel(const std::vector<IsotopeComposition>& iso,  double temperature,
                             double bias=1. ,
                             double elasticThreshold=0,
+                            bool gammaTransport=false, bool sampleNTP=true,
                             double minEKin=0, double maxEKin=std::numeric_limits<double>::max()) const;
 
     std::vector<std::shared_ptr<GIDIModel>> createPhotonGIDIModel(const std::vector<IsotopeComposition>& iso,  double bias=1. ,
+                            bool gammaTransport=true, bool sampleNTP=true,
                             double minEKinElastic=0, double maxEKinElastic=std::numeric_limits<double>::max(),
                             double minEKinNonelastic=0, double maxEKinNonelastic=std::numeric_limits<double>::max()) const;
 
@@ -117,17 +123,24 @@ namespace Prompt {
     ~GIDIFactory();
 
     std::shared_ptr<MCGIDI::ProtareSingle> cachedProtare(const std::string &name, const std::string &tempLabel,
-                                                         const char *mode,
+                                                         const char *mode, bool gammaTransport, bool sampleNTP,
                                                          const std::function<std::shared_ptr<MCGIDI::ProtareSingle>()> &builder) const;
+
+    // The photon transport particle is registered into the shared particle
+    // list on demand: at init time no snapshot exists yet, so the first
+    // build that wants photons adds it, once, before its protares.
+    void ensurePhotonParticle() const;
 
     // Cache key of a built MCGIDI::ProtareSingle: isotope name, the heated
     // cross-section label of the selected temperature (encodes both the file
-    // and the temperature), and the reaction-exclusion mode ("elas" keeps
-    // elastic, "nonelas" keeps non-elastic, "all" excludes nothing). Sharing
-    // one ProtareSingle across repeated isotopes is safe for sampling: the
-    // per-event URR probabilities are refreshed from (energy, temperature,
-    // RNG) before every use, never carried across calls.
-    using ProtareCacheKey = std::tuple<std::string, std::string, const char *>;
+    // and the temperature), the reaction-exclusion mode ("elas" keeps
+    // elastic, "nonelas" keeps non-elastic, "all" excludes nothing), and the
+    // two build-time flags the protare bakes in (gamma index mapping and
+    // non-transporting-particle sampling). Sharing one ProtareSingle across
+    // repeated isotopes is safe for sampling: the per-event URR
+    // probabilities are refreshed from (energy, temperature, RNG) before
+    // every use, never carried across calls.
+    using ProtareCacheKey = std::tuple<std::string, std::string, const char *, bool, bool>;
 
     GidiSetting &m_ctrdata;
     // mutable: the accessors are const but must be able to run the one-time
@@ -139,6 +152,7 @@ namespace Prompt {
     mutable MCGIDI::DomainHash *m_domainHash;
     LUPI::StatusMessageReporting *m_smr1;
     mutable bool m_initialised;
+    mutable bool m_photonParticleAdded;
     mutable std::map<ProtareCacheKey, std::shared_ptr<MCGIDI::ProtareSingle>> m_protareCache;
 
   };

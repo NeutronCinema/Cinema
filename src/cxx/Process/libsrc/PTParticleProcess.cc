@@ -175,7 +175,8 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
         std::cout << v << std::endl;
 
       m_discretModels->registerPendingGidi(std::move(isotopes), temperature, 1.,
-                                           gidithreshold<=0.?0.:gidithreshold, cd.getGammaTransport());
+                                           gidithreshold<=0.?0.:gidithreshold, cd.getGammaTransport(),
+                                           cd.getGidiSampleNTP());
     }
     else
     #endif
@@ -216,7 +217,8 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
         std::cout << v << std::endl;
 
       m_discretModels->registerPendingGidi(std::move(isotopes), temperature, abs_bias,
-                                           gidithreshold<=0.?0:gidithreshold, cd.getGammaTransport());
+                                           gidithreshold<=0.?0:gidithreshold, cd.getGammaTransport(),
+                                           cd.getGidiSampleNTP());
 
       // NCrystal models: held back so that the deferred gidi models land
       // before them, matching the eager model order

@@ -33,11 +33,21 @@
 // thread_local, so collections never cross threads). It lets the transport
 // entries materialise all pending gidi models through one call without
 // walking the geometry.
+//
+// The vector is heap-allocated on purpose. A function-local thread_local
+// object would be destroyed before the thread_local singletons that own the
+// collections registered here (TLS destructors run in reverse completion
+// order, and ResourceManager completes before the first collection is
+// constructed), so ~ModelCollection would deregister from an
+// already-destroyed vector — a use-after-free on every normal process exit.
+// A raw pointer has no TLS destructor: the vector outlives every owner, the
+// deregistration stays exact, and the few-dozen-byte buffer is reclaimed
+// with the thread.
 namespace {
   std::vector<Prompt::ModelCollection*> &liveCollections()
   {
-    static thread_local std::vector<Prompt::ModelCollection*> s_live;
-    return s_live;
+    static thread_local auto *s_live = new std::vector<Prompt::ModelCollection*>;
+    return *s_live;
   }
 }
 
@@ -56,7 +66,7 @@ Prompt::ModelCollection::~ModelCollection()
 
 #ifdef ENABLE_GIDI
 void Prompt::ModelCollection::registerPendingGidi(std::vector<IsotopeComposition> isotopes, double temperature,
-                                                  double bias, double elasticThreshold, bool photon)
+                                                  double bias, double elasticThreshold, bool photon, bool sampleNTP)
 {
   PendingGidi pending;
   pending.isotopes = std::move(isotopes);
@@ -64,6 +74,7 @@ void Prompt::ModelCollection::registerPendingGidi(std::vector<IsotopeComposition
   pending.bias = bias;
   pending.elasticThreshold = elasticThreshold;
   pending.photon = photon;
+  pending.sampleNTP = sampleNTP;
   m_pendingGidi.push_back( std::move(pending) );
   std::cout << "GIDI models for this material are registered as pending"
             << " and will be built at the first transport event." << std::endl;
@@ -80,32 +91,45 @@ void Prompt::ModelCollection::prepareGidi()
     return;
 
   auto &gidifactory = Singleton<GIDIFactory>::getInstance();
-  for(const auto &pending : m_pendingGidi)
+  // Consume every entry as it completes: if the build of entry k throws, the
+  // earlier entries stay built exactly once, so a retry (next transport
+  // event) only redoes the failed one instead of duplicating whole channels.
+  while(!m_pendingGidi.empty())
   {
+    PendingGidi pending( std::move(m_pendingGidi.front()) );
+    m_pendingGidi.erase( m_pendingGidi.begin() );
+
     // same model order as the eager configuration used to produce:
-    // neutron models first, then photon, then the atomic photon pass
+    // neutron models first, then photon, then the atomic photon pass.
+    // gamma/sampleNTP are the configuration-time snapshot, not the live
+    // GidiSetting — the deferred build must not read changed globals.
     auto models = gidifactory.createNeutronGIDIModel(pending.isotopes, pending.temperature,
-                                                     pending.bias, pending.elasticThreshold);
+                                                     pending.bias, pending.elasticThreshold,
+                                                     pending.photon, pending.sampleNTP);
     for(const auto &v : models)
       addPhysicsModel(v);
 
     if(pending.photon)
     {
-      auto gmodels = gidifactory.createPhotonGIDIModel(pending.isotopes, 1.);
+      auto gmodels = gidifactory.createPhotonGIDIModel(pending.isotopes, 1.,
+                                                       pending.photon, pending.sampleNTP);
       for(const auto &v : gmodels)
         addPhysicsModel(v);
 
-      auto atomic_models = gidifactory.createPhotonGIDIModel(shrink2element(pending.isotopes), 1.);
+      auto atomic_models = gidifactory.createPhotonGIDIModel(shrink2element(pending.isotopes), 1.,
+                                                             pending.photon, pending.sampleNTP);
       for(const auto &v : atomic_models)
         addPhysicsModel(v);
     }
   }
-  m_pendingGidi.clear();
 
   // held-back models land after the gidi ones, as in the eager layout
-  for(auto &model : m_deferredModels)
+  while(!m_deferredModels.empty())
+  {
+    std::shared_ptr<DiscreteModel> model( std::move(m_deferredModels.front()) );
+    m_deferredModels.erase( m_deferredModels.begin() );
     addPhysicsModel( model );
-  m_deferredModels.clear();
+  }
 }
 
 void Prompt::ModelCollection::prepareAllGidi()
@@ -157,7 +181,9 @@ double Prompt::ModelCollection::totalCrossSection(int pdg, double ekin, const Ve
   // offline callers (python xs(), unit tests) can reach the collection before
   // any transport entry ran; self-materialise the pending gidi models. No-op
   // once prepared, and the build consumes no random numbers.
+#ifdef ENABLE_GIDI
   const_cast<ModelCollection*>(this)->prepareGidi();
+#endif
 
   if(sameInquiryAsLastTime(ekin, dir))
   {

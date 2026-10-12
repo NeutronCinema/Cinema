@@ -242,13 +242,27 @@ def test_simulate_pythongun_without_vectorized_defaults_to_one(monkeypatch):
 def test_simulate_second_stack_forwards_int(monkeypatch):
     seen = {}
 
-    def fake_second_stack(cobj, num):
+    def fake_second_stack(cobj, num, out):
+        # the checked bridge protocol: int status, particle count through
+        # the out-pointer
         seen['num'] = num
-        return 99
+        out[0] = 99
+        return 0
 
     monkeypatch.setattr(launcher_mod, '_pt_Launcher_goWithSecondStack', fake_second_stack)
     assert Prompt(seed=1).simulateSecondStack(7.9) == 99
     assert seen['num'] == 7  # int(7.9) truncation before the ctypes call
+
+
+def test_simulate_second_stack_bridge_error(monkeypatch):
+    # a nonzero bridge status (e.g. a C++ error inside the eigenvalue cycle)
+    # surfaces as RuntimeError instead of being silently dropped
+    def failing_second_stack(cobj, num, out):
+        return 1
+
+    monkeypatch.setattr(launcher_mod, '_pt_Launcher_goWithSecondStack', failing_second_stack)
+    with pytest.raises(RuntimeError):
+        Prompt(seed=1).simulateSecondStack(5)
 
 
 # ---------------------------------------------------------------------------

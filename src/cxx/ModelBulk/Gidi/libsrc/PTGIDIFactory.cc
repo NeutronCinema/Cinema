@@ -35,7 +35,7 @@
 Prompt::GIDIFactory::GIDIFactory()
 :m_ctrdata(Singleton<Prompt::GidiSetting>::getInstance()),
 m_pops(nullptr), m_map(nullptr), m_particles(nullptr), m_construction(nullptr),
-m_domainHash(nullptr), m_smr1(nullptr), m_initialised(false)
+m_domainHash(nullptr), m_smr1(nullptr), m_initialised(false), m_photonParticleAdded(false)
 {}
 
 void Prompt::GIDIFactory::ensureInitialised() const
@@ -52,13 +52,19 @@ void Prompt::GIDIFactory::ensureInitialised() const
 
   GIDI::Transporting::Particle neutron(PoPI::IDs::neutron, GIDI::Transporting::Mode::MonteCarloContinuousEnergy);
   m_particles->add(neutron);
-  if(m_ctrdata.getGammaTransport())
-  {
-    GIDI::Transporting::Particle photon( PoPI::IDs::photon, GIDI::Transporting::Mode::MonteCarloContinuousEnergy );
-    m_particles->add( photon );
-  }
 
   m_initialised = true;
+}
+
+void Prompt::GIDIFactory::ensurePhotonParticle() const
+{
+  ensureInitialised();
+  if( m_photonParticleAdded )
+    return;
+
+  GIDI::Transporting::Particle photon( PoPI::IDs::photon, GIDI::Transporting::Mode::MonteCarloContinuousEnergy );
+  m_particles->add( photon );
+  m_photonParticleAdded = true;
 }
 
 Prompt::GIDIFactory::~GIDIFactory()
@@ -89,9 +95,10 @@ const PoPI::Database &Prompt::GIDIFactory::getPoPs() const
 
 std::shared_ptr<MCGIDI::ProtareSingle>
 Prompt::GIDIFactory::cachedProtare(const std::string &name, const std::string &tempLabel, const char *mode,
+                                   bool gammaTransport, bool sampleNTP,
                                    const std::function<std::shared_ptr<MCGIDI::ProtareSingle>()> &builder) const
 {
-  ProtareCacheKey key( name, tempLabel, mode );
+  ProtareCacheKey key( name, tempLabel, mode, gammaTransport, sampleNTP );
   auto iter = m_protareCache.find( key );
   if( iter != m_protareCache.end() ) {
     std::cout << "Reusing the cached MCGIDI tables for isotope " << name
@@ -106,12 +113,15 @@ Prompt::GIDIFactory::cachedProtare(const std::string &name, const std::string &t
 // todo: fixme: factory should pass the shared pointer of ncrystal sca to the gidi model, alone with the elastic the hold. below the threslhold replace the xs of mt2, but cache the  total xs calculate by mt2 for sampling reaction. if mt2 is leaked at the end, use the mcstas for secondary.
 // after that manager should cache all shared pointed gidi models. the isotope should be re used by a key name, the ncsca should be updated.
 
-std::vector<std::shared_ptr<Prompt::GIDIModel>> Prompt::GIDIFactory::createNeutronGIDIModel(const std::vector<Prompt::IsotopeComposition> &vecComp, 
-double temperature, double bias, double elasticThreshold, double minEKin, double maxEKin) const
+std::vector<std::shared_ptr<Prompt::GIDIModel>> Prompt::GIDIFactory::createNeutronGIDIModel(const std::vector<Prompt::IsotopeComposition> &vecComp,
+double temperature, double bias, double elasticThreshold, bool gammaTransport, bool sampleNTP,
+double minEKin, double maxEKin) const
 {
   std::vector<std::shared_ptr<GIDIModel>> gidimodels;
 
   ensureInitialised();
+  if(gammaTransport)
+    ensurePhotonParticle();
 
   // auto gdcomp = new GIDI::ProtareComposite( *m_construction);
   // auto mcpro_comp = new MCGIDI::ProtareComposite();
@@ -195,7 +205,7 @@ double temperature, double bias, double elasticThreshold, double minEKin, double
                                   &gidiprotare->styles(), name, delay,
                                   static_cast<GIDI::ProtareSingle const &>( *gidiprotare).projectileEnergyMax());
     // MC.setNuclearPlusCoulombInterferenceOnly( true );
-    MC.sampleNonTransportingParticles( m_ctrdata.getGidiSampleNTP() );
+    MC.sampleNonTransportingParticles( sampleNTP );
     // MC.set_ignoreENDF_MT5(true);
     MC.want_URR_probabilityTables(true);
     MC.setThrowOnError( false );
@@ -226,12 +236,12 @@ double temperature, double bias, double elasticThreshold, double minEKin, double
         }
       }
 
-      auto mcprotare = cachedProtare( name, selectedLabel, "elas", [&]() {
+      auto mcprotare = cachedProtare( name, selectedLabel, "elas", gammaTransport, sampleNTP, [&]() {
         auto protare = std::make_shared<MCGIDI::ProtareSingle>(*m_smr1, static_cast<GIDI::ProtareSingle const &>( *gidiprotare), *m_pops, MC,
                                                                     *m_particles, *m_domainHash, selectedTempinfo, nonElastic );
         // customize neutron index to consistent with pdg, neutron_pdg = 2112
         protare->setUserParticleIndex(protare->projectileIndex(), const_neutron_pgd);
-        if(m_ctrdata.getGammaTransport())
+        if(gammaTransport)
           protare->setUserParticleIndex(protare->photonIndex(), const_photon_pgd);
         return protare;
       });
@@ -239,11 +249,11 @@ double temperature, double bias, double elasticThreshold, double minEKin, double
       gidimodels.emplace_back(std::make_shared<GIDIModel>(const_neutron_pgd, "n_"+name+"_elas", mcprotare, selectedTemp_K, bias, frac, elasticThreshold, maxEKin));
 
 
-      auto mcProtare_nonelastic = cachedProtare( name, selectedLabel, "nonelas", [&]() {
+      auto mcProtare_nonelastic = cachedProtare( name, selectedLabel, "nonelas", gammaTransport, sampleNTP, [&]() {
         auto protare = std::make_shared<MCGIDI::ProtareSingle>(*m_smr1, static_cast<GIDI::ProtareSingle const &>( *gidiprotare), *m_pops, MC,
                                                                     *m_particles, *m_domainHash, selectedTempinfo, elastic );
         protare->setUserParticleIndex(protare->projectileIndex(), const_neutron_pgd);
-        if(m_ctrdata.getGammaTransport())
+        if(gammaTransport)
           protare->setUserParticleIndex(protare->photonIndex(), const_photon_pgd);
         return protare;
       });
@@ -251,12 +261,12 @@ double temperature, double bias, double elasticThreshold, double minEKin, double
       gidimodels.emplace_back(std::make_shared<GIDIModel>(const_neutron_pgd, "n_"+name+"_nonelas", mcProtare_nonelastic, selectedTemp_K, bias, frac, 0, maxEKin));
     }
     else {
-      auto mcprotare = cachedProtare( name, selectedLabel, "all", [&]() {
+      auto mcprotare = cachedProtare( name, selectedLabel, "all", gammaTransport, sampleNTP, [&]() {
         GIDI::ExcludeReactionsSet excludeNone;
         auto protare = std::make_shared<MCGIDI::ProtareSingle>(*m_smr1, static_cast<GIDI::ProtareSingle const &>( *gidiprotare), *m_pops, MC,
                                                                     *m_particles, *m_domainHash, selectedTempinfo, excludeNone );
         protare->setUserParticleIndex(protare->projectileIndex(), const_neutron_pgd);
-        if(m_ctrdata.getGammaTransport())
+        if(gammaTransport)
           protare->setUserParticleIndex(protare->photonIndex(), const_photon_pgd);
         return protare;
       });
@@ -271,12 +281,15 @@ double temperature, double bias, double elasticThreshold, double minEKin, double
 
 
 
-std::vector<std::shared_ptr<Prompt::GIDIModel>> Prompt::GIDIFactory::createPhotonGIDIModel(const std::vector<Prompt::IsotopeComposition> & vecComp, 
-double bias, double minEKinElastic, double maxEKinElastic, double minEKinNonelastic, double maxEKinNonelastic) const
+std::vector<std::shared_ptr<Prompt::GIDIModel>> Prompt::GIDIFactory::createPhotonGIDIModel(const std::vector<Prompt::IsotopeComposition> & vecComp,
+double bias, bool gammaTransport, bool sampleNTP,
+double minEKinElastic, double maxEKinElastic, double minEKinNonelastic, double maxEKinNonelastic) const
 {
   std::vector<std::shared_ptr<GIDIModel>> gidimodels;
 
   ensureInitialised();
+  if(gammaTransport)
+    ensurePhotonParticle();
 
   // fixme: make shared pointer map to cache MCGIDI::ProtareSingle for repeated isotopes
   // the key should be the label (i.e. iter->heatedCrossSection()) plus the  isotope name
@@ -326,7 +339,7 @@ double bias, double minEKinElastic, double maxEKinElastic, double minEKinNonelas
 
     MCGIDI::Transporting::MC MC ( *m_pops, gidiprotare->projectile().ID(), &gidiprotare->styles(), label, delay, 150.0 );
     // MC.setNuclearPlusCoulombInterferenceOnly( true );
-    MC.sampleNonTransportingParticles( m_ctrdata.getGidiSampleNTP() );
+    MC.sampleNonTransportingParticles( sampleNTP );
     // MC.set_ignoreENDF_MT5(true);
     MC.want_URR_probabilityTables(false);
     MC.setThrowOnError( false );

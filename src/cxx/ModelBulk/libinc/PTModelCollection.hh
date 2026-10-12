@@ -55,6 +55,7 @@ namespace Prompt {
     double bias;            // neutron interaction bias
     double elasticThreshold;
     bool photon;            // snapshot of gammaTransport at configuration time
+    bool sampleNTP;         // snapshot of sampleNTP at configuration time
   };
 #endif
 
@@ -76,7 +77,7 @@ namespace Prompt {
     // Defer the gidi models of this material: register the frozen settings
     // now, build nothing (P2.1). Entries materialise in registration order.
     void registerPendingGidi(std::vector<IsotopeComposition> isotopes, double temperature,
-                             double bias, double elasticThreshold, bool photon);
+                             double bias, double elasticThreshold, bool photon, bool sampleNTP);
 
     // Hold back an already-built model so that prepareGidi() can append it
     // AFTER the deferred gidi models — preserving the eager model order of

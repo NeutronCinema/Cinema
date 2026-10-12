@@ -203,7 +203,26 @@ duplicating it.
   has no effect.
 - **Fix:** configure `GidiSetting` before building any volume or material, and
   confirm the library was built with GIDI (`GidiSetting().isCompiled` — see the
-  GIDI/CATIMA entry in section 1). See [Materials and physics](materials-physics).
+  GIDI/CATIMA entry in section 1). Prefer the checked front-end API:
+  `GidiSetting().enable()` warns when GIDI is not compiled in and refuses with
+  `ValueError` when the data files are missing, instead of failing this quietly.
+  See [Materials and physics](materials-physics).
+
+### gidi.enable() raises ValueError about missing data files
+
+- **Symptom:** `GidiSetting().enable()` refuses with a `ValueError` naming a
+  `pops.xml` or `all.map` path that "is missing or unreadable".
+- **Cause:** compiled-in is not the same as runtime-usable — the GIDI data
+  package (pops database + map + ENDF files) is optional and not installed (or
+  the configured paths point elsewhere). The refusal is deliberate: an enable
+  that cannot be honoured must never degrade silently into "looks like GIDI
+  but is not".
+- **Fix:** install the GIDI data under the cinema data path, or point at an
+  existing installation with `GidiSetting().setGidiPops(...)` /
+  `.setGidiMap(...)` before `enable()`. Probe a build without side effects
+  with `GidiSetting().available()`, e.g. `if gidi.available(): gidi.enable()`.
+  Users who never enable GIDI are unaffected either way — the default path
+  never reads the data. See [Materials and physics](materials-physics).
 
 ### A scorer returns another scorer's numbers
 

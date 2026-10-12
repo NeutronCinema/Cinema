@@ -57,3 +57,36 @@ double pt_ModelCollection_generate(void* obj, double ekin, double dx, double dy,
 
   return coll->pickAndSample(ekin, dir).final_ekin;
 }
+
+// Checked variants (0 status + pt_last_error, the protocol of the
+// Launcher/Volume/makeModelCollection_checked bridges), implemented in
+// PTPythonResource.cc. Since the P2 lazy rewrite the deferred gidi build
+// runs inside totalCrossSection on this offline path, so a data problem
+// would otherwise surface here as a C++ exception crossing the raw ctypes
+// boundary — aborting the interpreter — instead of the catchable error the
+// eager build used to raise at configuration time.
+extern "C" int pt_bridge_record_error();
+
+int pt_ModelCollection_getxs_checked(void* obj, int pdg, double ekin, double *out)
+{
+  try {
+    Prompt::Vector dir;
+    *out = static_cast<Prompt::ParticleProcess *>(obj)
+        ->getModelCollection()->totalCrossSection(pdg, ekin, dir)/Prompt::Unit::barn;
+    return 0;
+  } catch(...) { return pt_bridge_record_error(); }
+}
+
+int pt_ModelCollection_generate_checked(void* obj, double ekin, double dx, double dy, double dz, double *out)
+{
+  try {
+    Prompt::Vector dir(dx, dy, dz);
+    if(dir.isStrictNullVector())
+      PROMPT_THROW2(BadInput, "null incident direction (direction sampler would loop forever)");
+
+    auto *coll = static_cast<Prompt::ParticleProcess *>(obj)->getModelCollection();
+    coll->totalCrossSection(2112, ekin, dir);
+    *out = coll->pickAndSample(ekin, dir).final_ekin;
+    return 0;
+  } catch(...) { return pt_bridge_record_error(); }
+}

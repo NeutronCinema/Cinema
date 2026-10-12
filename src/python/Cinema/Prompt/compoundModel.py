@@ -44,6 +44,20 @@ try:
 except AttributeError:
     _pt_makeModelCollection_checked = None
 
+# Checked xs/generate bridges, same protocol and same defensive binding: on
+# the offline path the deferred gidi build runs inside these calls, so a data
+# problem must come back as a catchable RuntimeError (the eager build raised
+# it at configuration time) instead of aborting the interpreter.
+try:
+    _pt_ModelCollection_getxs_checked = importFunc('pt_ModelCollection_getxs_checked', type_int,
+                                                   [type_voidp, type_int, type_dbl, POINTER(type_dbl)])
+    _pt_ModelCollection_generate_checked = importFunc('pt_ModelCollection_generate_checked', type_int,
+                                                      [type_voidp, type_dbl, type_dbl, type_dbl, type_dbl,
+                                                       POINTER(type_dbl)])
+except AttributeError:
+    _pt_ModelCollection_getxs_checked = None
+    _pt_ModelCollection_generate_checked = None
+
 class ModelCollection:
     def __init__(self, cfg) -> None:
         if _pt_makeModelCollection_checked is not None:
@@ -61,6 +75,10 @@ class ModelCollection:
             _pt_deleteModelCollection(cobj)
 
     def xs(self, ekin, pdg=2112):
+        if _pt_ModelCollection_getxs_checked is not None:
+            out = type_dbl()
+            raiseOnBridgeError(_pt_ModelCollection_getxs_checked(self.cobj, pdg, float(ekin), byref(out)))
+            return out.value
         return _pt_ModelCollection_getxs(self.cobj, pdg, ekin)
 
     def generate(self, ekin, dir=(0., 0., 1.)):
@@ -80,5 +98,11 @@ class ModelCollection:
         if dir[0] == 0. and dir[1] == 0. and dir[2] == 0.:
             raise ValueError('null incident direction: the direction samplers '
                              'would divide by zero and loop forever')
+        if _pt_ModelCollection_generate_checked is not None:
+            out = type_dbl()
+            raiseOnBridgeError(_pt_ModelCollection_generate_checked(self.cobj, float(ekin),
+                                                                    float(dir[0]), float(dir[1]),
+                                                                    float(dir[2]), byref(out)))
+            return out.value
         return _pt_ModelCollection_generate(self.cobj, ekin,
                                             float(dir[0]), float(dir[1]), float(dir[2]))

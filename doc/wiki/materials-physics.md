@@ -355,58 +355,114 @@ tools — in particular `VolFluence` scoring is invalid in volumes where weights
 The GIDI+ module (gidiplus) adds continuous-energy ENDF data on top of NCrystal. It is a
 compile-time option: `option(ENABLE_GIDI ...)` in `src/cxx/CMakeLists.txt` (ON for a
 plain cmake configure; `cimbuild` needs `--enablegidi` to keep it on — see
-[Installation](install) for the feature-flag gotcha).
+[Installation](install) for the feature-flag gotcha). GIDI *data* is strictly optional
+and only ever touched by a simulation that explicitly enables GIDI.
+
+### 8.1 The front-end API
 
 ```python
 from Cinema.Prompt.GidiSetting import GidiSetting
 
-cd = GidiSetting()                  # singleton over the C++ settings object
-cd.isCompiled                       # False when built without GIDI -> skip GIDI code paths
-cd.setEnableGidi(True)              # default False
-cd.setGidiThreshold(5.)             # eV; default 5.0; <= 0 means GIDI handles everything
-cd.setGammaTransport(False)         # default False; adds photon transport + atomic models
-cd.setEnableGidiPowerIteration(False)  # for k-eigenvalue style calculations
-cd.setGidiPops('/path/to/pops.xml') # PoPI database
-cd.setGidiMap('/path/to/all.map')   # GIDI map file
+gidi = GidiSetting()       # singleton over the C++ settings object
+
+gidi.available()           # True: compiled in AND pops/map data readable
+gidi.enable()              # turn on; refuses loudly when it cannot be honoured
+gidi.disable()             # turn off
+gidi.defaults()            # introspection dict of the build defaults
+
+gidi.isCompiled            # attribute: False when built without GIDI
 ```
+
+`enable()` has an explicit contract — the request is honoured or loudly
+refused, never silently degraded:
+
+- **not compiled in** → `RuntimeWarning` (the flag is set, but nothing will
+  use it; rebuild with `--enablegidi` to actually run GIDI);
+- **data files missing/unreadable** → `ValueError` naming the missing file
+  and the way out (`setGidiPops` / `setGidiMap`, or another data root);
+- otherwise it is exactly `setEnableGidi(True)`.
+
+The default path of a simulation never probes anything: users who never call
+`enable()` stay completely unaware of GIDI — no data probing, no warnings,
+no build cost — whether or not the data is present. Compiled-in is *not* the
+same as runtime-usable; only `available()` answers the data question, and
+only when called. Scripts that treat GIDI as optional branch on it:
+
+```python
+if gidi.available():
+    gidi.enable()
+```
+
+### 8.2 Settings and timing
 
 | Setting | Default | Meaning |
 |:---|:---|:---|
-| `setEnableGidi` | `False` | master switch |
+| `setEnableGidi` / `enable()` | `False` | master switch |
 | `setGidiThreshold` | `5.0` eV | hybrid switching energy; `> 0`: NCrystal below, GIDI above; `<= 0`: GIDI does *all* reactions including elastic (no NCrystal scattering model is created) |
 | `setGammaTransport` | `False` | creates photon transport models and atomic (element-level) photon data |
 | `setEnableGidiPowerIteration` | `False` | power-iteration (criticality-style) mode |
 | `setGidiPops` / `setGidiMap` | `$CINEMAPATH/external/ptdata/pops.xml` / `all.map` | ENDF data description files; point at a local ENDF data directory containing your data (the test suite uses a `testdata/` tree with `pops.xml`, `all.map` and `neutron/`) |
 | `.isCompiled` | — | attribute, `True` only when the library was built with GIDI; all GIDI tests guard with it |
 
-**Configure before creating volumes.** The settings are read once when a volume's physics
-is configured, and the GIDI factory (a singleton) bakes the pops/map paths at first use —
-a `GidiSetting` call after `Volume(...)` construction has no effect. Configure it at the
-top of `makeWorld()`, before any `Material`/`Volume` is created. (Known fixme: paths with
-backslashes do not decode.)
+The old setters are kept as aliases — existing scripts keep working. All of
+them only take effect **before the material is configured**, i.e. before the
+`Volume(...)` carrying the material is constructed. Configure at the top of
+`makeWorld()`. (Known fixme: paths with backslashes do not decode.)
+
+### 8.3 Lazy model building
+
+GIDI model building is **deferred**: configuring a GIDI material is cheap and
+parses no ENDF data. At `Volume` construction time the material is decomposed
+into isotopes and its settings (threshold, temperature, biases, gamma flag,
+non-transporting-particle flag) are frozen into a *pending* entry of the
+material's model collection; the
+GNDS parsing and protare building happen once, at the **first transport
+event** (`simulate` / `simulateSecondStack` / a `simOneEvent` call).
+`makeWorld()` therefore costs NCrystal-level time only, and the first event
+absorbs the data-loading cost. Repeated isotopes across materials share one
+set of cached Monte Carlo tables — a nuclide appearing in several materials
+is parsed and broadened once per (isotope, temperature).
+
+Offline cross-section queries (`ModelCollection.totalCrossSection` and the
+Python `xs()` helper) materialise the pending models on first use, so they
+give the same numbers before or after a transport run. Construction consumes
+no random numbers: identical seeds give identical results to the
+pre-lazy build, histogram by histogram.
+
+Errors surface catchable: a data problem found at the first event raises a
+normal Python `RuntimeError` (not a process abort) on all transport entry
+points, and the same holds for the offline cross-section path (`xs()` /
+`generate()`). Front-load what can be front-loaded by calling `available()`
+before the run.
 
 What happens per material when GIDI is enabled (`PTParticleProcess.cc` +
-`PTGIDIFactory.cc`):
+`PTModelCollection.cc` + `PTGIDIFactory.cc`):
 
-1. The NCrystal material is decomposed into isotopes
-   (`MaterialDecomposer::decompose(nccfg, T)`), which expands composite atoms and natural
-   elements into isotope lists; the NCMAT temperature `T` is carried along.
-2. For each isotope the ENDF protare is loaded, selecting the **nearest available ENDF
-   temperature** (the selection is printed to stdout: "The specified temperature is X,
-   the selected data is at Y Kelvin"). With a positive threshold two protares are built
-   per isotope — elastic (MT=2) and non-elastic — otherwise a single combined protare.
-3. Hybrid: with `gidiThreshold > 0` the `NCrystalScat` model is created with its energy
-   range capped at the threshold (thermal scattering below), GIDI models covering above;
-   with `gidiThreshold <= 0` GIDI covers the full range and no NCrystal scattering model
-   is created.
-4. Bias split: `abs_bias` is handed to the GIDI models; `scatter_bias` applies to the
-   below-threshold NCrystal model. Note `abs_bias=0.` cannot remove GIDI's absorption
-   handling (there is an explicit todo about this in the source).
-5. `setGammaTransport(True)` additionally creates photon models from the isotope list
-   *and* from the element-collapsed list (`shrink2element`) for atomic (photoelectric-
-   style) data; isotopes with missing photon data are skipped with a warning.
-6. URR probability tables are enabled for the neutron protares; incomplete delayed-neutron
-   data prints a warning and is not included.
+1. *At configuration time:* the NCrystal material is decomposed into isotopes
+   (`MaterialDecomposer::decompose(nccfg, T)`), which expands composite atoms
+   and natural elements into isotope lists; the NCMAT temperature `T` is
+   carried along. The settings are frozen (nothing below reads the global
+   settings again). With a positive threshold the below-threshold
+   `NCrystalScat` model is created now.
+2. *At the first transport event:* for each isotope the ENDF protare is
+   loaded, selecting the **nearest available ENDF temperature** (the
+   selection is printed to stdout: "The specified temperature is X, the
+   selected data is at Y Kelvin"). With a positive threshold two protares are
+   built per isotope — elastic (MT=2) and non-elastic — otherwise a single
+   combined protare.
+3. Hybrid: with `gidiThreshold > 0` NCrystal covers below the threshold and
+   GIDI above; with `gidiThreshold <= 0` GIDI covers the full range and no
+   NCrystal scattering model is created.
+4. Bias split: `abs_bias` is handed to the GIDI models; `scatter_bias`
+   applies to the below-threshold NCrystal model. Note `abs_bias=0.` cannot
+   remove GIDI's absorption handling (there is an explicit todo about this in
+   the source).
+5. `setGammaTransport(True)` additionally creates photon models from the
+   isotope list *and* from the element-collapsed list (`shrink2element`) for
+   atomic (photoelectric-style) data; isotopes with missing photon data are
+   skipped with a warning.
+6. URR probability tables are enabled for the neutron protares; incomplete
+   delayed-neutron data prints a warning and is not included.
 
 ## 9. Verifying materials offline
 
