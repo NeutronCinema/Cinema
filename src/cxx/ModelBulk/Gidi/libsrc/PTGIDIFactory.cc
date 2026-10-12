@@ -182,7 +182,7 @@ double temperature, double bias, double elasticThreshold, double minEKin, double
 
 
     if(elasticThreshold>0.) {      
-      std::set<int> nonElastic, elastic;
+      GIDI::ExcludeReactionsSet nonElastic, elastic;
       for( int i = 0; i < numberOfReactions; ++i ) 
       {
         // The type of ENDF_MT can be found at https://t2.lanl.gov/nis/endf/mts.html
@@ -200,7 +200,7 @@ double temperature, double bias, double elasticThreshold, double minEKin, double
       auto mcprotare = std::make_shared<MCGIDI::ProtareSingle>(*m_smr1, static_cast<GIDI::ProtareSingle const &>( *gidiprotare), *m_pops, MC, 
                                                                   *m_particles, *m_domainHash, selectedTempinfo, nonElastic );
     // customize neutron index to consistent with pdg, neutron_pdg = 2112
-      mcprotare->setUserParticleIndex(mcprotare->neutronIndex(), const_neutron_pgd);
+      mcprotare->setUserParticleIndex(mcprotare->projectileIndex(), const_neutron_pgd);
       if(m_ctrdata.getGammaTransport())
         mcprotare->setUserParticleIndex(mcprotare->photonIndex(), const_photon_pgd);
 
@@ -210,17 +210,17 @@ double temperature, double bias, double elasticThreshold, double minEKin, double
       auto mcProtare_nonelastic = std::make_shared<MCGIDI::ProtareSingle>(*m_smr1, static_cast<GIDI::ProtareSingle const &>( *gidiprotare), *m_pops, MC, 
                                                                   *m_particles, *m_domainHash, selectedTempinfo, elastic );
 
-      mcProtare_nonelastic->setUserParticleIndex(mcProtare_nonelastic->neutronIndex(), const_neutron_pgd);
+      mcProtare_nonelastic->setUserParticleIndex(mcProtare_nonelastic->projectileIndex(), const_neutron_pgd);
       if(m_ctrdata.getGammaTransport())
         mcProtare_nonelastic->setUserParticleIndex(mcProtare_nonelastic->photonIndex(), const_photon_pgd);
 
       gidimodels.emplace_back(std::make_shared<GIDIModel>(const_neutron_pgd, "n_"+name+"_nonelas", mcProtare_nonelastic, selectedTemp_K, bias, frac, 0, maxEKin));
     }
     else {
-      std::set<int> excludeNone;
+      GIDI::ExcludeReactionsSet excludeNone;
       auto mcprotare = std::make_shared<MCGIDI::ProtareSingle>(*m_smr1, static_cast<GIDI::ProtareSingle const &>( *gidiprotare), *m_pops, MC, 
                                                                   *m_particles, *m_domainHash, selectedTempinfo, excludeNone );
-      mcprotare->setUserParticleIndex(mcprotare->neutronIndex(), const_neutron_pgd);
+      mcprotare->setUserParticleIndex(mcprotare->projectileIndex(), const_neutron_pgd);
       if(m_ctrdata.getGammaTransport())
         mcprotare->setUserParticleIndex(mcprotare->photonIndex(), const_photon_pgd);
       gidimodels.emplace_back(std::make_shared<GIDIModel>(const_neutron_pgd, "n_"+name+"_all", mcprotare, selectedTemp_K, bias, frac, elasticThreshold>0. ? elasticThreshold: minEKin, maxEKin));
@@ -297,7 +297,7 @@ double bias, double minEKinElastic, double maxEKinElastic, double minEKinNonelas
     //     PROMPT_THROW(CalcError, "ProtareType must be single");
     // }
     
-    std::set<int> exc;
+    GIDI::ExcludeReactionsSet exc;
     int numberOfReactions = gidiprotare->numberOfReactions();
     std::cout <<"Isotope " << name << " has " << numberOfReactions << " reactions in total"<< "\n";
 
