@@ -159,35 +159,23 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
     {
       // in this mode, abs and nonelastic scattering (e.g. MT!=2) are all be done in GIDI+
       // ncrystal only does the scattering below the threshold
-      std::cout << "enabled gidi model for " << cfgstr 
+      std::cout << "enabled gidi model for " << cfgstr
       << ", the swithching energy from ncrystal to digi is at " << gidithreshold << "eV.\n";
       // NCrystal models
       if(gidithreshold>0)
-         m_discretModels->addPhysicsModel(std::make_shared<NCrystalScat>(cfgstr, 1.0, 0, gidithreshold));    
-      
-      // GIDI models 
+         m_discretModels->addPhysicsModel(std::make_shared<NCrystalScat>(cfgstr, 1.0, 0, gidithreshold));
+
+      // GIDI models: decompose now (cheap, front-loads config errors) but
+      // defer the GNDS parsing to the first transport event (P2.1); the
+      // settings below are frozen here (P2.2)
       auto &nm = Prompt::Singleton<Prompt::MaterialDecomposer>::getInstance();
       double temperature(0.);
       auto isotopes = nm.decompose(cfgstr, temperature);
       for(const auto &v: isotopes)
         std::cout << v << std::endl;
 
-      auto &gidifactory = Prompt::Singleton<Prompt::GIDIFactory>::getInstance();  
-      auto models = gidifactory.createNeutronGIDIModel(isotopes, temperature, 1., gidithreshold<=0.?0.:gidithreshold);
-
-      for(const auto &v: models)
-        m_discretModels->addPhysicsModel(v);
-
-      if(cd.getGammaTransport())
-      {
-        auto models = gidifactory.createPhotonGIDIModel(isotopes, 1.);
-        for(const auto &v: models)
-           m_discretModels->addPhysicsModel(v);
-
-        auto atomic_models = gidifactory.createPhotonGIDIModel(shrink2element(isotopes), 1.);
-        for(const auto &v: atomic_models)
-           m_discretModels->addPhysicsModel(v);
-      }
+      m_discretModels->registerPendingGidi(std::move(isotopes), temperature, 1.,
+                                           gidithreshold<=0.?0.:gidithreshold, cd.getGammaTransport());
     }
     else
     #endif
@@ -215,41 +203,29 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
     //fixme: todo: how to disable absorption when abs_bias is zero?
     if(enablegidi)
     {
-      std::cout << "enabled gidi model for " << cfgstr 
+      std::cout << "enabled gidi model for " << cfgstr
       << ", the switching energy at " << gidithreshold << "eV.\n";
 
-      // GIDI models
+      // GIDI models: decompose now (cheap, front-loads config errors) but
+      // defer the GNDS parsing to the first transport event (P2.1); the
+      // settings below are frozen here (P2.2)
       auto &nm = Prompt::Singleton<Prompt::MaterialDecomposer>::getInstance();
       double temperature (0);
       auto isotopes = nm.decompose(nccfg, temperature);
       for(const auto &v: isotopes)
         std::cout << v << std::endl;
 
+      m_discretModels->registerPendingGidi(std::move(isotopes), temperature, abs_bias,
+                                           gidithreshold<=0.?0:gidithreshold, cd.getGammaTransport());
 
-      auto &gidifactory = Prompt::Singleton<Prompt::GIDIFactory>::getInstance();  
-      auto models = gidifactory.createNeutronGIDIModel(isotopes, temperature, abs_bias, gidithreshold<=0.?0:gidithreshold);
-
-      for(const auto &v: models)
-        m_discretModels->addPhysicsModel(v);
-
-      // NCrystal models 
+      // NCrystal models: held back so that the deferred gidi models land
+      // before them, matching the eager model order
       if(gidithreshold>0.)
       {
-        m_discretModels->addPhysicsModel(std::make_shared<NCrystalScat>(nccfg, scatter_bias, 0, gidithreshold));
+        m_discretModels->registerDeferredModel(std::make_shared<NCrystalScat>(nccfg, scatter_bias, 0, gidithreshold));
       }
       else
         std::cout << "!The ncrystal elastic scatter is not created!\n";
-
-      if(cd.getGammaTransport())
-      {
-        auto models = gidifactory.createPhotonGIDIModel(isotopes, 1.);
-        for(const auto &v: models)
-           m_discretModels->addPhysicsModel(v);
-
-        auto atomic_models = gidifactory.createPhotonGIDIModel(shrink2element(isotopes), 1.);
-        for(const auto &v: atomic_models)
-           m_discretModels->addPhysicsModel(v);
-      }
     }
     else
     #endif

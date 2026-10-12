@@ -30,6 +30,7 @@
 #include "PTNeutron.hh"
 #include "PTGunFactory.hh"
 #include "PTPythonGun.hh"
+#include "PTModelCollection.hh"
 #include "NCrystal/NCrystal.hh"
 
 class SingletonPTRandWrapper : public NCrystal::RNGStream{
@@ -92,6 +93,13 @@ void Prompt::Launcher::setGun(const char* cfg)
 
 void Prompt::Launcher::simOneEvent(bool recordTrj)
 {
+  // P2.1 single materialization point: go(), goWithSecondStack() and the
+  // python-gun loop all funnel through here, so the pending gidi models of
+  // every configured material are built exactly once before the first
+  // transport event. The build consumes no random numbers, hence the RNG
+  // stream (and with it every pinned histogram) is unchanged.
+  ModelCollection::prepareAllGidi();
+
       //add a primary particle into the stack
     while(!m_stackManager.empty())
     {
