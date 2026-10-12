@@ -1,10 +1,12 @@
 """Per-solid constructor validation tests for Prompt/solid.py.
 
 The guard code is pure Python (sub-ms per case); the positive paths additionally
-build a C++ solid (~10 us). Each test has a single assertion focus. Two known
-gaps are documented as xfail (the guard should reject the input but currently
-does not), and one -- Polyhedron sideCount=0, which builds a degenerate solid
-with capacity 0 instead of raising -- is skipped with evidence.
+build a C++ solid (~10 us). Each test has a single assertion focus. One known
+gap is documented as xfail (the Cone guard should reject negative phi deltas
+but its historical non-abs check does not -- deliberately preserved through the
+param-table refactor, flagged for the user), and one -- Polyhedron sideCount=0,
+which builds a degenerate solid with capacity 0 instead of raising -- is
+skipped with evidence.
 """
 
 import numpy as np
@@ -121,17 +123,15 @@ def test_polycone_rmin_greater_than_rmax_at_plane_raises():
 # ---------------------------------------------------------------- Polyhedron
 
 def test_polyhedron_array_length_mismatch_raises():
-    with pytest.raises(RuntimeError, match="same length"):
+    # user input errors are ValueError across the module: the historical
+    # RuntimeError here was re-typed in the solid param-table refactor
+    with pytest.raises(ValueError, match="same length"):
         Polyhedron(np.array([0.0, 5.0]), np.array([1.0]), np.array([2.0, 2.0]))
 
 
-@pytest.mark.xfail(
-    reason="Polyhedron passes raw lists to the ctypes ndpointer binding (no "
-           "_arrayCheck, unlike PolyCone), so its own docstring example with "
-           "plain lists [0,5,10]/[1,2,1]/[3,4,3] raises ctypes.ArgumentError",
-    strict=False)
 def test_polyhedron_plain_list_input_matches_docstring():
-    # the class docstring example must be executable as written
+    # the class docstring example must be executable as written (plain lists
+    # are converted by the shared array check since the param-table refactor)
     poly = Polyhedron([0., 5., 10.], [1., 2., 1.], [3., 4., 3.])
     assert poly.cobj
 

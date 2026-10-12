@@ -10,7 +10,10 @@ from scipy.interpolate import interp1d  # CinemaXY
 from .convertor import *
 
 import numpy as np
-import matplotlib.pyplot as plt
+# matplotlib is NOT imported at module level: Cinema/__init__ pulls this file
+# in, so a top-level import would make `import Cinema.Prompt` (and even
+# `import Cinema`) fail on machines without the optional viz stack. The
+# plotting mixins import it locally, on first actual use.
 from scipy.interpolate import interp1d
 from typing import Union
 
@@ -281,6 +284,7 @@ class Array2DCoordinateMixin:
 class Array2DPlotMixin:
     """2D plotting functionality mixin"""
     def plot(self, ax=None, plot_errors=False, **kwargs):
+        import matplotlib.pyplot as plt
         ax = ax or plt.gca()
         x = getattr(self, 'x', np.arange(self.shape[1]))
         y = getattr(self, 'y', np.arange(self.shape[0]))
@@ -303,6 +307,7 @@ class Array2DPlotMixin:
     def plot_surface(self, ax=None, **kwargs):
         """Create a 3D surface plot"""
         if ax is None:
+            import matplotlib.pyplot as plt
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
         elif not hasattr(ax, 'plot_surface'):

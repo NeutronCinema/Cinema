@@ -18,13 +18,38 @@
 ##                                                                            ##
 ################################################################################
 
+from __future__ import annotations
+
 from ..Interface import *
 from enum import Enum
 
-try:
-    import pyvista as pv
-except:
-    raise ImportError("pyvista is required to visualize.")
+# pyvista is an optional (viz-extra) dependency: geo.py imports this module
+# at package-import time, so binding pyvista here would make
+# `import Cinema.Prompt` fail on machines without the plotting stack. The
+# module is imported on first use instead (see _require_pyvista); importing
+# THIS module stays possible without it.
+pv = None
+
+
+def _require_pyvista():
+    """Return the pyvista module, importing it on first use.
+
+    Raises a clear ImportError naming the optional extra when pyvista is not
+    installed, so callers surface 'pip install neutron-cinema[viz]' instead
+    of a bare ModuleNotFoundError deep inside a plotting call chain.
+    """
+    global pv
+    if pv is None:
+        try:
+            import pyvista as _pv
+        except Exception as exc:
+            raise ImportError(
+                "pyvista is required to visualize; it is part of the "
+                "optional 'viz' extra - install it with "
+                "'pip install neutron-cinema[viz]' (or 'pip install pyvista')"
+            ) from exc
+        pv = _pv
+    return pv
 
 _pt_Transformation3D_new = importFunc('pt_Transformation3D_new', type_voidp, [type_voidp])
 _pt_Transformation3D_newfromID = importFunc('pt_Transformation3D_newfromID', type_voidp, [type_uint])
@@ -147,11 +172,18 @@ class Mesh():
         Returns:
             tuple: A tuple containing the mesh name and the mesh object.
         """
-        def meshByPointCloud(npoints):
-            npoints = nSegments*100
+        def meshByPointCloud(npoints=None):
+            # the caller may pass a sample count; without one (or with the 0
+            # that the boolean branch sees when VecGeom could not mesh the
+            # solid) fall back to the long-standing 100 points per segment.
+            # The parameter used to be overwritten unconditionally, which
+            # silently discarded the caller's argument.
+            if not npoints:
+                npoints = nSegments*100
             points = np.zeros([npoints, 3])
             norm = np.zeros_like(points)
             _pt_generatePointCloud(self.n, npoints, points, norm)
+            pv = _require_pyvista()
             point_cloud = pv.PolyData(points)
             # Add normals to the point cloud
             point_cloud.point_data['Normals'] = norm
@@ -199,7 +231,7 @@ class Mesh():
             facesVec = np.zeros(faceSize+nPlolygen, dtype=type_sizet)
             _pt_getMesh(self.n, nSegments, vert, NumPolygonPoints, facesVec, pvolID)
 
-            return name, pv.PolyData(vert, facesVec)
+            return name, _require_pyvista().PolyData(vert, facesVec)
 
     def __iter__(self):
         self.n = -1
@@ -244,7 +276,7 @@ class VtkBoolWrapper:
         boolean_filter.SetInputData(0, self.mesh)
         boolean_filter.SetInputData(1, other_mesh)
         boolean_filter.Update()
-        
+
         result = boolean_filter.GetOutput()
-        mesh = pv.wrap(result)
+        mesh = _require_pyvista().wrap(result)
         return mesh

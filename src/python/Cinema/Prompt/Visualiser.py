@@ -20,27 +20,34 @@
 ##                                                                            ##
 ################################################################################
 
-import sys
-from ..Interface import *
+"""Interactive 3D visualisation of the geometry (and trajectories).
+
+The heavy plotting dependencies (pyvista, and through it VTK/matplotlib) are
+optional: they belong to the ``viz`` extra (``pip install
+neutron-cinema[viz]``). This module therefore imports nothing heavy at import
+time; the ImportError naming the missing extra is raised only when a
+Visualiser (or PtPlotter) is actually constructed.
+"""
+
+from __future__ import annotations
 
 import random
-import matplotlib.colors as mcolors
-from .launcher import ensureDisplayUsable
-from .Mesh import Mesh, generateVolumetricMesh
+from ..Interface import *
 
-try:
-    import pyvista as pv
-except Exception:
-    # raise (matching Mesh.py), not sys.exit: importing this module from a
-    # library must fail with a normal catchable exception
-    raise ImportError("pyvista is required to visualize.")
+from .launcher import ensureDisplayUsable
+from .Mesh import Mesh, generateVolumetricMesh, _require_pyvista
 
 high_contrast_colors = ["#FF0000","#FF4500","#FF8C00","#FFD700","#FFFF00","#FF6347","#CD5C5C",
     "#0000FF","#1E90FF","#00BFFF","#00FFFF","#00FF00","#32CD32","#2E8B57","#20B2AA",
     "#800080","#9370DB","#8A2BE2","#DA70D6","#FF00FF","#00FF7F","#4B0082","#7FFF00","#FF1493",
     "#9400D3","#000000","#696969","#A9A9A9"]
 
-# from https://stackoverflow.com/questions/57173235/how-to-detect-whether-in-jupyter-notebook-or-lab 
+# Cached result of the jupyter-session probe: process-wide, computed at most
+# once (the psutil parent-process inspection is not free and the answer
+# cannot change within a process).
+_jupyterlab_session = None
+
+# from https://stackoverflow.com/questions/57173235/how-to-detect-whether-in-jupyter-notebook-or-lab
 def is_jupyterlab_session() -> bool:
     """Check whether we are in a Jupyter-Lab session.
     Notes
@@ -50,28 +57,37 @@ def is_jupyterlab_session() -> bool:
     It will also report false positive in case a classic notebook frontend is started
     via Jupyter lab.
     """
+    global _jupyterlab_session
+    if _jupyterlab_session is not None:
+        return _jupyterlab_session
     import psutil
 
     # inspect parent process for any signs of being a jupyter lab server
 
     parent = psutil.Process().parent()
     if parent.name() == "jupyter-lab":
-        return True
+        _jupyterlab_session = True
+        return _jupyterlab_session
     keys = (
         "JUPYTERHUB_API_KEY",
         "JPY_API_TOKEN",
         "JUPYTERHUB_API_TOKEN",
     )
     env = parent.environ()
-    if any(k in env for k in keys):
-        return True
-
-    return False
+    _jupyterlab_session = any(k in env for k in keys)
+    return _jupyterlab_session
 
 class Visualiser():
-    def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, doDumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=True, geoClip=False):
+    def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, doDumpMesh=False, window_size=None, byMat=False, addLegend=True, geoClip=False):
+        # pyvista (and VTK underneath) is needed the moment a Visualiser is
+        # built; importing THIS module stays possible without it
+        pv = _require_pyvista()
+        if window_size is None:
+            # None sentinel replaces the mutable [1920, 1080] default literal;
+            # the effective default window size is unchanged
+            window_size = (1920, 1080)
         if is_jupyterlab_session():
-            pv.set_jupyter_backend('trame')  
+            pv.set_jupyter_backend('trame')
         # self.color =  list(mcolors.CSS4_COLORS.keys())
         self.color = high_contrast_colors
         self.worldMesh = Mesh()
@@ -113,7 +129,7 @@ class Visualiser():
         self.plotter.add_key_event('r', self._refresh_plotter)
 
     def _load_plotter(self):
-        self.plotter = PtPlotter(window_size=self._window_size)
+        self.plotter = _getPtPlotter()(window_size=self._window_size)
         self.plotter.enable_depth_peeling()
         self._config_key_events()
 
@@ -131,13 +147,15 @@ class Visualiser():
         nosuccess = self.loadMesh(self._nSegments, self._doDumpMesh, self._mergeMesh, self._byMat, self._geoClip)
         if nosuccess:
             try:
-                self._load_plotter() # perform a reload, try again 
+                self._load_plotter() # perform a reload, try again
                 self.loadMesh(self._nSegments, self._doDumpMesh, self._mergeMesh, self._byMat, self._geoClip)
             except Exception as e:
                 print(e)
                 print("Error: Failed to load mesh.")
-                sys.exit(1)
-            
+                # library code must not kill the interpreter (was sys.exit(1));
+                # callers get a normal exception instead
+                raise RuntimeError("Error: Failed to load mesh.") from e
+
         if self._addLegend:
             mesh_num = self.worldMesh.countFullTreeNode() + 1
             s = min(mesh_num * 0.05, 1)
@@ -161,7 +179,7 @@ class Visualiser():
                     return a
         else:
             return None
-    
+
     def _mask_selected(self):
         if self.selected_mesh:
             if not self.selected_actor:
@@ -174,7 +192,7 @@ class Visualiser():
             print(f'Masked Physical Volumes:')
             for hm in self._hidden_meshes:
                 print(f'\t- {hm["mesh_name"]}')
-    
+
     def _unmask_selected(self):
         if self._hidden_meshes:
             for m in self._hidden_meshes:
@@ -190,12 +208,13 @@ class Visualiser():
         self.plotter.show_grid()
 
     def save(self):
-        print('save screenshot.png')
+        print('save screenshot.svg')
         self.plotter.save_graphic('screenshot.svg')
 
     def addTrj(self, data):
         if data.size < 2:
             return
+        pv = _require_pyvista()
         line = pv.lines_from_points(data)
         line.add_field_data(['a neutron trajectory'], 'mesh_info')
         #draw the first and last position as red dots
@@ -222,7 +241,7 @@ class Visualiser():
 
         if combineMesh:
             print('INFO: Visualizing combined geometry')
-            combined_meshes_block = pv.MultiBlock()
+            combined_meshes_block = _require_pyvista().MultiBlock()
 
         for amesh in self.worldMesh:
             mesh_name, mesh = self.loadOneMesh(amesh, nSegments)
@@ -248,21 +267,35 @@ class Visualiser():
                     try:
                         vol_mesh = generateVolumetricMesh(mesh)
                         vol_mesh = self.plotter.addClipPlane([vol_mesh], not amesh.n, normal='x', opacity=0.5)
-                        actor = self.plotter.addClippedMesh(vol_mesh , label=mesh_label, color=rcolor, opacity=0.5)
+                        add_kwargs = {'color': rcolor, 'opacity': 0.5}
+                        if self._addLegend:
+                            add_kwargs['label'] = mesh_label
+                        actor = self.plotter.addClippedMesh(vol_mesh , **add_kwargs)
                     except Exception as e:
                         print(e)
                         print(f"Warning: Failed to visualize {mesh_name} with geoClip. Fall back without geoClip.")
                         self._geoClip = False
                         return 1
                 else:
-                    actor = self.plotter.add_mesh(sur_mesh, color=rcolor, opacity=0.3, label=mesh_label)
+                    # pyvista builds a legend glyph entry for every labelled
+                    # actor even when add_legend() is never called; pass the
+                    # label only when a legend will actually be rendered
+                    # (self._addLegend), leaving the legend behaviour itself
+                    # unchanged
+                    add_kwargs = {'color': rcolor, 'opacity': 0.3}
+                    if self._addLegend:
+                        add_kwargs['label'] = mesh_label
+                    actor = self.plotter.add_mesh(sur_mesh, **add_kwargs)
                 self._add_builtin_mesh_info(sur_mesh, mesh_name, matName)
 
                 self._mesh_actor_pair.append((mesh, actor))
         if combineMesh:
             mesh = combined_meshes_block.combine()
             self._add_builtin_mesh_info(mesh, "Combined geometry", "Material not defined for a combined geometry")
-            actor = self.plotter.add_mesh(mesh, color=random.choice(self.color), opacity=0.3, label="Combined geometry")
+            add_kwargs = {'color': random.choice(self.color), 'opacity': 0.3}
+            if self._addLegend:
+                add_kwargs['label'] = "Combined geometry"
+            actor = self.plotter.add_mesh(mesh, **add_kwargs)
             self._mesh_actor_pair.append((mesh, actor))
 
         if doDumpMesh:
@@ -297,7 +330,11 @@ class Visualiser():
 
     def getValidMesh(self, ptmesh : Mesh, nSegments, byMat=True):
         # name = mesh.getMeshName()
-        name, mesh = ptmesh.getMesh(nSegments)
+        # the blacklist filter runs BEFORE the tessellation: names are plain
+        # tree lookups while getMesh() meshes the solid, so blacklisted
+        # volumes are no longer meshed just to be discarded. The name is the
+        # same physical-volume name getMesh() would have returned.
+        name = ptmesh.getPhysicalVolumeName()
         mat = ptmesh.getMaterialName()
         if self.blacklist is not None:
             if any(srchstr in name for srchstr in self.blacklist):
@@ -305,9 +342,11 @@ class Visualiser():
             if byMat:
                 if any(srchstr in mat for srchstr in self.blacklist):
                     return name, None
+        _, mesh = ptmesh.getMesh(nSegments)
         return name, mesh
 
     def _viz_trj(self):
+        pv = _require_pyvista()
         if self._trj.keys()!=[]:
             mesh = self._trj.combine()
             actor = self.plotter.add_mesh(mesh, color='blue', opacity=0.2, line_width=2 )
@@ -319,7 +358,7 @@ class Visualiser():
             if crp.points.size>0:
                 actor = self.plotter.add_mesh(crp, color='red', opacity=0.3, point_size=8 )
                 self._mesh_actor_pair.append((crp, actor))
-                self._add_builtin_mesh_info(crp, "Interections", "Not defined")
+                self._add_builtin_mesh_info(crp, "Intersections", "Not defined")
 
     def show(self):
         self._plot_geo_and_trj()
@@ -327,80 +366,115 @@ class Visualiser():
             self.plotter.off_screen = True # no usable X server, render off-screen
         self.plotter.show(title='Cinema Visualiser')
 
-class PtPlotter(pv.Plotter):
-    def __init__(self, window_size=None):
-        super().__init__(window_size=window_size)
-        self.clippers = []
-        self.clipFunction = None
+
+def _build_ptplotter_class(pv):
+    """Build the PtPlotter class against a concrete pyvista module.
+
+    PtPlotter subclasses pv.Plotter, so the class can only be created once
+    pyvista is importable; the factory defers that moment to the first
+    PtPlotter access (see the module-level __getattr__ below).
+    """
+    class PtPlotter(pv.Plotter):
+        def __init__(self, window_size=None):
+            super().__init__(window_size=window_size)
+            self.clippers = []
+            self.clipFunction = None
 
 
-    def addClipPlane(self, meshes, isWorld, normal='x', invert=False, widget_color=None, value=0, assign_to_axis=None, tubing=False, origin_translation=True, outline_translation=False, implicit=True, normal_rotation=True, crinkle=False, interaction_event='end', origin=None, outline_opacity=None, **kwargs):
-        from pyvista.plotting.utilities.algorithms import algorithm_to_mesh_handler
-        from pyvista.plotting.utilities.algorithms import add_ids_algorithm
-        from pyvista.plotting.utilities.algorithms import outline_algorithm
-        from pyvista.plotting.utilities.algorithms import set_algorithm_input
-        from pyvista.plotting import _vtk
+        def addClipPlane(self, meshes, isWorld, normal='x', invert=False, widget_color=None, value=0, assign_to_axis=None, tubing=False, origin_translation=True, outline_translation=False, implicit=True, normal_rotation=True, crinkle=False, interaction_event='end', origin=None, outline_opacity=None, **kwargs):
+            from pyvista.plotting.utilities.algorithms import algorithm_to_mesh_handler
+            from pyvista.plotting.utilities.algorithms import add_ids_algorithm
+            from pyvista.plotting.utilities.algorithms import outline_algorithm
+            from pyvista.plotting.utilities.algorithms import set_algorithm_input
+            from pyvista.plotting import _vtk
 
-        from pyvista.core.utilities.helpers import generate_plane
-        from pyvista.core.filters import _get_output  # avoids circular import
-        for mesh in meshes:
-            mesh, algo = algorithm_to_mesh_handler(
-                add_ids_algorithm(mesh, point_ids=False, cell_ids=True),
-            )
+            from pyvista.core.utilities.helpers import generate_plane
+            from pyvista.core.filters import _get_output  # avoids circular import
+            for mesh in meshes:
+                mesh, algo = algorithm_to_mesh_handler(
+                    add_ids_algorithm(mesh, point_ids=False, cell_ids=True),
+                )
 
-            name = kwargs.get('name', mesh.memory_address)
-            rng = mesh.get_data_range(kwargs.get('scalars', None))
-            kwargs.setdefault('clim', kwargs.pop('rng', rng))
-            mesh.set_active_scalars(kwargs.get('scalars', mesh.active_scalars_name))
-            if origin is None:
-                origin = mesh.center
+                name = kwargs.get('name', mesh.memory_address)
+                rng = mesh.get_data_range(kwargs.get('scalars', None))
+                kwargs.setdefault('clim', kwargs.pop('rng', rng))
+                mesh.set_active_scalars(kwargs.get('scalars', mesh.active_scalars_name))
+                if origin is None:
+                    origin = mesh.center
 
-            self.add_mesh(outline_algorithm(algo), name=f"{name}-outline", opacity=0.0)
+                self.add_mesh(outline_algorithm(algo), name=f"{name}-outline", opacity=0.0)
 
-            if isinstance(mesh, _vtk.vtkPolyData):
-                clipper = _vtk.vtkClipPolyData()
-            else:
-                clipper = _vtk.vtkTableBasedClipDataSet()
-            set_algorithm_input(clipper, algo)
-            clipper.SetValue(value)
-            clipper.SetInsideOut(invert)  # invert the clip if needed
+                if isinstance(mesh, _vtk.vtkPolyData):
+                    clipper = _vtk.vtkClipPolyData()
+                else:
+                    clipper = _vtk.vtkTableBasedClipDataSet()
+                set_algorithm_input(clipper, algo)
+                clipper.SetValue(value)
+                clipper.SetInsideOut(invert)  # invert the clip if needed
 
-            plane_clipped_mesh = _get_output(clipper)
-            self.plane_clipped_meshes.append(plane_clipped_mesh)
-            self.clippers.append(clipper)
+                plane_clipped_mesh = _get_output(clipper)
+                self.plane_clipped_meshes.append(plane_clipped_mesh)
+                self.clippers.append(clipper)
 
-        def callback(normal, loc):  # numpydoc ignore=GL08
-            for clipper in self.clippers:
-                function = generate_plane(normal, loc)
-                clipper.SetClipFunction(function)  # the implicit function
-                clipper.Update()  # Perform the Cut
-                clipped = pv.wrap(clipper.GetOutput())
-                plane_clipped_mesh.shallow_copy(clipped)
-                
-        if isWorld:
-            self.add_plane_widget(
-                callback=callback,
-                bounds=mesh.bounds,
-                factor=1.25,
-                normal=normal,
-                color=widget_color,
-                tubing=tubing,
-                assign_to_axis=assign_to_axis,
-                origin_translation=origin_translation,
-                outline_translation=outline_translation,
-                implicit=implicit,
-                origin=origin,
-                normal_rotation=normal_rotation,
-                interaction_event=interaction_event,
-                outline_opacity=outline_opacity,
-            )
-        return clipper
+            def callback(normal, loc):  # numpydoc ignore=GL08
+                for clipper in self.clippers:
+                    function = generate_plane(normal, loc)
+                    clipper.SetClipFunction(function)  # the implicit function
+                    clipper.Update()  # Perform the Cut
+                    clipped = pv.wrap(clipper.GetOutput())
+                    plane_clipped_mesh.shallow_copy(clipped)
 
-    def addClippedMesh(self, clippedMesh, **kwargs):
-        from pyvista.plotting._vtk import vtkPlane
-        function = vtkPlane()
-        function.SetNormal(1,0,0)
-        function.SetOrigin(0,0,0)
-        clippedMesh.SetClipFunction(function)  # the implicit function
-        actor = self.add_mesh(clippedMesh, **kwargs)
-        return actor
+            if isWorld:
+                self.add_plane_widget(
+                    callback=callback,
+                    bounds=mesh.bounds,
+                    factor=1.25,
+                    normal=normal,
+                    color=widget_color,
+                    tubing=tubing,
+                    assign_to_axis=assign_to_axis,
+                    origin_translation=origin_translation,
+                    outline_translation=outline_translation,
+                    implicit=implicit,
+                    origin=origin,
+                    normal_rotation=normal_rotation,
+                    interaction_event=interaction_event,
+                    outline_opacity=outline_opacity,
+                )
+            return clipper
+
+        def addClippedMesh(self, clippedMesh, **kwargs):
+            from pyvista.plotting._vtk import vtkPlane
+            function = vtkPlane()
+            function.SetNormal(1,0,0)
+            function.SetOrigin(0,0,0)
+            clippedMesh.SetClipFunction(function)  # the implicit function
+            actor = self.add_mesh(clippedMesh, **kwargs)
+            return actor
+    return PtPlotter
+
+
+def _getPtPlotter():
+    """Return the PtPlotter class, building it (and importing pyvista) on
+    first use.
+
+    Bare-name references inside this module bypass the module-level
+    __getattr__ below (LOAD_GLOBAL consults the globals dict directly), so
+    internal call sites must go through this helper; __getattr__ delegates
+    here for external attribute access.
+    """
+    cls = globals().get('PtPlotter')
+    if cls is None:
+        cls = _build_ptplotter_class(_require_pyvista())
+        globals()['PtPlotter'] = cls
+    return cls
+
+
+def __getattr__(name):
+    # PEP 562 lazy class definition: PtPlotter needs pyvista (it subclasses
+    # pv.Plotter), so it is built on first access. Importing this module
+    # without the optional viz extra keeps working; constructing a
+    # Visualiser raises the clear ImportError from _require_pyvista().
+    if name == 'PtPlotter':
+        return _getPtPlotter()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -112,7 +112,12 @@ def ensureDisplayUsable(timeout=2.0):
     return False
 
 
-ensureDisplayUsable()
+# NOTE: ensureDisplayUsable() used to run here, at import time. That made
+# importing Cinema.Prompt mutate os.environ and the matplotlib backend and
+# print the headless WARNING before any user code ran. The probe now runs
+# lazily on first actual use - Launcher.showWorld and Visualiser.show both
+# call it - with the same once-per-process semantics and the same warning
+# text and headless fallback behaviour.
 
 
 @singleton
