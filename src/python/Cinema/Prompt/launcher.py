@@ -20,6 +20,7 @@
 ##                                                                            ##
 ################################################################################
 
+import ctypes
 import os
 import socket
 import sys
@@ -40,13 +41,16 @@ _pt_Launcher_getTrajSize = importFunc('pt_Launcher_getTrajSize', type_sizet, [ty
 _pt_Launcher_getTrajectory = importFunc('pt_Launcher_getTrajectory', None, [type_voidp, type_npdbl2d])
 _pt_Launcher_go = importFunc('pt_Launcher_go', type_int, [type_voidp, type_sizet, type_dbl, type_bool, type_bool, type_bool])
 _pt_Launcher_setGun = importFunc('pt_Launcher_setGun', type_int, [type_voidp, type_cstr])
-_pt_Launcher_goWithSecondStack = importFunc('pt_Launcher_goWithSecondStack', type_sizet, [type_voidp, type_sizet])
+# goWithSecondStack/simOneEvent are bridged like go: since the lazy gidi
+# rewrite the first event builds the pending gidi models, and a data problem
+# (DataLoadError) must raise a catchable RuntimeError, not abort the process
+_pt_Launcher_goWithSecondStack = importFunc('pt_Launcher_goWithSecondStack', type_int, [type_voidp, type_sizet, type_sizetp])
 
 _pt_ResourceManager_getHist = importFunc('pt_ResourceManager_getHist', type_voidp, [type_cstr])
 
 _pt_setWorld = importFunc('pt_setWorld', None, [type_voidp])
 
-_pt_Launcher_simOneEvent = importFunc('pt_Launcher_simOneEvent', None, [type_voidp, type_bool])
+_pt_Launcher_simOneEvent = importFunc('pt_Launcher_simOneEvent', type_int, [type_voidp, type_bool])
 
 # Shared by Launcher.setWorld and Prompt.setWorld. Do not suggest clear() as a
 # remedy here: clear() would destroy the world another Prompt instance in this
@@ -196,7 +200,9 @@ class Launcher():
         raiseOnBridgeError(_pt_Launcher_go(self.cobj, numPrimary, printPercent, recordTrj, timer, save2Disk))
 
     def goWithSecondStack(self, numPrimary):
-        return _pt_Launcher_goWithSecondStack(self.cobj, numPrimary)
+        num = type_sizet()
+        raiseOnBridgeError(_pt_Launcher_goWithSecondStack(self.cobj, int(numPrimary), ctypes.pointer(num)))
+        return num.value
 
 
     def getHist(self, cfg):
@@ -222,4 +228,4 @@ class Launcher():
             raise RuntimeError("no implemented")
         
     def simOneEvent(self, recordTrj=False):
-        _pt_Launcher_simOneEvent(self.cobj, recordTrj)
+        raiseOnBridgeError(_pt_Launcher_simOneEvent(self.cobj, recordTrj))

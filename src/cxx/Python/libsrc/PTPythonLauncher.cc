@@ -50,8 +50,8 @@ size_t pt_Launcher_getTrajSize(void* obj);
 void pt_Launcher_getTrajectory(void* obj, double *trj);
 int pt_Launcher_go(void* obj, uint64_t numParticle, double printPrecent, bool recordTrj, bool timer, bool save2Disk);
 int pt_Launcher_setGun(void *obj, const char* cfg);
-void pt_Launcher_simOneEvent(void *obj, bool recordTrj);
-size_t pt_Launcher_goWithSecondStack(void *obj, uint64_t numParticle);
+int pt_Launcher_simOneEvent(void *obj, bool recordTrj);
+int pt_Launcher_goWithSecondStack(void *obj, uint64_t numParticle, size_t *out);
 
 const char* pt_last_error();
 int pt_bridge_record_error();
@@ -130,13 +130,30 @@ int pt_Launcher_setGun(void *obj, const char* cfg)
   }
 }
 
-size_t pt_Launcher_goWithSecondStack(void *obj, uint64_t numParticle)
+// Bridged: same reason as pt_Launcher_simOneEvent — the deferred gidi build
+// runs inside the first event of the second-stack cycle.
+int pt_Launcher_goWithSecondStack(void *obj, uint64_t numParticle, size_t *out)
 {
-  return static_cast<pt::Launcher *>(obj)->goWithSecondStack(numParticle);
+  try {
+    *out = static_cast<pt::Launcher *>(obj)->goWithSecondStack(numParticle);
+    return 0;
+  }
+  catch (...) {
+    return pt_bridge_record_error();
+  }
 }
 
 
-void pt_Launcher_simOneEvent(void *obj, bool recordTrj)
+// Bridged: since the lazy gidi rewrite the first event builds the pending
+// gidi models, and a data problem (DataLoadError) must surface as a nonzero
+// status plus pt_last_error() instead of aborting the host process.
+int pt_Launcher_simOneEvent(void *obj, bool recordTrj)
 {
-  static_cast<pt::Launcher *>(obj)->simOneEvent(recordTrj);
+  try {
+    static_cast<pt::Launcher *>(obj)->simOneEvent(recordTrj);
+    return 0;
+  }
+  catch (...) {
+    return pt_bridge_record_error();
+  }
 }
