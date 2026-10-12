@@ -210,7 +210,7 @@ void main2( int argc, char **argv ) {
 
     
     unsigned long long seed = 1;
-    std::set<int> reactionsToExclude;
+    GIDI::ExcludeReactionsSet reactionsToExclude;
     GIDI::Transporting::Particles particles;
     double temperature_keV_K = 2.582e-5;
     LUPI::StatusMessageReporting smr1;
@@ -339,15 +339,24 @@ void main2( int argc, char **argv ) {
 
     for( long sampleIndex = 0; sampleIndex < numberOfSamples; ++sampleIndex ) {
         int reactionIndex2 = reactionIndex;
-        if( reactionIndex2 < 0 ) reactionIndex2 = MCProtare->sampleReaction( URR_protareInfos, hashIndex, temperature_keV_K, energy_in, totalCrossSection, getRandNumber, nullptr );
+        if( reactionIndex2 < 0 ) {
+            // gidiplus 3.35: temperature/energy ride in Sampling::Input and the user RNG
+            // is a callable. The temperature is passed through unchanged from the
+            // pre-3.35 code (its keV-vs-MeV value is preserved as-is; see issue list).
+            input.setTemperatureAndEnergy( temperature_keV_K, energy_in );
+            reactionIndex2 = static_cast<int>( MCProtare->sampleReaction( input, URR_protareInfos, hashIndex, totalCrossSection,
+                                                                          []() -> double { return getRandNumber(nullptr); } ) );
+        }
         MCGIDI::Reaction const *reaction = MCProtare->reaction( reactionIndex2 );
 
         // if( recordPath != "" ) recordStream << "Event: " << reactionIndex2 << std::endl;
 
         products.clear( );
-        input.m_temperature = temperature_keV_K;   // In keV/k;
 
-        reaction->sampleProducts( MCProtare, energy_in, input, getRandNumber, nullptr, products );
+        reaction->sampleProducts( MCProtare, input,
+                                  []() -> double { return getRandNumber(nullptr); },
+                                  []( MCGIDI::Sampling::Product & ) {},
+                                  products );
         for( std::size_t productIndex = 0; productIndex < products.size( ); ++productIndex ) {
             MCGIDI::Sampling::Product const &product = products[productIndex];
             int userProductIndex = product.m_userProductIndex;
