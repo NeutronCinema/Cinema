@@ -120,6 +120,7 @@ Source builds (with apt or conda prerequisites) are documented on
 - [home](home) — this page
 - [Installation and environments](install) — conda package, source builds, what `env.sh` does
 - [Your first simulation](first-simulation) — line-by-line walkthrough, running and scaling it
+- [Runnable examples](https://code.ihep.ac.cn/cinema-developers/cinema/-/blob/master/doc/wiki/examples) — seven small scripts (units, nesting, scorers, headless viewing), smoke-tested in CI
 
 ### Tutorials
 
