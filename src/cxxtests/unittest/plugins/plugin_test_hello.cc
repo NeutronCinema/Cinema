@@ -134,7 +134,7 @@ public:
     PROMPT_THROW(BadInput, "physics=hellopair: this factory only produces model sets; use produceAll");
   }
 
-  void produceAll(const CfgView& cfg, const ModelEmit& emit) const override
+  void produceAll(const CfgView& cfg, const HostBias& bias, const ModelEmit& emit) const override
   {
     double xs_a = 1.0, xs_s = 2.0;
     for(const auto &key : cfg.keys())
@@ -146,8 +146,12 @@ public:
       else
         PROMPT_THROW2(BadInput, "physics=" << cfg.ns() << ": unknown key '" << key << "'");
     }
-    emit(std::make_unique<PairAbsModel>(xs_a), ModelRole::Absorption);
-    emit(std::make_unique<HelloModel>(xs_s), ModelRole::Scatter);
+    // same channel-enablement semantics as the ncrystal SCATTER path: a
+    // non-positive role bias skips the emission before construction
+    if(bias.scatter > 0.)
+      emit(std::make_unique<HelloModel>(xs_s), ModelRole::Scatter);
+    if(bias.abs > 0.)
+      emit(std::make_unique<PairAbsModel>(xs_a), ModelRole::Absorption);
   }
 };
 

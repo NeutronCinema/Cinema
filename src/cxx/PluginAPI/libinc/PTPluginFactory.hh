@@ -43,6 +43,17 @@ namespace Prompt::Plugin {
 // value when building the adapter.
 enum class ModelRole { Scatter, Absorption };
 
+// Read-only view of the host-parsed bias values, passed to produceAll so a
+// multi-channel factory can apply the host's channel-enablement semantics
+// (the ncrystal SCATTER path skips a channel whose bias is <= 0, and that
+// decision must precede model construction). A factory uses these values
+// ONLY for such decisions: the host applies them to the adapters, so a
+// plugin still cannot scale its own cross section.
+struct HostBias {
+  double scatter = 1.0;
+  double abs = 1.0;
+};
+
 class ModelFactory {
 public:
   virtual ~ModelFactory() = default;
@@ -65,10 +76,12 @@ public:
   // Implementations call emit() once per model, in registration order: the
   // host builds one adapter per emission and registers them in that order,
   // keeping ModelCollection's channel-pick math and the disappearing-model
-  // election identical to the builtin paths. Default: emit produce() with
-  // role Scatter.
+  // election identical to the builtin paths. The bias values are for
+  // channel-enablement decisions only (see HostBias). Default: emit
+  // produce() with role Scatter.
   using ModelEmit = std::function<void(std::unique_ptr<ScatterModel>, ModelRole)>;
-  virtual void produceAll(const CfgView& cfg, const ModelEmit& emit) const
+  virtual void produceAll(const CfgView& cfg, const HostBias& bias,
+                          const ModelEmit& emit) const
   {
     emit(produce(cfg), ModelRole::Scatter);
   }

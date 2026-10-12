@@ -43,6 +43,10 @@ namespace Prompt {
 
   private:
     double macroCrossSection(const Prompt::Particle &particle) const;
+    // Route the non-gidi ncrystal paths (NC_RAW and NC_SCATTER) through the
+    // plugin registry: the builtin NCrystalFactory emits the same Abs/Scat
+    // channels in the legacy order and each becomes a PluginModelAdapter.
+    void cfgNCrystalViaPlugin(const std::string &cfgstr, double scatter_bias, double abs_bias);
     std::string m_name;
     SingletonPTRand &m_rng;
     std::unique_ptr<ModelCollection> m_discretModels;

@@ -23,6 +23,7 @@
 
 #include <cmath>
 #include <limits>
+#include <memory>
 #include "NCrystal/NCrystal.hh"
 #include "PTIdealElaScat.hh"
 #include "PTPhysicsFactory.hh"
@@ -37,6 +38,9 @@
 #include "PTGidiSetting.hh"
 #endif
 #include "PTStackManager.hh"
+#include "PTPluginRegistry.hh"
+#include "PTNCrystalPlugin.hh"
+#include "PTPluginModelAdapter.hh"
 
 Prompt::ParticleProcess::ParticleProcess(const std::string &name, int pdg, bool absorp_in_weight)
     : m_rng(Singleton<SingletonPTRand>::getInstance()),
@@ -150,6 +154,14 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
   const bool enablegidi = cd.getEnableGidi();
   const double gidithreshold = cd.getGidiThreshold();
   #endif
+
+  // The non-gidi ncrystal branches below route through the plugin registry
+  // (ncrystal = plugin #0): the builtin NCrystalFactory emits the same
+  // channels in the legacy order and each becomes a PluginModelAdapter, so
+  // ModelCollection's channel-pick math is unchanged. The gidi branches
+  // stay on the legacy constructors - the PendingGidi/DeferredModel
+  // machinery is ModelCollection state, not expressible as model emission.
+  // The factory ships in the core library until M5 repackages it.
   if (type == PhysicsFactory::PhysicsType::NC_RAW)
   {
     m_numdensity = pfact.nccalNumDensity(cfgstr);
@@ -181,10 +193,11 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
     else
     #endif
     {
-      m_discretModels->addPhysicsModel(std::make_shared<NCrystalAbs>(cfgstr, 1.0, 0));
-      m_discretModels->addPhysicsModel(std::make_shared<NCrystalScat>(cfgstr, 1.0, 0));
+      // plugin #0: the same Abs+Scat pair in the same order, at unit bias,
+      // produced through the registry instead of direct construction
+      cfgNCrystalViaPlugin(cfgstr, 1.0, 1.0);
     }
-    
+
 
   }
   else if (type == PhysicsFactory::PhysicsType::NC_SCATTER)
@@ -232,10 +245,9 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
     else
     #endif
     {
-      if(scatter_bias > 0.)
-        m_discretModels->addPhysicsModel(std::make_shared<NCrystalScat>(nccfg, scatter_bias, 0));
-      if(abs_bias > 0.)
-        m_discretModels->addPhysicsModel(std::make_shared<NCrystalAbs>(nccfg, abs_bias, 0));
+      // plugin #0: the factory applies the same channel-enablement rule
+      // (bias <= 0 skips, before construction) and the Scat-then-Abs order
+      cfgNCrystalViaPlugin(cfgstr, scatter_bias, abs_bias);
     }
   }
   else if (type == PhysicsFactory::PhysicsType::NC_IDEALSCAT)
@@ -245,4 +257,38 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
     m_numdensity =  reinterpret_cast<IdealElaScat *>(idsct.get())->getNumberDensity();
   }
 
+}
+
+void Prompt::ParticleProcess::cfgNCrystalViaPlugin(const std::string &cfgstr, double scatter_bias, double abs_bias)
+{
+  auto *factory = Plugin::PluginRegistry::instance().lookup("ncrystal");
+  if(!factory)
+    PROMPT_THROW(BadInput, "the builtin ncrystal plugin factory is not registered");
+
+  Plugin::HostBias hb;
+  hb.scatter = scatter_bias;
+  hb.abs = abs_bias;
+
+  bool numdensityChecked = false;
+  factory->produceAll(Plugin::CfgView(cfgstr), hb,
+    [this,scatter_bias,abs_bias,&numdensityChecked](std::unique_ptr<Plugin::ScatterModel> model,
+                                                    Plugin::ModelRole role)
+    {
+      // Cross-check the plugin number-density contract against m_numdensity
+      // (the host keeps calling nccalNumDensity; both values go through the
+      // identical NCrystal call, so a mismatch means a lying plugin, not a
+      // unit problem).
+      if(!numdensityChecked)
+      {
+        numdensityChecked = true;
+        double mdd = model->numberDensity();
+        if(mdd > 0. && std::abs(mdd - m_numdensity) > 1e-12*std::abs(m_numdensity))
+          PROMPT_THROW2(CalcError, "plugin number density " << mdd
+                        << " disagrees with the material density " << m_numdensity);
+      }
+
+      double bias = (role == Plugin::ModelRole::Absorption) ? abs_bias : scatter_bias;
+      m_discretModels->addPhysicsModel(
+        std::make_shared<PluginModelAdapter>(std::move(model), "ncrystal", bias));
+    });
 }

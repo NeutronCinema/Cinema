@@ -19,6 +19,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "PTPluginRegistry.hh"
+#include "PTNCrystalPlugin.hh"
 
 // Bootstrap of the builtin physics models onto the plugin registry. Lives in
 // ModelBulk so PluginAPI needs no dependency on the concrete model code
@@ -30,11 +31,11 @@ namespace {
 
 void registerBuiltinFactories()
 {
-  // Milestone M2/M3: the builtin ncrystal and idealElaScat factories
-  // register here, turning them into plugin #0 and #1 behind the same
-  // Prompt::Plugin::ModelFactory interface as any external model. Until
-  // then the builtin stack is wired directly in cfgPhysicsModel and this
-  // hook deliberately registers nothing.
+  // Plugin #0: NCrystal. The host's NC_RAW/NC_SCATTER non-gidi branches
+  // dispatch through the registry to this factory; see PTNCrystalPlugin.hh.
+  // Milestone M3 adds idealElaScat as plugin #1 the same way.
+  using namespace Prompt::Plugin;
+  registerModelFactory(std::make_unique<NCrystalFactory>());
 }
 
 struct BuiltinRegistrar {

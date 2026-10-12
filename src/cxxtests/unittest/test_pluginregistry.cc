@@ -92,25 +92,39 @@ TEST_CASE("test_pluginregistry")
   CHECK_THROWS_AS(reg.loadFile(helloPath), pt::Error::BadInput);
 
   // A multi-model factory emits its set in registration order, each emission
-  // tagged with the role that selects the host bias key. This is the shape
-  // that keeps a plugin Abs+Scat pair byte-identical to the builtin paths.
+  // tagged with the role that selects the host bias key, and applies the
+  // host's channel-enablement semantics (non-positive role bias skips the
+  // emission). This is the shape that keeps a plugin Abs+Scat pair
+  // byte-identical to the builtin paths.
   const auto *pairFactory = reg.lookup("hellopair");
   REQUIRE(pairFactory != nullptr);
   pt::Plugin::CfgView pairCfg("physics=hellopair;xs_a=1.5;xs_s=4.0");
+  pt::Plugin::HostBias bothOn;
   std::vector<std::pair<pt::Plugin::ModelRole, double>> emitted;
-  pairFactory->produceAll(pairCfg,
+  pairFactory->produceAll(pairCfg, bothOn,
     [&emitted](std::unique_ptr<pt::Plugin::ScatterModel> m, pt::Plugin::ModelRole role)
     { emitted.emplace_back(role, m->crossSection(1.0, nullptr)); });
   REQUIRE(emitted.size() == 2);
+  CHECK(emitted[0].first == pt::Plugin::ModelRole::Scatter);
+  CHECK(emitted[0].second == doctest::Approx(4.0));
+  CHECK(emitted[1].first == pt::Plugin::ModelRole::Absorption);
+  CHECK(emitted[1].second == doctest::Approx(1.5));
+
+  // A skipped channel is never constructed: zero scatter bias leaves only
+  // the absorption emission.
+  emitted.clear();
+  pt::Plugin::HostBias scatOff;
+  scatOff.scatter = 0.0;
+  pairFactory->produceAll(pairCfg, scatOff,
+    [&emitted](std::unique_ptr<pt::Plugin::ScatterModel> m, pt::Plugin::ModelRole role)
+    { emitted.emplace_back(role, m->crossSection(1.0, nullptr)); });
+  REQUIRE(emitted.size() == 1);
   CHECK(emitted[0].first == pt::Plugin::ModelRole::Absorption);
-  CHECK(emitted[0].second == doctest::Approx(1.5));
-  CHECK(emitted[1].first == pt::Plugin::ModelRole::Scatter);
-  CHECK(emitted[1].second == doctest::Approx(4.0));
 
   // The absorbing emission terminates particles and deposits its full energy.
   std::unique_ptr<pt::Plugin::ScatterModel> absModel;
   pt::Plugin::SampleResult absOut{};
-  pairFactory->produceAll(pairCfg,
+  pairFactory->produceAll(pairCfg, bothOn,
     [&](std::unique_ptr<pt::Plugin::ScatterModel> m, pt::Plugin::ModelRole role)
     { if(role == pt::Plugin::ModelRole::Absorption) absModel = std::move(m); });
   REQUIRE(absModel != nullptr);
@@ -121,7 +135,7 @@ TEST_CASE("test_pluginregistry")
 
   // Single-model factories default to exactly one Scatter-role emission.
   emitted.clear();
-  factory->produceAll(pt::Plugin::CfgView("physics=hello;xs=2.5"),
+  factory->produceAll(pt::Plugin::CfgView("physics=hello;xs=2.5"), bothOn,
     [&emitted](std::unique_ptr<pt::Plugin::ScatterModel> m, pt::Plugin::ModelRole role)
     { emitted.emplace_back(role, m->crossSection(1.0, nullptr)); });
   REQUIRE(emitted.size() == 1);

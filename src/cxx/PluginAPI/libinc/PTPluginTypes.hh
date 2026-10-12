@@ -94,7 +94,7 @@ protected:
 // Parsed key=value view of ONE cfg string, following the grammar of
 // Prompt::CfgParser: sections split on ';', each 'key=value', single-quoted
 // spans may contain ';'. Host-reserved keys (physics, scatter_bias, abs_bias,
-// absorp_in_weight, density) are consumed by the host and never surface here.
+// absorp_in_weight) are consumed by the host and never surface here.
 class CfgView {
 public:
   explicit CfgView(std::string raw);

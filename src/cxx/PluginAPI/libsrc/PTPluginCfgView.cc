@@ -35,9 +35,11 @@ CfgView::CfgView(std::string raw)
     m_parsed = Singleton<CfgParser>::getInstance().parse(m_raw);
     m_parsed.getStringIfExist("physics", m_ns);
     // Host-reserved keys are consumed by the host (ParticleProcess) and
-    // never surface to a factory: a plugin cannot scatter_bias or override
-    // its own density.
-    for(const char *reserved : {"physics", "scatter_bias", "abs_bias", "absorp_in_weight", "density"})
+    // never surface to a factory: a plugin cannot bias itself or flip the
+    // host's absorption-weight mode. (Note: density= inside an nccfg= value
+    // is NCrystal's own key and does not appear at this level; the actual
+    // host number-density key, density_per_aa3, belongs to idealElaScat.)
+    for(const char *reserved : {"physics", "scatter_bias", "abs_bias", "absorp_in_weight"})
       m_parsed.parameters.erase(reserved);
   }
   catch (const Error::Exception&)
