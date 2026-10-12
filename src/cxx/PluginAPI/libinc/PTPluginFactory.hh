@@ -21,6 +21,7 @@
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
+#include <functional>
 #include <memory>
 #include "PTPluginModel.hh"
 
@@ -36,6 +37,12 @@
 // ...) which live on their own configuration path.
 namespace Prompt::Plugin {
 
+// Which host-reserved bias key applies to an emitted model. The host parses
+// scatter_bias/abs_bias itself (they are stripped from CfgView, a plugin
+// cannot set its own bias) and hands each emitted model its role-matched
+// value when building the adapter.
+enum class ModelRole { Scatter, Absorption };
+
 class ModelFactory {
 public:
   virtual ~ModelFactory() = default;
@@ -50,6 +57,21 @@ public:
   // Unknown or invalid keys must throw Prompt::Error::BadInput naming the
   // key - there is no parCount boilerplate any more.
   virtual std::unique_ptr<ScatterModel> produce(const CfgView&) const = 0;
+
+  // Multi-model emission, for factories that must register more than one
+  // model per cfg string - the ncrystal Abs+Scat pair with independent
+  // host biases is the motivating case (a fused single model would change
+  // the per-channel weight correction, so it is not byte-identical).
+  // Implementations call emit() once per model, in registration order: the
+  // host builds one adapter per emission and registers them in that order,
+  // keeping ModelCollection's channel-pick math and the disappearing-model
+  // election identical to the builtin paths. Default: emit produce() with
+  // role Scatter.
+  using ModelEmit = std::function<void(std::unique_ptr<ScatterModel>, ModelRole)>;
+  virtual void produceAll(const CfgView& cfg, const ModelEmit& emit) const
+  {
+    emit(produce(cfg), ModelRole::Scatter);
+  }
 };
 
 // Exported from prompt_core with default visibility; called by

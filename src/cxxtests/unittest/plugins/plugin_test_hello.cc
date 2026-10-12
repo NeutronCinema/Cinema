@@ -87,9 +87,74 @@ public:
   }
 };
 
+// An absorption-channel model: every collision terminates the particle.
+class PairAbsModel final : public ScatterModel {
+public:
+  explicit PairAbsModel(double xs) : m_xs(xs) {}
+
+  PluginNumDensity numberDensity() const override { return 0.02; } // atoms/A^3
+  bool declaresAbsorption() const override { return true; }
+
+  PluginXs crossSection(PluginEkin ekin, const double* dir) const override
+  {
+    (void)ekin; (void)dir;
+    return m_xs; // mm^2
+  }
+
+  PluginXs absorptionCrossSection(PluginEkin ekin, const double* dir) const override
+  {
+    (void)ekin; (void)dir;
+    return m_xs;
+  }
+
+  void sample(PluginEkin ekin, const double* dir, Rng& rng,
+              SampleResult& out, SecondarySink* sink) override
+  {
+    (void)dir; (void)rng; (void)sink;
+    out.final_ekin = 0.0;
+    out.deposition = ekin;
+    out.absorbed = true;
+  }
+
+private:
+  double m_xs;
+};
+
+// A two-model factory: the shape the ncrystal plugin needs (an absorption
+// channel plus a scatter channel, emitted in registration order so the host
+// adapters keep the builtin channel-pick math).
+class PairFactory final : public ModelFactory {
+public:
+  const char* ns() const override { return "hellopair"; }
+  const char* description() const override { return "unittest: absorbing + scattering model pair"; }
+
+  std::unique_ptr<ScatterModel> produce(const CfgView&) const override
+  {
+    // This namespace only makes sense as a model SET.
+    PROMPT_THROW(BadInput, "physics=hellopair: this factory only produces model sets; use produceAll");
+  }
+
+  void produceAll(const CfgView& cfg, const ModelEmit& emit) const override
+  {
+    double xs_a = 1.0, xs_s = 2.0;
+    for(const auto &key : cfg.keys())
+    {
+      if(key == "xs_a")
+        xs_a = cfg.number("xs_a");
+      else if(key == "xs_s")
+        xs_s = cfg.number("xs_s");
+      else
+        PROMPT_THROW2(BadInput, "physics=" << cfg.ns() << ": unknown key '" << key << "'");
+    }
+    emit(std::make_unique<PairAbsModel>(xs_a), ModelRole::Absorption);
+    emit(std::make_unique<HelloModel>(xs_s), ModelRole::Scatter);
+  }
+};
+
 void registerPlugin()
 {
   registerModelFactory(std::make_unique<HelloFactory>());
+  registerModelFactory(std::make_unique<PairFactory>());
 }
 
 }
