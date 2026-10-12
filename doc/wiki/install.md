@@ -3,7 +3,7 @@
 This page covers the ways to install Cinema/Prompt, what the `env.sh` environment
 script actually does, the NCrystal environment policy, and the known build and
 environment gotchas. It documents Cinema **2.0.0a5** (`Cinema.__version__`, which is
-authoritative for packages; the `Version` file in the repo says `v2.0.0`).
+authoritative for packages; the `Version` file in the repo says `v2.0.1`).
 
 This wiki uses the Python API (`Cinema.Prompt`, `Simulation`) as the supported way to
 define simulations everywhere. See [First simulation](first-simulation) for the
@@ -144,7 +144,11 @@ wiki) — and then it sources `install.sh` from the repo root. Sourcing it has t
    (default branch, currently `master`), xerces-c **v3.2.3** (shared libs, GDML parser dependency), VecGeom (branch
    `cinema` of the project's VecGeom fork, static library, built with GDML +
    navigation-index + built-in VecCore), hdf5 (**1.12.2** preferred), gidiplus
-   (branch `pt`, `make install4prompt`), the SSSP pseudopotentials (BzScope/DFT side
+   (branch `pt`, gidiplus **3.35.0** plus the project's build patches — fPIC
+   coverage and GNDS `2.2.rc1` acceptance; built via `make install4prompt`
+   with `HDF5_PATH` pointing at the hdf5 above, without which the library
+   links but every HDF5-backed GNDS file fails at runtime), the SSSP
+   pseudopotentials (BzScope/DFT side
    only — BzScope was formerly named PiXiu; the in-repo package directory is still
    `Cinema/PiXiu`) and the `ptgeo` git submodule.
 5. **Exports the daily-use environment**:

@@ -38,7 +38,7 @@
 namespace Prompt
 {
 
-  static const std::string PTVersion = "v2.0.0";
+  static const std::string PTVersion = "v2.0.1";
 
   void printLogo();
   void printLogo2();

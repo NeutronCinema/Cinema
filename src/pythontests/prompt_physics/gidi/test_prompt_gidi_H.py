@@ -10,8 +10,12 @@ popsPATH = os.path.join(cpath, 'testdata', 'pops.xml')
 # external/ptdata GNDS-2.0 endf80). The 2024-10-24 pin predates gidi thermal
 # kernel/data drift: the U238 1 MeV anchor still reproduces at rtol 1e-15, so
 # transport determinism is intact while the thermal kernel state moved.
+# Re-recorded again 2026-10-12 for gidiplus 3.35 (P1.2/P1.4): dual-library check
+# confirms the archived 3.28 .so still reproduces the 2026-10-11 pins exactly;
+# the 3.35 shift (2 of 20 bins by +-1 count) is attributed to the restructured
+# sampling internals (RNG stream divergence) + float cross sections.
 # MUST be re-verified against OpenMC in Phase 4 (L1).
-expected = [0.0, 0.0, 6.0, 27.0, 79.0, 220.0, 607.0, 1288.0, 2883.0, 6240.0, 12502.0, 21836.0, 28508.0, 20148.0, 4172.0, 74.0, 0.0, 0.0, 0.0, 0.0]
+expected = [0.0, 0.0, 6.0, 27.0, 79.0, 220.0, 607.0, 1288.0, 2883.0, 6240.0, 12502.0, 21837.0, 28507.0, 20148.0, 4172.0, 74.0, 0.0, 0.0, 0.0, 0.0]
 
 
 def test_gidi_H():

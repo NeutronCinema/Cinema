@@ -57,6 +57,9 @@ namespace Prompt {
     virtual const SampledResult& sampleReaction(double ekin, const Vector &dir) const override;
 
   protected:
+    // gidiplus >= 3.35 keeps Sampling::Input's temperature/energy private: they are
+    // written per sampling call via setTemperatureAndEnergy, in MeV.
+    double temperatureMeV() const;
 
     const GIDIFactory &m_factory;
     Launcher &m_launcher; 
@@ -68,7 +71,7 @@ namespace Prompt {
     mutable double m_cacheEkin, m_cacheGidiXS;  
     const double m_temperature, m_frac;
     MCGIDI::Sampling::Input *m_input;
-    mutable int m_hashIndex;
+    mutable std::size_t m_hashIndex;
   };
 
   

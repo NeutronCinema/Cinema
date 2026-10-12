@@ -77,6 +77,23 @@ duplicating it.
   `from Cinema.Prompt import ...`). Details:
   [Installation and environments](install).
 
+### GIDI material setup dies with "Cannot read from HDF5 file"
+
+- **Symptom:** building a GIDI-enabled world aborts with
+  `terminate called after throwing an instance of 'GIDI::Exception'` /
+  `what(): parseValuesOfDoubles: Cannot read from HDF5 file as GIDI+ was
+  compiled without HDF5 support.`
+- **Cause:** the gidiplus static library was compiled without its HDF5 reader.
+  This happens when `make install4prompt` is invoked by hand without
+  `HDF5_PATH` (the GNDS nuclear-data files under `external/ptdata/` are
+  HDF5-backed, so without it every parse fails at runtime, not at link time).
+- **Fix:** rebuild gidiplus with the HDF5 variables, exactly as `install.sh`
+  does: `make realclean && make install4prompt HDF5_PATH=$PROMPT_HDF5_PATH
+  HDF5_LIB=$PROMPT_HDF5_LIB HDF5_INCLUDE=$PROMPT_HDF5_HEADER` (plus
+  `CXXFLAGS=-fPIC`), then rebuild Cinema with `cimbuild -r --enablegidi`.
+  The HDF5 symbols themselves are resolved from Cinema's own link line.
+  See [Installation and environments](install).
+
 ### conda wants to downgrade libxml2 (or refuses to)
 
 - **Symptom:** while sourcing `env.sh`, conda resolves a `libxml2=2.9.3`

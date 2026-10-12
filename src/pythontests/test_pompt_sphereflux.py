@@ -54,7 +54,10 @@ def test_simulation():
     # moved by 0.77%) and the ENDF80-gidi-above-5eV hybrid contribution (the mode
     # difference itself is ~10%). Both modes are pinned in the two tests below,
     # giving the gidi mode-influence axis its own regression anchors.
-    npt.assert_array_almost_equal(spct.getWeight().sum(), 0.0004055407043737024, decimal = 15)
+    # Re-recorded again 2026-10-12 for gidiplus 3.35 (P1.2/P1.4): dual-library
+    # check confirms the 3.28 .so still reproduces the 2026-10-11 pin; the 3e-11
+    # relative shift is attributed to the 3.35 sampling-internal restructure.
+    npt.assert_array_almost_equal(spct.getWeight().sum(), 0.0004055407043858582, decimal = 15)
 
 
 def test_simulation_pure_ncrystal():
