@@ -355,7 +355,7 @@ void main2( int argc, char **argv ) {
 
         reaction->sampleProducts( MCProtare, input,
                                   []() -> double { return getRandNumber(nullptr); },
-                                  []( MCGIDI::Sampling::Product & ) {},
+                                  [&products]( MCGIDI::Sampling::Product &aproduct ) { products.push_back( aproduct ); },
                                   products );
         for( std::size_t productIndex = 0; productIndex < products.size( ); ++productIndex ) {
             MCGIDI::Sampling::Product const &product = products[productIndex];

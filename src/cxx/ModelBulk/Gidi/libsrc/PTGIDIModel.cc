@@ -157,11 +157,12 @@ const Prompt::SampledResult& Prompt::GIDIModel::sampleReaction(double ekin, cons
   pt_assert_always(m_mcprotare->threshold( reactionIndex ) < ekin_MeV);
 
   m_products->clear();
-  // The PUSHBACK callback is invoked unconditionally in 3.35, so the old nullptr
-  // "no extra pushback" becomes an empty callable; products are collected via the handler.
+  // In 3.35 the PUSHBACK callback is invoked unconditionally and is the ONLY route
+  // products take into the handler (ProductHandler::add never appends internally),
+  // so it must do the push itself (cf. MCGIDI/Test/upscatterModelB).
   reaction->sampleProducts( m_mcprotare.get(), *m_input,
                             []() -> double { return getRandNumber(nullptr); },
-                            []( MCGIDI::Sampling::Product & ) {},
+                            [this]( MCGIDI::Sampling::Product &aproduct ) { m_products->push_back( aproduct ); },
                             *m_products );
   pt_assert_always(m_input->m_reaction==reaction);
 
