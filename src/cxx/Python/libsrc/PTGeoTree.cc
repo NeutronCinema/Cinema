@@ -1,5 +1,6 @@
 #include <VecGeom/base/Transformation3D.h>
 #include <VecGeom/management/GeoManager.h>
+#include <unordered_map>
 #include "PTGeoTree.hh"
 
 using namespace std;
@@ -159,37 +160,57 @@ void Prompt::GeoTree::makeTree()
   }
   Prompt::GeoTree::Node::allPhysicalNodes.push_back(root);
 
-  // pvolCnt-2, skip the world as it is the root
-  for(size_t i=pvolCnt-2;i<-1;i--)
+  // Create a node for every placed volume except the world, which is the root.
+  // VecGeom registers a daughter before its mother completes, so placed ids
+  // follow no fixed order relative to the hierarchy: top-down nesting through
+  // placeChild (world.placeChild(A); A.placeChild(B)) leaves the mother A at a
+  // lower id than its daughter B. Build the nodes first and link them by id
+  // lookup afterwards, so the tree never depends on the registration order.
+  // (The old code scanned ids in descending order, which silently broke on
+  // top-down nesting: the daughter was processed before its mother existed,
+  // the mother kept childPhysicalID without the matching child node, and the
+  // countChildNode sanity check aborted the run.)
+  std::unordered_map<unsigned, std::shared_ptr<Node>> nodeById;
+  nodeById.reserve(pvolCnt);
+  for(size_t i=0;i<pvolCnt-1;i++)
   {
     auto *vol = geoManager.Convert(i);
-
 
     auto node = std::shared_ptr<Prompt::GeoTree::Node>(new Prompt::GeoTree::Node {vol->id(), vol->GetLogicalVolume()->id()});
     node->setMatrix(vol->GetTransformation());
     // set daughters
-    auto &dau = vol->GetDaughters();
-    for(auto d: dau)
+    for(auto d: vol->GetDaughters())
     {
       node->childPhysicalID.push_back(d->id());
     }
     // node->print();
     Prompt::GeoTree::Node::allPhysicalNodes.push_back(node);
+    nodeById.emplace(vol->id(), node);
+  }
 
+  //set the correlation of each node to the tree: a mother links the node of
+  //every daughter id it lists. The world (the root) joins the same pass: its
+  //childPhysicalID list was recorded before the id map existed.
+  auto linkDaughters = [&](Node *mother, const vecgeom::VPlacedVolume *vol) {
+    for(auto d: vol->GetDaughters())
+    {
+      auto it = nodeById.find(d->id());
+      if(it==nodeById.end())
+      {
+        if(emforce_placement)
+          PROMPT_THROW(BadInput, "Daughter volume is not found");
+        continue;
+      }
+      printf("Physical volume ID %u, \"%s\" added into the geometry tree\n", d->id(), d->GetName());
+      mother->addChild(it->second);
+    }
+  };
 
-    //set the correlation of this node to the tree
-    auto mothers = tree->findMotherNodeByPhysical(i);
-    if(mothers.empty())
-    {
-      if(emforce_placement)
-        PROMPT_THROW(BadInput, "Mother volume is not found");
-      continue;
-    }
-    for(auto m:mothers)
-    {
-      printf("Physical volume ID %zu, \"%s\" added into the geometry tree\n", i, vol->GetName());
-      m->addChild(node);
-    }
+  linkDaughters(root.get(), world);
+  for(size_t i=0;i<pvolCnt-1;i++)
+  {
+    auto *vol = geoManager.Convert(i);
+    linkDaughters(nodeById[vol->id()].get(), vol);
   }
 
   // update the matrix and also the m_fullTreeNode
