@@ -11,7 +11,7 @@
 import pytest
 
 from Cinema.Prompt.configstr import ConfigString
-from Cinema.Prompt.physics import Material, Mirror
+from Cinema.Prompt.physics import Material, Mirror, _validateMatCfg
 
 
 def _materialWithNccfg(text='X'):
@@ -96,3 +96,30 @@ def test_configstring_makecfg_rejects_none_value():
     cs.cfg_missing = None
     with pytest.raises(RuntimeError, match='is None'):
         cs.makeCfg()
+
+
+# --- physics namespace pre-check against the plugin registry ----------------
+#
+# These cases stay microsecond-level: none of the cfg strings references a
+# .ncmat file, so no NCrystal content validation runs - only the namespace
+# existence check against the C++ registry, whose builtin bootstrap is a
+# pair of factory registrations.
+
+def test_plugin_namespace_known_passes():
+    # the builtin idealElaScat resolves through the generic registry route
+    _validateMatCfg("physics=idealElaScat;xs_barn=20.5"
+                    ";density_per_aa3=0.07;energy_transfer_eV=1.0")
+
+
+def test_plugin_namespace_unknown_raises_valueerror():
+    # the python-side check mirrors the C++ 'unknown physics' rejection,
+    # surfaced at material-construction time instead of at launch time
+    with pytest.raises(ValueError, match='unknown physics nope'):
+        _validateMatCfg("physics=nope;xs=1")
+
+
+def test_plugin_namespaces_listing_contains_builtins():
+    from Cinema.Interface import pluginNamespaces
+    known = pluginNamespaces()
+    assert known is not None
+    assert {'ncrystal', 'idealElaScat'} <= known

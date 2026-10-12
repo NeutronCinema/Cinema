@@ -30,13 +30,14 @@ Material(nccfg).cfg                      (python, physics.py)
        PhysicsFactory::checkPhysicsType  PTPhysicsFactory.cc
          NC_RAW       string failed key=value parsing -> raw NCrystal cfg
          NC_SCATTER   physics=ncrystal;nccfg='...';scatter_bias=..;abs_bias=..
-         NC_IDEALSCAT physics=idealElaScat;xs_barn=..;density_per_aa3=..
+         PLUGIN       physics=<ns> with no dedicated host branch: resolved
+                      through the physics-model plugin registry
   -> ModelCollection (one per particle type, cached per config string)
        built from DiscreteModel(s):
          NCrystalScat   thermal + elastic scattering kernel
          NCrystalAbs    absorption (kills the particle, analog mode)
          GIDIModel      ENDF-based reactions, if GIDI is enabled
-         IdealElaScat   analytic test scatterer
+         idealElaScat   analytic test scatterer (ships as builtin plugin #1)
   -> macroscopic cross section = number_density * sum(biased microscopic xs)
 ```
 
@@ -95,9 +96,7 @@ Rendering rules worth knowing (verified in `physics.py`):
 - Reading `.cfg` before a config string was set raises
   `ValueError("Material config string is not set")`.
 - Setting both biases to `0` does **not** throw: both models are skipped and the volume
-  becomes transparent (total cross section 0). Keep at least one bias non-zero. (A
-  `BadInput` guard for this case exists in `PhysicsFactory::createParticleProcess`, but
-  that helper is not on the current `Volume`/`ModelCollection` code path.)
+  becomes transparent (total cross section 0). Keep at least one bias non-zero.
 
 `Material` stores its cfg_-prefixed attributes like every
 [`ConfigString`](https://code.ihep.ac.cn/cinema-developers/cinema/-/blob/master/src/python/Cinema/Prompt/configstr.py)
@@ -265,13 +264,18 @@ them proportionally (section 7).
 | `NCrystalScat` | bulk, scattering | Bragg diffraction + S(α,β) thermal scattering + free-gas elastic from NCrystal data; oriented-aware (`crossSection(E)` or `crossSection(E, dir)`); `sampleReaction` returns the final energy and direction; xs in barn, energies in eV; carries an energy-validity range and asserts `ekin < maxEkin` when its cross section is evaluated |
 | `NCrystalAbs` | bulk, absorption | NCrystal capture; not direction-dependent; sampling marks the result "disappeared" with `deposition = ekin`; in analog mode the particle is killed |
 | `GIDIModel` | bulk, reactions | continuous-energy ENDF reactions via GIDI+ (one MCGIDI protare per isotope per reaction group: elastic MT=2 and non-elastic); URR probability tables enabled for neutrons; delayed-neutron data handled (warning printed where incomplete); optional photon production; compile-time optional |
-| `IdealElaScat` | bulk, scattering | analytic isotropic elastic scatterer: `xs_barn` (default 1, non-zero), `density_per_aa3` (default 0.05), optional fixed `energy_transfer_eV`, optional `scatter_bias`; intended for verification and tests |
+| `idealElaScat` | bulk, scattering | analytic isotropic elastic scatterer: `xs_barn` (default 1, non-zero), `density_per_aa3` (default 0.05), optional fixed `energy_transfer_eV`, optional `scatter_bias`; intended for verification and tests. Ships as builtin plugin #1 of the physics-model plugin registry |
 | `Mirror`, `DiskChopper`, `EnergyReflector` | surface | neutron-optics models, attached via `surfaceCfg` (section 6) |
 
 The dispatch between them is purely the config string: a raw NCrystal string creates
 `NCrystalAbs` + `NCrystalScat` (unbiased); `physics=ncrystal;...` creates the two models
-honouring the bias values; `physics=idealElaScat;...` creates the analytic model. GIDI
-rearranges the combination (section 8). Only **one** disappearing (absorption-type) model
+honouring the bias values; `physics=idealElaScat;...` creates the analytic model. Any
+**other** `physics=<ns>` resolves through the physics-model plugin registry: plugin
+files listed in `CINEMA_PLUGIN_LIST` (colon-separated `.so` paths, the same policy as
+NCrystal's `NCRYSTAL_PLUGIN_LIST`) register their namespaces, and an unknown namespace
+raises `ValueError("unknown physics <ns>")` at
+`Volume` construction in Python (the C++ side rejects with the same message at launch).
+GIDI rearranges the combination (section 8). Only **one** disappearing (absorption-type) model
 per `ModelCollection` is allowed — adding a second throws.
 
 ## 6. Surface physics

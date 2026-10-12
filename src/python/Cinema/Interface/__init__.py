@@ -84,6 +84,23 @@ def importFunc(funcName, resType, argType):
 # copies the buffer into an immutable bytes object at call time.
 _pt_last_error = importFunc('pt_last_error', type_cstr, [])
 
+# Namespace listing of the C++ physics-model plugin registry (builtin
+# factories plus any loaded plugin files): "ns\tdescription\n" lines in a
+# thread-local C-side buffer. Checked protocol like the other bridges.
+pt_PluginRegistry_list = importFunc('pt_PluginRegistry_list', type_int,
+                                    [ctypes.POINTER(type_cstr)])
+
+
+def pluginNamespaces():
+    """Set of physics namespaces the C++ plugin registry can resolve (builtin
+    factories and loaded plugins), or None when the listing is unavailable -
+    callers fail open and let the C++ side decide."""
+    out = type_cstr()
+    if pt_PluginRegistry_list(ctypes.byref(out)) != 0:
+        return None
+    return {line.split('\t', 1)[0]
+            for line in out.value.decode('utf-8', 'replace').splitlines() if line}
+
 
 def raiseOnBridgeError(status):
     """Raise RuntimeError with the recorded C++ message when a bridged
