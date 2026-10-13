@@ -213,6 +213,27 @@ size_t Prompt::Launcher::goWithSecondStack(uint64_t numParticle)
   return m_stackManager.getNumParticleInSecondStack();
 }
 
+std::vector<char> Prompt::Launcher::exportSecondStack() const
+{
+  return m_stackManager.dumpSecondStack();
+}
+
+size_t Prompt::Launcher::secondStackSize() const
+{
+  return m_stackManager.secondStackBlobSize();
+}
+
+void Prompt::Launcher::importSecondStack(const std::vector<char> &blob, uint64_t normaliseTo)
+{
+  m_stackManager.importSecondStack(blob, normaliseTo);
+}
+
+std::vector<char> Prompt::Launcher::extractSecondStack(const std::vector<char> &blob,
+                                                       const std::vector<uint64_t> &localIndices) const
+{
+  return m_stackManager.extractSecondStack(blob, localIndices);
+}
+
 void Prompt::Launcher::go(uint64_t numParticle, double printPrecent, bool recordTrj, bool timer, bool save)
 {
   // fixme: recordTrj should be done in the particle class with an optional switch.

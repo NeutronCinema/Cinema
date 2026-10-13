@@ -50,6 +50,16 @@ namespace Prompt {
     void normaliseSecondStack(long unsigned num);
     void swapStack();
 
+    // Fission-bank exchange for the parallel power iteration (PromptMPI +
+    // mpi4py): the C++ core stays MPI-free, the python side allgathers the
+    // blobs between ranks and hands them back here. The record layout is
+    // documented next to BankRecord in PTStackManager.cc.
+    std::vector<char> dumpSecondStack() const;
+    size_t secondStackBlobSize() const;
+    void importSecondStack(const std::vector<char> &blob, long unsigned normaliseTo);
+    std::vector<char> extractSecondStack(const std::vector<char> &blob,
+                                         const std::vector<uint64_t> &localIndices) const;
+
     size_t getNumParticleInStack() const { return m_stack.size(); }
     size_t getNumParticleInSecondStack() const { return m_stack_second.size(); }
 

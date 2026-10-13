@@ -32,6 +32,16 @@ namespace Prompt {
     void go(uint64_t numParticle, double printPrecent, bool recordTrj=false, bool timer=true, bool save2Disk=true);
     size_t goWithSecondStack(uint64_t numParticle);
 
+    // fission-bank exchange for the parallel power iteration: the python
+    // side (PromptMPI + mpi4py) allgathers the blobs across ranks between
+    // cycles and hands them back; normaliseTo mirrors the per-rank share
+    // the serial path would normalise to
+    std::vector<char> exportSecondStack() const;
+    size_t secondStackSize() const;
+    void importSecondStack(const std::vector<char> &blob, uint64_t normaliseTo);
+    std::vector<char> extractSecondStack(const std::vector<char> &blob,
+                                         const std::vector<uint64_t> &localIndices) const;
+
     void loadGeometry(const std::string &geofile); 
 
     void simOneEvent(bool recordTrj);

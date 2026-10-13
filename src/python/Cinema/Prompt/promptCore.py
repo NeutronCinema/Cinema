@@ -59,6 +59,53 @@ def _guard_second_make_world(func):
     return wrapper
 
 
+def _nn_windows(num, size):
+    """Contiguous per-rank slices of a ``num``-sized shared sample.
+
+    Used by the parallel power iteration both for the transport split and
+    for the nearest-neighbour bank exchange: the first ``num % size`` ranks
+    take one extra site, the windows tile [0, num) exactly. Returns a list
+    of (lo, hi) tuples, one per rank.
+    """
+    base, extra = divmod(int(num), int(size))
+    out = []
+    lo = 0
+    for rank in range(int(size)):
+        width = base + (1 if rank < extra else 0)
+        out.append((lo, lo + width))
+        lo += width
+    return out
+
+
+def _nn_send_indices(sample, counts, num, size, rank):
+    """Pure assignment half of the nearest-neighbour bank exchange.
+
+    Given the shared sorted sample of source sites, the per-rank bank sizes
+    and the caller's rank, returns (cum, sends): cum is the exclusive scan
+    of counts (the rank bank ranges), sends[j] the LOCAL record indices
+    (already offset by this rank's own start) this rank must hand to rank
+    j, including its locally-owned slice at j == rank. Identical inputs
+    give identical outputs on every rank, which is what lets each rank
+    derive the whole assignment without a request phase.
+    """
+    cum = np.zeros(size + 1, dtype=np.int64)
+    cum[1:] = np.cumsum(counts)
+    windows = _nn_windows(num, size)
+    need = sample[windows[rank][0]:windows[rank][1]]
+    owner = np.searchsorted(cum, need, side='right') - 1
+    # rank j receives every site in its slice that lives in my range; for
+    # j == myself that is the locally-owned part of my own slice
+    sends = []
+    for j in range(size):
+        jneed = sample[windows[j][0]:windows[j][1]]
+        if j == rank:
+            sel = need[owner == rank]
+        else:
+            sel = jneed[(jneed >= cum[rank]) & (jneed < cum[rank + 1])]
+        sends.append((sel - cum[rank]).astype(np.uint64))
+    return cum, sends
+
+
 def _no_ghost_registry_entries():
     """Keep Volume.scorer_dict free of entries for rejected registrations.
 
@@ -237,14 +284,17 @@ class Prompt:
     def simulateSecondStack(self, num):
         """
         Simulate using second stack.
-        
+
         Args:
             num: Number of simulation events
-            
+
         Returns:
             Simulation result
         """
-        return self.l.goWithSecondStack(int(num))
+        num = int(num)
+        if num < 0:
+            raise ValueError(f'num must be non-negative, got {num}')
+        return self.l.goWithSecondStack(num)
 
     def simulate(self, gun, num: int = 0, timer=True, save2Disk=False):
         """
@@ -349,23 +399,51 @@ class PromptMPI(Prompt):
     MPI parallel augmented Prompt.
 
     Auto-ranking of processes and auto-reduce of histogram data.
-    
+    simulateSecondStack runs the power iteration (keff) in parallel: the
+    ranks collectively advance one fission chain instead of independent
+    ones, exchanging fission banks between cycles. Two exchange schemes
+    (bank_exchange=...):
+
+      'nearest' (default): the OpenMC "nearest neighbours" scheme. Every
+        rank draws the same sample of source sites against the conceptual
+        pooled bank, and only the sites that change owner cross ranks —
+        expected O(sqrt(num)) particles per rank, independent of the rank
+        count. Derives the exchange sample from the seed argument, which
+        must be identical on every rank (the per-rank transport streams
+        still differ: each rank is seeded with seed + rank).
+      'pooled': an allgather of the raw banks, then each rank resamples its
+        share from the pooled bank with the exact serial sampling. Bit-level
+        serial statistics per bank state; every rank receives the whole
+        bank, O(num) particles per rank.
+
     Attributes:
         comm: MPI communicator
         rank (int): Current process MPI rank
         size (int): Total number of MPI processes
     """
-    
-    def __init__(self, seed=4096) -> None:
+
+    def __init__(self, seed=4096, bank_exchange='nearest') -> None:
         """
         Initialize MPI version of Prompt instance.
 
         Args:
-            seed: Initial random seed, each process gets different seed (seed + rank)
+            seed: Initial random seed, each process gets different seed
+                (seed + rank). Must be the same on every rank; the parallel
+                bank exchange additionally derives its shared sampling from
+                this value.
+            bank_exchange: 'nearest' (default) or 'pooled', see the class
+                docstring
 
         Raises:
             ImportError: If mpi4py is not available in this environment
+            ValueError: On an unknown bank_exchange value
         """
+        if bank_exchange not in ('nearest', 'pooled'):
+            raise ValueError(f"unknown bank_exchange {bank_exchange!r}; "
+                             "expected 'nearest' or 'pooled'")
+        self._bank_exchange = bank_exchange
+        self._base_seed = int(seed)
+        self._keff_cycle = 0
         if MPI is None:
             raise ImportError(
                 'PromptMPI requires the mpi4py package, which is not installed '
@@ -408,6 +486,133 @@ class PromptMPI(Prompt):
             super().simulate(gun, batchSize, timer=False, save2Disk=False)
         else:
             super().simulate(gun, num - batchSize * (self.size - 1), timer=timer, save2Disk=save2Disk)
+
+    def simulateSecondStack(self, num):
+        """MPI version of the power-iteration cycle (parallel keff).
+
+        Every rank transports its share of the source bank (the first
+        ``num % size`` ranks take one extra particle, so the pooled source
+        is exactly ``num``), then the fission banks are exchanged according
+        to bank_exchange and each rank enters the next cycle with its share
+        of source sites. This is the same single-chain power iteration the
+        serial code runs, with the transport stratified over ranks — the
+        bank exchange mirrors what OpenMC calls "synchronizing fission
+        bank", in either the nearest-neighbour or the pooled form.
+
+        ``num`` must be at least ``size``: a pooled source smaller than the
+        rank count would leave some ranks with an empty share and no
+        well-defined place in the chain. ``num`` may change between calls
+        (every rank is active on every cycle, so each bank simply
+        resamples to the new share of the current chain). ``num`` must be
+        identical on every rank, like the call pattern itself.
+
+        Returns:
+            The pooled fission-birth count of this cycle. Divide it by the
+            total source size per cycle exactly as in the serial loop; the
+            per-cycle statistics of all ranks are summed into this number.
+
+        Raises:
+            ValueError: if ``num < size`` (or negative).
+            RuntimeError: collectively, with the serial
+                "secondary stack is empty" wording, if no fission happened
+                on any rank this cycle — the same clean stop the serial
+                path offers. Also raised collectively when a rank enters
+                the iteration with an empty fission bank (run more events
+                in simulate() first so every rank banks fissions).
+        """
+        if self._size == 1:
+            # identity path: bit-identical to the serial Prompt, no
+            # collective calls, no extra RNG consumption
+            return super().simulateSecondStack(num)
+        num = int(num)
+        if num < self._size:
+            raise ValueError(f'parallel power iteration needs num >= size '
+                             f'(got num={num}, size={self._size}); a pooled source '
+                             'smaller than the rank count has no well-defined '
+                             'chain semantics')
+        # collective entry guard, before transport: a rank whose fission
+        # bank is still empty (its share of the initial simulate() produced
+        # no fissions) would throw a rank-local CalcError inside the C++
+        # entry and hang the other ranks in the first collective
+        empty = 1 if self.l.secondStackSize() <= 12 else 0 # 12 bytes: header-only blob
+        if self.comm.allreduce(empty, op=MPI.SUM):
+            raise RuntimeError('a rank enters the power iteration with an empty '
+                               'fission bank; run more events in simulate() first '
+                               'so every rank banks fissions')
+        lo, hi = _nn_windows(num, self._size)[self._rank]
+        local = hi - lo
+        births = self.l.goWithSecondStack(local)
+        total = self.comm.allreduce(births, op=MPI.SUM)
+        if total == 0:
+            # the serial clean stop, raised in lockstep on every rank: the
+            # bank is empty everywhere, there is no next cycle
+            raise RuntimeError('secondary stack is empty')
+        if self._bank_exchange == 'nearest':
+            self._exchangeBankNearestNeighbour(num, local)
+        else:
+            self._exchangeBankPooled(local)
+        # drives the shared sampling of the nearest-neighbour exchange;
+        # identical across ranks because every rank calls in lockstep
+        self._keff_cycle += 1
+        return total
+
+    def _exchangeBankPooled(self, local):
+        """Allgather the raw banks; resample the local share from the pool.
+
+        Ranks with a zero share sit out: they contribute no blob and touch
+        no RNG (a stale bank is harmless, they never transport it)."""
+        pool = b''.join(self.comm.allgather(
+            self.l.exportSecondStack() if local else b''))
+        if local:
+            # resample this rank's share from the pooled bank; the next
+            # cycle's goWithSecondStack normalise then sees an already
+            # correct-sized bank and consumes no further random numbers
+            if len(pool) < 12: # all-dead safety net: simulateSecondStack
+                # already stops the loop collectively before we get here
+                raise RuntimeError('secondary stack is empty')
+            self.l.importSecondStack(pool, local)
+
+    def _exchangeBankNearestNeighbour(self, num, local):
+        """OpenMC 12.1.2 "Nearest Neighbors Algorithm" bank exchange.
+
+        Instead of gathering the whole pooled bank on every rank, all ranks
+        draw the same num indices into the conceptual pooled bank from one
+        shared seed and view them sorted — the next cycle's source, in bank
+        order. Rank r owns the [lo, hi) slice of that order; most of its
+        slice lands inside its own [a, b) bank range (it exported that bank
+        above), and only the boundary deviation changes owner. Expected
+        exchange volume is O(sqrt(num)) sites at the worst boundary and
+        independent of the rank count, versus O(num) per rank for the
+        pooled allgather. Every rank derives the same assignment from the
+        shared sample, so no request phase is needed; the exchange is one
+        allgather of the bank sizes plus one alltoall of the site blobs.
+        """
+        blob = self.l.exportSecondStack() if local else b''
+        # (len - 12) // 84 unpacks the record count of a PKB1 blob; the
+        # layout is fixed by BankRecord in PTStackManager.cc
+        counts = self.comm.allgather(max(len(blob) - 12, 0) // 84)
+        total_bank = sum(counts)
+        if total_bank == 0:
+            # all-dead safety net: simulateSecondStack already stops the
+            # loop collectively before we get here. Keep the bank empty;
+            # the literal is the 12-byte empty PKB1 blob (magic + count 0).
+            if local:
+                self.l.importSecondStack(b'PKB1' + b'\x00' * 8, 0)
+            return
+        # the shared sample: identical on every rank; sorted, it is the next
+        # source in bank order. Sampling with replacement, like OpenMC.
+        rng = np.random.default_rng([self._base_seed, self._keff_cycle])
+        sample = np.sort(rng.integers(0, total_bank, size=num, dtype=np.int64))
+        cum, sends_idx = _nn_send_indices(sample, counts, num, self._size, self._rank)
+        sends = [self.l.extractSecondStack(blob, idx) if idx.size else b''
+                 for idx in sends_idx]
+        recv = self.comm.alltoall(sends)
+        # normaliseTo == 0: the slices partition the shared sample, so the
+        # bank is already exactly the local share — no resampling, no RNG.
+        # Zero-share ranks receive only empty slices and keep their (never
+        # transported) bank untouched.
+        if local:
+            self.l.importSecondStack(b''.join(recv), 0)
 
     def show(self, gun, num: int = 0, mergeMesh=False, xscale=1.0, yscale=1.0, zscale=1.0, byMat=False, addLegend=False, geoClip=False):
         """

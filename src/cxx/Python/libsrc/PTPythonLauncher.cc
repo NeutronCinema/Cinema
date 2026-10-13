@@ -23,7 +23,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
+#include <vector>
 
 namespace pt = Prompt;
 
@@ -52,6 +54,12 @@ int pt_Launcher_go(void* obj, uint64_t numParticle, double printPrecent, bool re
 int pt_Launcher_setGun(void *obj, const char* cfg);
 int pt_Launcher_simOneEvent(void *obj, bool recordTrj);
 int pt_Launcher_goWithSecondStack(void *obj, uint64_t numParticle, size_t *out);
+int pt_Launcher_secondStackSize(void *obj, size_t *out);
+int pt_Launcher_dumpSecondStack(void *obj, char *buf, size_t cap, size_t *written);
+int pt_Launcher_loadSecondStack(void *obj, const char *data, size_t len, uint64_t normaliseTo);
+int pt_Launcher_extractSecondStack(void *obj, const char *data, size_t len,
+                                   const char *idxData, size_t nIdx,
+                                   char *buf, size_t cap, size_t *written);
 
 const char* pt_last_error();
 int pt_bridge_record_error();
@@ -136,6 +144,75 @@ int pt_Launcher_goWithSecondStack(void *obj, uint64_t numParticle, size_t *out)
 {
   try {
     *out = static_cast<pt::Launcher *>(obj)->goWithSecondStack(numParticle);
+    return 0;
+  }
+  catch (...) {
+    return pt_bridge_record_error();
+  }
+}
+
+// Bridged: the fission-bank exchange for the parallel power iteration.
+// Two-step dump (query the blob size, then fill a caller-allocated buffer)
+// follows the getTrajSize/getTrajectory idiom; the load validates the
+// format, so a corrupted or foreign blob surfaces as DataLoadError through
+// the bridge instead of crossing into ctypes.
+int pt_Launcher_secondStackSize(void *obj, size_t *out)
+{
+  try {
+    *out = static_cast<pt::Launcher *>(obj)->secondStackSize();
+    return 0;
+  }
+  catch (...) {
+    return pt_bridge_record_error();
+  }
+}
+
+int pt_Launcher_dumpSecondStack(void *obj, char *buf, size_t cap, size_t *written)
+{
+  try {
+    std::vector<char> blob = static_cast<pt::Launcher *>(obj)->exportSecondStack();
+    if(blob.size() > cap)
+      PROMPT_THROW2(CalcError, "second-stack blob needs " << blob.size() << " bytes, caller provided " << cap);
+    memcpy(buf, blob.data(), blob.size());
+    *written = blob.size();
+    return 0;
+  }
+  catch (...) {
+    return pt_bridge_record_error();
+  }
+}
+
+int pt_Launcher_loadSecondStack(void *obj, const char *data, size_t len, uint64_t normaliseTo)
+{
+  try {
+    std::vector<char> blob(data, data + len);
+    static_cast<pt::Launcher *>(obj)->importSecondStack(blob, normaliseTo);
+    return 0;
+  }
+  catch (...) {
+    return pt_bridge_record_error();
+  }
+}
+
+// Bridged like loadSecondStack: record selection for the nearest-neighbour
+// bank exchange. The indices arrive as a packed buffer of native-endian
+// uint64 (python side passes a numpy uint64 array's bytes); the output
+// buffer is sized exactly by the caller (12-byte header + 84 bytes per
+// selected record, both fixed by the record layout in PTStackManager.cc).
+int pt_Launcher_extractSecondStack(void *obj, const char *data, size_t len,
+                                   const char *idxData, size_t nIdx,
+                                   char *buf, size_t cap, size_t *written)
+{
+  try {
+    std::vector<char> blob(data, data + len);
+    std::vector<uint64_t> indices(nIdx);
+    if(nIdx)
+      memcpy(indices.data(), idxData, nIdx * sizeof(uint64_t));
+    std::vector<char> out = static_cast<pt::Launcher *>(obj)->extractSecondStack(blob, indices);
+    if(out.size() > cap)
+      PROMPT_THROW2(CalcError, "second-stack extract needs " << out.size() << " bytes, caller provided " << cap);
+    memcpy(buf, out.data(), out.size());
+    *written = out.size();
     return 0;
   }
   catch (...) {

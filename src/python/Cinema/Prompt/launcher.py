@@ -46,6 +46,14 @@ _pt_Launcher_setGun = importFunc('pt_Launcher_setGun', type_int, [type_voidp, ty
 # (DataLoadError) must raise a catchable RuntimeError, not abort the process
 _pt_Launcher_goWithSecondStack = importFunc('pt_Launcher_goWithSecondStack', type_int, [type_voidp, type_sizet, type_sizetp])
 
+# Fission-bank exchange for the parallel power iteration (PromptMPI allgathers
+# the blobs between ranks). loadSecondStack is bridged: a corrupted or foreign
+# blob raises DataLoadError through the bridge instead of crashing.
+_pt_Launcher_secondStackSize = importFunc('pt_Launcher_secondStackSize', type_int, [type_voidp, type_sizetp])
+_pt_Launcher_dumpSecondStack = importFunc('pt_Launcher_dumpSecondStack', type_int, [type_voidp, type_cstr, type_sizet, type_sizetp])
+_pt_Launcher_loadSecondStack = importFunc('pt_Launcher_loadSecondStack', type_int, [type_voidp, type_cstr, type_sizet, type_sizet])
+_pt_Launcher_extractSecondStack = importFunc('pt_Launcher_extractSecondStack', type_int, [type_voidp, type_cstr, type_sizet, type_cstr, type_sizet, type_cstr, type_sizet, type_sizetp])
+
 _pt_ResourceManager_getHist = importFunc('pt_ResourceManager_getHist', type_voidp, [type_cstr])
 
 _pt_setWorld = importFunc('pt_setWorld', None, [type_voidp])
@@ -208,6 +216,59 @@ class Launcher():
         num = type_sizet()
         raiseOnBridgeError(_pt_Launcher_goWithSecondStack(self.cobj, int(numPrimary), ctypes.pointer(num)))
         return num.value
+
+    def secondStackSize(self):
+        """The byte size the next exportSecondStack blob would have.
+
+        A header-only query on the C++ side (O(1)), so callers can probe
+        the bank — e.g. an MPI entry guard checking for an empty bank —
+        without serialising it. 12 bytes means an empty bank."""
+        size = type_sizet()
+        raiseOnBridgeError(_pt_Launcher_secondStackSize(self.cobj, ctypes.pointer(size)))
+        return size.value
+
+    def exportSecondStack(self):
+        """The fission bank (second stack) as an opaque bytes blob.
+
+        Fixed-layout records owned by the C++ side (see StackManager.cc);
+        the only legal consumer is importSecondStack, possibly after an
+        MPI allgather to pool the banks of all ranks."""
+        buf = ctypes.create_string_buffer(max(self.secondStackSize(), 1))
+        written = type_sizet()
+        raiseOnBridgeError(_pt_Launcher_dumpSecondStack(self.cobj, buf, len(buf), ctypes.pointer(written)))
+        return buf.raw[:written.value]
+
+    def importSecondStack(self, blob, normaliseTo):
+        """Replace the fission bank with an exportSecondStack blob.
+
+        normaliseTo (an int in [0, 1e9], ValueError outside) resamples the
+        pooled bank to the local share with the same sampling (and the same
+        RNG draws per bank state) as the serial goWithSecondStack entry
+        path. normaliseTo == 0 replaces the bank verbatim (the
+        nearest-neighbour exchange hands back an already exactly-sized
+        bank)."""
+        normaliseTo = int(normaliseTo)
+        if normaliseTo < 0 or normaliseTo > 10**9:
+            raise ValueError(f'normaliseTo out of range [0, 1e9]: {normaliseTo}')
+        raiseOnBridgeError(_pt_Launcher_loadSecondStack(self.cobj, blob, len(blob), normaliseTo))
+
+    def extractSecondStack(self, blob, local_indices):
+        """Pick records out of an exportSecondStack blob by local index.
+
+        Returns a fresh self-describing blob holding the selected records in
+        the order given; duplicate indices duplicate the record (the
+        nearest-neighbour exchange samples with replacement). local_indices
+        is a sequence of non-negative ints bounded by the blob's record
+        count; anything else raises DataLoadError through the bridge."""
+        idx = np.asarray(local_indices, dtype=np.uint64)
+        if idx.ndim != 1:
+            raise ValueError('local_indices must be one-dimensional')
+        out = ctypes.create_string_buffer(12 + idx.size * 84)
+        written = type_sizet()
+        raiseOnBridgeError(_pt_Launcher_extractSecondStack(
+            self.cobj, blob, len(blob),
+            idx.tobytes(), idx.size, out, len(out), ctypes.pointer(written)))
+        return out.raw[:written.value]
 
 
     def getHist(self, cfg):
