@@ -60,6 +60,56 @@ Physics is cached: volumes that share the same material config string share one
 `ParticleProcess`. In the Python layer the same machinery is reachable offline through
 `Cinema.Prompt.compoundModel.ModelCollection` (section 9).
 
+### 1.1 The modular model layer
+
+Everything a material does at a collision is a *model*. The layer has three pieces
+(all under `src/cxx`):
+
+```text
+PhysicsFactory                    classifies the cfg string (PTPhysicsFactory.cc)
+  -> ParticleProcess              one per material cfg; owns the number density
+       -> ModelCollection         one per particle type (PDG): the model bag
+            [DiscreteModel]       NCrystalScat / NCrystalAbs / GIDIModel /
+                                  PluginModelAdapter — each declares the
+                                  validity domain it answers for (pdg, emin, emax)
+       -> PluginRegistry          resolves physics=<ns> to a model factory;
+                                  builtins register on first cfg dispatch
+```
+
+- **`DiscreteModel`** ([PTDiscreteModel.hh](https://code.ihep.ac.cn/cinema-developers/cinema/-/blob/master/src/cxx/ModelBulk/libinc/PTDiscreteModel.hh))
+  is the common base: metadata (name, PDG, open energy interval, oriented flag) plus
+  `getCrossSection(ekin[, dir])` and `sampleReaction(ekin, dir)`. A model never sees
+  the geometry or other materials — it answers "how likely, and what happens" for one
+  process on one particle type.
+- **`ModelCollection`** ([PTModelCollection.hh](https://code.ihep.ac.cn/cinema-developers/cinema/-/blob/master/src/cxx/ModelBulk/libinc/PTModelCollection.hh))
+  is the per-material *model bag*, one per particle type. At a collision it sums the
+  biased cross sections of the models whose validity domain covers the particle
+  (`totalCrossSection`), picks a channel proportional to those sums, and samples it
+  (`pickAndSample`). It owns the xs cache, the `scatter_bias`/`abs_bias` split, the
+  disappearing-reaction (absorption) election and the lazy-gidi materialisation queue
+  (section 8.3). Models are `shared_ptr`s; identical config strings share one
+  `ParticleProcess`, hence one collection.
+- **Built-in models**: `NCrystalScat` (thermal + elastic kernel), `NCrystalAbs`
+  (analog absorption), `GIDIModel` (ENDF reactions: neutrons elastic/non-elastic;
+  photons arrive as `GIDIModel`s too, built in the two disjoint passes of section 8),
+  and plugin-hosted models bridged by `PluginModelAdapter`.
+- **The plugin registry** (PluginAPI): `physics=<ns>` with no dedicated host branch
+  resolves through `PluginRegistry`, a name → factory map bootstrapped with the
+  builtins — NCrystal as plugin #0, the analytic `idealElaScat` as plugin #1 (the
+  template for external models). A factory's `produceAll` emits `ScatterModel`
+  objects — the stable plugin ABI (metadata + `crossSection` + `sample`, with the
+  RNG stream and the secondary stack injected by the host) — and the adapter bridges
+  each onto `DiscreteModel`, so biasing, caching and channel picking stay host code.
+  Host-reserved cfg keys (`scatter_bias`, `abs_bias`, `density`) are applied by the
+  host, never by the plugin, and a plugin that declares a number density is
+  cross-checked against the material's density.
+
+New physics therefore enters as one `ScatterModel` + factory registered under a
+namespace — the transport loop, bias machinery and scorers are untouched. That is how
+`idealElaScat` ships, and the same seam is where the planned gidi-plugin and
+relaxation-model components will land (the in-core `GIDIModel` stays until the plugin
+conversion is decided).
+
 ## 2. The `Material` class
 
 `Material` (`Cinema.Prompt.physics`) wraps an NCrystal config string and the bias
@@ -404,6 +454,7 @@ if gidi.available():
 | `setEnableGidi` / `enable()` | `False` | master switch |
 | `setGidiThreshold` | `5.0` eV | hybrid switching energy; `> 0`: NCrystal below, GIDI above; `<= 0`: GIDI does *all* reactions including elastic (no NCrystal scattering model is created) |
 | `setGammaTransport` | `False` | creates photon transport models and atomic (element-level) photon data |
+| `setGammaCutEkin` | `1000.0` eV | photons below this kinetic energy are killed at their next collision with the full energy deposited locally (Boundary crossings are not collisions, so a photon below the cut still escapes through vacuum). `0` disables the cut |
 | `setEnableGidiPowerIteration` | `False` | power-iteration (criticality-style) mode |
 | `setGidiPops` / `setGidiMap` | `$CINEMAPATH/external/ptdata/pops.xml` / `all.map` | ENDF data description files; point at a local ENDF data directory containing your data (the test suite uses a `testdata/` tree with `pops.xml`, `all.map` and `neutron/`) |
 | `.isCompiled` | — | attribute, `True` only when the library was built with GIDI; all GIDI tests guard with it |
@@ -461,12 +512,25 @@ What happens per material when GIDI is enabled (`PTParticleProcess.cc` +
    applies to the below-threshold NCrystal model. Note `abs_bias=0.` cannot
    remove GIDI's absorption handling (there is an explicit todo about this in
    the source).
-5. `setGammaTransport(True)` additionally creates photon models from the
-   isotope list *and* from the element-collapsed list (`shrink2element`) for
-   atomic (photoelectric-style) data; isotopes with missing photon data are
-   skipped with a warning.
+5. `setGammaTransport(True)` additionally creates photon models in two
+   disjoint passes so the atomic data is registered exactly once: an
+   **isotope pass** with photonuclear data only (isotopes without a
+   photonuclear file, e.g. H1, are skipped with a warning), then an
+   **element-collapsed pass** (`shrink2element`) with photo-atomic data only.
+   Each element's photo-atomic total therefore enters a material once.
 6. URR probability tables are enabled for the neutron protares; incomplete
    delayed-neutron data prints a warning and is not included.
+
+Two traps to know when transporting photons:
+
+- **Vacuum is not void for photons.** A gidi photon model is materialised for
+  whatever the geometry hands over, including empty world volumes, which get
+  freegas-H1 photo-atomic physics at ~1 atom/cm3. Keep sensitive vacuum
+  volumes out of a gamma field until a density gate exists.
+- **Dilute still means transport.** Trace concentrations build full-strength
+  microscopic cross sections; the macroscopic rate scales with number density
+  as usual — check the material decomposition if a dopant's effect looks
+  surprising.
 
 ## 9. Verifying materials offline
 
