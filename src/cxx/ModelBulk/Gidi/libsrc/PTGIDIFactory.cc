@@ -35,6 +35,7 @@
 Prompt::GIDIFactory::GIDIFactory()
 :m_ctrdata(Singleton<Prompt::GidiSetting>::getInstance()),
 m_pops(nullptr), m_map(nullptr), m_particles(nullptr), m_construction(nullptr),
+m_constructionPhotonNuclear(nullptr), m_constructionPhotonAtomic(nullptr),
 m_domainHash(nullptr), m_smr1(nullptr), m_initialised(false), m_photonParticleAdded(false)
 {}
 
@@ -48,6 +49,14 @@ void Prompt::GIDIFactory::ensureInitialised() const
   m_particles = new GIDI::Transporting::Particles();
   m_construction = new GIDI::Construction::Settings ( GIDI::Construction::ParseMode::all,
                                                 GIDI::Construction::PhotoMode::nuclearAndAtomic );
+  // the photon isotope pass wants photonuclear data only and the element
+  // pass photo-atomic data only: one pass each keeps the atomic cross
+  // section registered exactly once (a nuclearAndAtomic isotope pass plus
+  // an element pass double-counts it)
+  m_constructionPhotonNuclear = new GIDI::Construction::Settings ( GIDI::Construction::ParseMode::all,
+                                                GIDI::Construction::PhotoMode::nuclearOnly );
+  m_constructionPhotonAtomic = new GIDI::Construction::Settings ( GIDI::Construction::ParseMode::all,
+                                                GIDI::Construction::PhotoMode::atomicOnly );
   m_domainHash = new MCGIDI::DomainHash ( 4000, 1e-8, 20 );
 
   GIDI::Transporting::Particle neutron(PoPI::IDs::neutron, GIDI::Transporting::Mode::MonteCarloContinuousEnergy);
@@ -73,6 +82,8 @@ Prompt::GIDIFactory::~GIDIFactory()
   delete m_map;
   delete m_particles;
   delete m_construction;
+  delete m_constructionPhotonNuclear;
+  delete m_constructionPhotonAtomic;
   delete m_domainHash;
 }
 
@@ -93,16 +104,33 @@ const PoPI::Database &Prompt::GIDIFactory::getPoPs() const
   return *m_pops;
 }
 
-std::shared_ptr<MCGIDI::ProtareSingle>
-Prompt::GIDIFactory::cachedProtare(const std::string &name, const std::string &tempLabel, const char *mode,
+std::shared_ptr<MCGIDI::Protare>
+Prompt::GIDIFactory::cachedProtare(const std::string &name, const std::string &label, const char *mode,
                                    bool gammaTransport, bool sampleNTP,
-                                   const std::function<std::shared_ptr<MCGIDI::ProtareSingle>()> &builder) const
+                                   const std::function<std::shared_ptr<MCGIDI::Protare>()> &builder) const
 {
-  ProtareCacheKey key( name, tempLabel, mode, gammaTransport, sampleNTP );
+  // Identity is canonical, not lexical: PoPI resolves aliases (final) and
+  // hands back the integer (Z, A, metastable index), so the same nuclide
+  // reached under a different name still shares one entry instead of
+  // duplicating the (large) MCGIDI tables. Ids PoPI does not know keep a
+  // distinct, name-carrying entry (the builder below then reports them
+  // missing). Note the Base overloads: the particleZ(Database, string)
+  // convenience overload dynamic_casts to Particle and throws bad_cast for
+  // chemical elements.
+  int Z = -1, A = 0, ms = 0;
+  if( m_pops->exists( name ) ) {
+    PoPI::Base const &base = m_pops->get<PoPI::Base>( m_pops->final( name ) );
+    Z = PoPI::particleZ( base );
+    A = PoPI::particleA( base );
+    ms = PoPI::particleMetaStableIndex( base );
+  }
+  ProtareCacheKey key{ Z, A, ms, label, mode, gammaTransport, sampleNTP };
+  if( Z < 0 )
+    key.label = name + "@" + label;
   auto iter = m_protareCache.find( key );
   if( iter != m_protareCache.end() ) {
     std::cout << "Reusing the cached MCGIDI tables for isotope " << name
-              << " (" << mode << ", temperature label " << tempLabel << ")" << std::endl;
+              << " (" << mode << ", temperature label " << label << ")" << std::endl;
     return iter->second;
   }
   auto protare = builder();
@@ -283,13 +311,21 @@ double minEKin, double maxEKin) const
 
 std::vector<std::shared_ptr<Prompt::GIDIModel>> Prompt::GIDIFactory::createPhotonGIDIModel(const std::vector<Prompt::IsotopeComposition> & vecComp,
 double bias, bool gammaTransport, bool sampleNTP,
-double minEKinElastic, double maxEKinElastic, double minEKinNonelastic, double maxEKinNonelastic) const
+double minEKinElastic, double maxEKinElastic, double minEKinNonelastic, double maxEKinNonelastic,
+bool atomicPass) const
 {
   std::vector<std::shared_ptr<GIDIModel>> gidimodels;
 
   ensureInitialised();
   if(gammaTransport)
     ensurePhotonParticle();
+
+  // the isotope pass reads photonuclear data through the nuclearOnly
+  // Construction, the element pass photo-atomic data through the atomicOnly
+  // one (see the header); nuclearAndAtomic in a single pass would register
+  // the atomic cross section twice (once per pass)
+  GIDI::Construction::Settings &construction = atomicPass ? *m_constructionPhotonAtomic
+                                                          : *m_constructionPhotonNuclear;
 
   // fixme: make shared pointer map to cache MCGIDI::ProtareSingle for repeated isotopes
   // the key should be the label (i.e. iter->heatedCrossSection()) plus the  isotope name
@@ -305,10 +341,19 @@ double minEKinElastic, double maxEKinElastic, double minEKinNonelastic, double m
       continue;
       // PROMPT_THROW2(DataLoadError, "GIDIFactory createPhotonGIDIModel failed to load data for " << name);
     }
-    auto *gidiprotare =  (GIDI::Protare *) m_map->protare( *m_construction, *m_pops, "photon", name, "", "", true, true ) ;
+    auto *gidiprotare =  (GIDI::Protare *) m_map->protare( construction, *m_pops, "photon", name, "", "", true, true ) ;
+    if(!gidiprotare)
+    {
+      // the map returns null when the half of the data this pass wants does
+      // not exist (e.g. no photonuclear file for H1 in the isotope pass);
+      // skipping keeps the rest of the material transportable
+      std::cout << "WARNING: photon " << (atomicPass ? "atomic" : "nuclear") << " data for "
+                << name << " could not be constructed. It is ignored.\n";
+      continue;
+    }
     std::cout << "Using data file " << gidiprotare->realFileName() << std::endl;
     auto delay = GIDI::Transporting::DelayedNeutrons::on;
-    if( !gidiprotare->isDelayedFissionNeutronComplete() ) 
+    if( !gidiprotare->isDelayedFissionNeutronComplete() )
     {
         std::cout << "WARNING: delayed neutron fission data for "<< name<< " are incomplete and are not included." << std::endl;
         delay = GIDI::Transporting::DelayedNeutrons::off;
@@ -325,17 +370,17 @@ double minEKinElastic, double maxEKinElastic, double minEKinNonelastic, double m
         std::cout << " " << *iter;
     }
     std::cout << std::endl;
-    
+
     GIDI::Styles::TemperatureInfos temperatures = gidiprotare->temperatures();
     for( GIDI::Styles::TemperatureInfos::const_iterator iter = temperatures.begin(); iter != temperatures.end(); ++iter ) {
       std::cout << "label = " << iter->heatedCrossSection() << "  temperature = " << iter->temperature().value() << std::endl;
     }
-   
+
 
     // std::string label( temperatures[0].heatedCrossSection() ); // fixme: heated? gridded
     std::string label( temperatures[0].griddedCrossSection() );
 
-    double selectedTemp_K = temperatures[0].temperature().value()*Unit::MeV / const_boltzmann; 
+    double selectedTemp_K = temperatures[0].temperature().value()*Unit::MeV / const_boltzmann;
 
     MCGIDI::Transporting::MC MC ( *m_pops, gidiprotare->projectile().ID(), &gidiprotare->styles(), label, delay, 150.0 );
     // MC.setNuclearPlusCoulombInterferenceOnly( true );
@@ -344,19 +389,33 @@ double minEKinElastic, double maxEKinElastic, double minEKinNonelastic, double m
     MC.want_URR_probabilityTables(false);
     MC.setThrowOnError( false );
 
-   
-    // if( gidiprotare->protareType() != GIDI::ProtareType::single ) {
-    //     PROMPT_THROW(CalcError, "ProtareType must be single");
-    // }
-    
     GIDI::ExcludeReactionsSet exc;
     int numberOfReactions = gidiprotare->numberOfReactions();
     std::cout <<"Isotope " << name << " has " << numberOfReactions << " reactions in total"<< "\n";
 
-    auto g_mcProtare = std::make_shared<MCGIDI::ProtareComposite> ( *m_smr1, static_cast<GIDI::ProtareComposite const &>( *gidiprotare ), *m_pops, MC, 
-                                                                *m_particles, *m_domainHash, temperatures, exc );
-    // customize photon index to consistent with pdg, photon_pdg = 22
-    g_mcProtare->setUserParticleIndex(g_mcProtare->photonIndex(), const_photon_pgd);
+    // dispatch on the real type inside the cached build: the isotope pass
+    // yields single photonuclear protares and the element pass single
+    // photo-atomic protares, but a map entry may still hand back a composite.
+    // Viewing a ProtareSingle as a ProtareComposite reference reads out of
+    // bounds (the old segfault). The protare goes through the cache keyed by
+    // the canonical (Z, A): two materials sharing an element share the one
+    // set of photo-atomic tables instead of each building a copy.
+    auto g_mcProtare = cachedProtare( name, label, atomicPass ? "atomic" : "nuclear",
+                                      gammaTransport, sampleNTP, [&]() {
+      std::shared_ptr<MCGIDI::Protare> protare;
+      if( gidiprotare->protareType() == GIDI::ProtareType::composite )
+        protare = std::make_shared<MCGIDI::ProtareComposite>( *m_smr1, static_cast<GIDI::ProtareComposite const &>( *gidiprotare ), *m_pops, MC,
+                                                              *m_particles, *m_domainHash, temperatures, exc );
+      else
+      {
+        pt_assert_always(gidiprotare->protareType() == GIDI::ProtareType::single);
+        protare = std::make_shared<MCGIDI::ProtareSingle>( *m_smr1, static_cast<GIDI::ProtareSingle const &>( *gidiprotare ), *m_pops, MC,
+                                                           *m_particles, *m_domainHash, temperatures, exc );
+      }
+      // customize photon index to consistent with pdg, photon_pdg = 22
+      protare->setUserParticleIndex(protare->photonIndex(), const_photon_pgd);
+      return protare;
+    });
     gidimodels.emplace_back(std::make_shared<GIDIModel>(const_photon_pgd, "g_"+name, g_mcProtare, selectedTemp_K, bias, frac, minEKinNonelastic, maxEKinNonelastic));
 
     delete gidiprotare;

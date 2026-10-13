@@ -87,3 +87,13 @@ void pt_GidiSetting_setGammaTransport(void* obj, bool t)
 {
     return static_cast<pt::GidiSetting *>(obj)->setGammaTransport(t);
 }
+
+double pt_GidiSetting_getGammaCutEkin(void* obj)
+{
+    return static_cast<pt::GidiSetting *>(obj)->getGammaCutEkin();
+}
+
+void pt_GidiSetting_setGammaCutEkin(void* obj, double t)
+{
+    static_cast<pt::GidiSetting *>(obj)->setGammaCutEkin(t);
+}

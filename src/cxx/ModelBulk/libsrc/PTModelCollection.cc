@@ -24,6 +24,7 @@
 #include "PTPhysicsModel.hh"
 #include "PTActiveVolume.hh"
 #include <algorithm>
+#include <limits>
 #ifdef ENABLE_GIDI
 #include "PTGIDIFactory.hh"
 #include "PTGIDIModel.hh"
@@ -111,13 +112,20 @@ void Prompt::ModelCollection::prepareGidi()
 
     if(pending.photon)
     {
+      // isotope pass: photonuclear data only (atomicPass=false); element
+      // pass: photo-atomic data only (atomicPass=true). One pass each keeps
+      // the atomic cross section registered exactly once - both passes
+      // reading nuclearAndAtomic data would double-count it in the total.
       auto gmodels = gidifactory.createPhotonGIDIModel(pending.isotopes, 1.,
                                                        pending.photon, pending.sampleNTP);
       for(const auto &v : gmodels)
         addPhysicsModel(v);
 
       auto atomic_models = gidifactory.createPhotonGIDIModel(shrink2element(pending.isotopes), 1.,
-                                                             pending.photon, pending.sampleNTP);
+                                                             pending.photon, pending.sampleNTP,
+                                                             0, std::numeric_limits<double>::max(),
+                                                             0, std::numeric_limits<double>::max(),
+                                                             /*atomicPass=*/true);
       for(const auto &v : atomic_models)
         addPhysicsModel(v);
     }

@@ -41,6 +41,13 @@ namespace Prompt
     bool getGammaTransport() const { return m_gidiEnableGamma; }
     void setGammaTransport(bool t) { m_gidiEnableGamma=t; }
 
+    // photons below this kinetic energy (eV) are killed at their next
+    // collision with local energy deposition: the photo-atomic absorption
+    // cross sections grow steeply at low energy, so the collision happens
+    // almost immediately. Set to 0 to disable the cut.
+    double getGammaCutEkin() const { return m_gammaCutEkin; }
+    void setGammaCutEkin(double t) { m_gammaCutEkin=t; }
+
     bool getEnableGidi() const { return m_enablegidi; }
     void setEnableGidi(bool t) { m_enablegidi=t; }
 
@@ -71,6 +78,7 @@ namespace Prompt
 
     bool m_enablegidi;
     double m_gidithreshold;
+    double m_gammaCutEkin;
     bool m_gidiSampleNonTransportingParticles;
     bool m_gidiEnableGamma;
     bool m_gidiPowerIteration;

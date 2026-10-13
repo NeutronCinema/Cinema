@@ -160,6 +160,9 @@ void pt_GidiSetting_setEnableGidiPowerIteration(void* obj, bool t);
 bool pt_GidiSetting_getGammaTransport(void* obj);
 void pt_GidiSetting_setGammaTransport(void* obj, bool t);
 
+double pt_GidiSetting_getGammaCutEkin(void* obj);
+void pt_GidiSetting_setGammaCutEkin(void* obj, double t);
+
 double pt_nccalNumDensity(const char *s);  
 
 void pt_merge_mcpl(const char* file_output, unsigned nfiles, const char ** files);

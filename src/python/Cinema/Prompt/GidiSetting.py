@@ -47,6 +47,9 @@ _pt_GidiSetting_setEnableGidiPowerIteration = importFunc('pt_GidiSetting_setEnab
 _pt_GidiSetting_getGammaTransport = importFunc('pt_GidiSetting_getGammaTransport', type_bool, [type_voidp] )
 _pt_GidiSetting_setGammaTransport = importFunc('pt_GidiSetting_setGammaTransport', type_bool, [type_voidp, type_bool] )
 
+_pt_GidiSetting_getGammaCutEkin = importFunc('pt_GidiSetting_getGammaCutEkin', type_dbl, [type_voidp] )
+_pt_GidiSetting_setGammaCutEkin = importFunc('pt_GidiSetting_setGammaCutEkin', None, [type_voidp, type_dbl] )
+
 
 @singleton
 class GidiSetting():
@@ -56,7 +59,8 @@ class GidiSetting():
     # live setting instead of being mirrored here.
     _DEFAULTS = {'enable': False, 'threshold': 5.0,
                  'sampleNonTransportingParticles': True,
-                 'gammaTransport': False, 'powerIteration': False}
+                 'gammaTransport': False, 'powerIteration': False,
+                 'gammaCutEkin': 1000.0}
 
     def __init__(self):
         self.cobj = _pt_GidiSetting_getInstance()
@@ -162,6 +166,15 @@ class GidiSetting():
     
     def getGammaTransport(self):
         return _pt_GidiSetting_getGammaTransport(self.cobj)
-    
+
     def setGammaTransport(self, b):
         _pt_GidiSetting_setGammaTransport(self.cobj, b)
+
+    def getGammaCutEkin(self):
+        """The photon transport cutoff in eV: photons below it are killed at
+        their next collision with local energy deposition (default 1000 eV,
+        0 disables the cut)."""
+        return _pt_GidiSetting_getGammaCutEkin(self.cobj)
+
+    def setGammaCutEkin(self, t):
+        _pt_GidiSetting_setGammaCutEkin(self.cobj, t)

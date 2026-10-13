@@ -110,6 +110,22 @@ namespace — the transport loop, bias machinery and scorers are untouched. That
 relaxation-model components will land (the in-core `GIDIModel` stays until the plugin
 conversion is decided).
 
+**What the layer promises for growth** — the dispatch invariant is
+`(material, particle PDG, kinetic energy) → set of answering models`:
+
+- *More energy bands* need no new machinery: a band is just a model whose declared
+  `[emin, emax)` covers it, and the existing NCrystal↔GIDI hybrid switch is exactly
+  two models with adjacent intervals. Three bands (say thermal, epithermal, fast) are
+  three models — the transport sums whichever answer.
+- *More particles* need one more `ModelCollection` (one exists per PDG) and models
+  declaring that PDG; photons already ride this path.
+- Honest seams that are *not* general yet: the plugin ABI carries no particle
+  dimension (a `ScatterModel` factory cannot yet supply a photon or electron model —
+  the gidi photon models are host-wired); low-energy policies such as the photon
+  production cutoff are PDG-special-cased in the host process; and the model bag's
+  name/structure is due a simplification pass. These are tracked as roadmap items,
+  not hidden behind the diagram.
+
 ## 2. The `Material` class
 
 `Material` (`Cinema.Prompt.physics`) wraps an NCrystal config string and the bias
@@ -476,7 +492,13 @@ event** (`simulate` / `simulateSecondStack` / a `simOneEvent` call).
 `makeWorld()` therefore costs NCrystal-level time only, and the first event
 absorbs the data-loading cost. Repeated isotopes across materials share one
 set of cached Monte Carlo tables — a nuclide appearing in several materials
-is parsed and broadened once per (isotope, temperature).
+is parsed and broadened once per (isotope, temperature). The same holds for
+the photon models since the 2026-10 photon round: neutron and photo-atomic
+protares are cached under their *canonical* PoPI identity `(Z, A)` (aliases
+and different spellings of one nuclide collapse onto a single entry), so two
+materials sharing a nuclide hold one copy of the tables, never two. The
+reuse is pinned by a unit test
+(`test_gidi_photon.cc::gidi protare reuse across materials`).
 
 Offline cross-section queries (`ModelCollection.totalCrossSection` and the
 Python `xs()` helper) materialise the pending models on first use, so they

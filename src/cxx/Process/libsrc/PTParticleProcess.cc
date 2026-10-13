@@ -82,6 +82,25 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
     return false;
   }
 
+#ifdef ENABLE_GIDI
+  // Photon cutoff (GidiSetting::gammaCutEkin, default 1 keV, read live per
+  // collision): a photon below the cut is killed at this collision with its
+  // energy deposited locally. The photo-atomic absorption cross sections
+  // grow steeply at low energy, so below-cutoff photons collide almost
+  // immediately and the collision-time kill approximates a true production
+  // threshold; a photon reaching the wall unchanged is not cut (crossing a
+  // boundary is not a collision) and keeps escaping through vacuum.
+  {
+    const double cut = Singleton<GidiSetting>::getInstance().getGammaCutEkin();
+    if(cut > 0. && particle.getPDG() == const_photon_pgd && particle.getEKin() < cut)
+    {
+      particle.setDeposition(particle.getEKin());
+      particle.kill(Particle::KillType::ABSORB);
+      return false;
+    }
+  }
+#endif
+
   auto &res = m_discretModels->pickAndSample(particle.getEKin(), particle.getDirection());
 
   // fixme: when a particle exiting a volume, a reaction channel is forced to sampled at the moment
