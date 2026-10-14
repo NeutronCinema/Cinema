@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -23,8 +23,8 @@
 
 #include <cmath>
 #include <limits>
+#include <memory>
 #include "NCrystal/NCrystal.hh"
-#include "PTIdealElaScat.hh"
 #include "PTPhysicsFactory.hh"
 #include "PTActiveVolume.hh"
 #include "PTNCrystalScat.hh"
@@ -37,6 +37,9 @@
 #include "PTGidiSetting.hh"
 #endif
 #include "PTStackManager.hh"
+#include "PTPluginRegistry.hh"
+#include "PTNCrystalPlugin.hh"
+#include "PTPluginModelAdapter.hh"
 
 Prompt::ParticleProcess::ParticleProcess(const std::string &name, int pdg, bool absorp_in_weight)
     : m_rng(Singleton<SingletonPTRand>::getInstance()),
@@ -79,12 +82,29 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
     return false;
   }
 
+#ifdef ENABLE_GIDI
+  // Photon cutoff (GidiSetting::gammaCutEkin, default 1 keV, read live per
+  // collision): a photon below the cut is killed at this collision with its
+  // energy deposited locally. The photo-atomic absorption cross sections
+  // grow steeply at low energy, so below-cutoff photons collide almost
+  // immediately and the collision-time kill approximates a true production
+  // threshold; a photon reaching the wall unchanged is not cut (crossing a
+  // boundary is not a collision) and keeps escaping through vacuum.
+  {
+    const double cut = Singleton<GidiSetting>::getInstance().getGammaCutEkin();
+    if(cut > 0. && particle.getPDG() == const_photon_pgd && particle.getEKin() < cut)
+    {
+      particle.setDeposition(particle.getEKin());
+      particle.kill(Particle::KillType::ABSORB);
+      return false;
+    }
+  }
+#endif
+
   auto &res = m_discretModels->pickAndSample(particle.getEKin(), particle.getDirection());
 
   // fixme: when a particle exiting a volume, a reaction channel is forced to sampled at the moment
   // lab_ekin could be -1 in those cases, but the transport keeps going, that is very confusing.
-  // std::cout << particle.getEventID() << ", is alive? " << particle.isAlive() << ", wall? "<< hitWall<<
-  //  ", labEkin " << lab_ekin   << ", effEkin " << particle.getEffEKin() << "\n";
 
   double weightCorrection = m_discretModels->calculateWeight(stepLength * m_numdensity, false);
 
@@ -152,6 +172,14 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
   const bool enablegidi = cd.getEnableGidi();
   const double gidithreshold = cd.getGidiThreshold();
   #endif
+
+  // The non-gidi ncrystal branches below route through the plugin registry
+  // (ncrystal = plugin #0): the builtin NCrystalFactory emits the same
+  // channels in the legacy order and each becomes a PluginModelAdapter, so
+  // ModelCollection's channel-pick math is unchanged. The gidi branches
+  // stay on the legacy constructors - the PendingGidi/DeferredModel
+  // machinery is ModelCollection state, not expressible as model emission.
+  // The factory ships in the core library until M5 repackages it.
   if (type == PhysicsFactory::PhysicsType::NC_RAW)
   {
     m_numdensity = pfact.nccalNumDensity(cfgstr);
@@ -161,43 +189,33 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
     {
       // in this mode, abs and nonelastic scattering (e.g. MT!=2) are all be done in GIDI+
       // ncrystal only does the scattering below the threshold
-      std::cout << "enabled gidi model for " << cfgstr 
+      std::cout << "enabled gidi model for " << cfgstr
       << ", the swithching energy from ncrystal to digi is at " << gidithreshold << "eV.\n";
       // NCrystal models
       if(gidithreshold>0)
-         m_discretModels->addPhysicsModel(std::make_shared<NCrystalScat>(cfgstr, 1.0, 0, gidithreshold));    
-      
-      // GIDI models 
+         m_discretModels->addPhysicsModel(std::make_shared<NCrystalScat>(cfgstr, 1.0, 0, gidithreshold));
+
+      // GIDI models: decompose now (cheap, front-loads config errors) but
+      // defer the GNDS parsing to the first transport event (P2.1); the
+      // settings below are frozen here (P2.2)
       auto &nm = Prompt::Singleton<Prompt::MaterialDecomposer>::getInstance();
       double temperature(0.);
       auto isotopes = nm.decompose(cfgstr, temperature);
       for(const auto &v: isotopes)
         std::cout << v << std::endl;
 
-      auto &gidifactory = Prompt::Singleton<Prompt::GIDIFactory>::getInstance();  
-      auto models = gidifactory.createNeutronGIDIModel(isotopes, temperature, 1., gidithreshold<=0.?0.:gidithreshold);
-
-      for(const auto &v: models)
-        m_discretModels->addPhysicsModel(v);
-
-      if(cd.getGammaTransport())
-      {
-        auto models = gidifactory.createPhotonGIDIModel(isotopes, 1.);
-        for(const auto &v: models)
-           m_discretModels->addPhysicsModel(v);
-
-        auto atomic_models = gidifactory.createPhotonGIDIModel(shrink2element(isotopes), 1.);
-        for(const auto &v: atomic_models)
-           m_discretModels->addPhysicsModel(v);
-      }
+      m_discretModels->registerPendingGidi(std::move(isotopes), temperature, 1.,
+                                           gidithreshold<=0.?0.:gidithreshold, cd.getGammaTransport(),
+                                           cd.getGidiSampleNTP());
     }
     else
     #endif
     {
-      m_discretModels->addPhysicsModel(std::make_shared<NCrystalAbs>(cfgstr, 1.0, 0));
-      m_discretModels->addPhysicsModel(std::make_shared<NCrystalScat>(cfgstr, 1.0, 0));
+      // plugin #0: the same Abs+Scat pair in the same order, at unit bias,
+      // produced through the registry instead of direct construction
+      cfgNCrystalViaPlugin(cfgstr, 1.0, 1.0);
     }
-    
+
 
   }
   else if (type == PhysicsFactory::PhysicsType::NC_SCATTER)
@@ -217,56 +235,125 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
     //fixme: todo: how to disable absorption when abs_bias is zero?
     if(enablegidi)
     {
-      std::cout << "enabled gidi model for " << cfgstr 
+      std::cout << "enabled gidi model for " << cfgstr
       << ", the switching energy at " << gidithreshold << "eV.\n";
 
-      // GIDI models
+      // GIDI models: decompose now (cheap, front-loads config errors) but
+      // defer the GNDS parsing to the first transport event (P2.1); the
+      // settings below are frozen here (P2.2)
       auto &nm = Prompt::Singleton<Prompt::MaterialDecomposer>::getInstance();
       double temperature (0);
       auto isotopes = nm.decompose(nccfg, temperature);
       for(const auto &v: isotopes)
         std::cout << v << std::endl;
 
+      m_discretModels->registerPendingGidi(std::move(isotopes), temperature, abs_bias,
+                                           gidithreshold<=0.?0:gidithreshold, cd.getGammaTransport(),
+                                           cd.getGidiSampleNTP());
 
-      auto &gidifactory = Prompt::Singleton<Prompt::GIDIFactory>::getInstance();  
-      auto models = gidifactory.createNeutronGIDIModel(isotopes, temperature, abs_bias, gidithreshold<=0.?0:gidithreshold);
-
-      for(const auto &v: models)
-        m_discretModels->addPhysicsModel(v);
-
-      // NCrystal models 
+      // NCrystal models: held back so that the deferred gidi models land
+      // before them, matching the eager model order
       if(gidithreshold>0.)
       {
-        m_discretModels->addPhysicsModel(std::make_shared<NCrystalScat>(nccfg, scatter_bias, 0, gidithreshold));
+        m_discretModels->registerDeferredModel(std::make_shared<NCrystalScat>(nccfg, scatter_bias, 0, gidithreshold));
       }
       else
         std::cout << "!The ncrystal elastic scatter is not created!\n";
-
-      if(cd.getGammaTransport())
-      {
-        auto models = gidifactory.createPhotonGIDIModel(isotopes, 1.);
-        for(const auto &v: models)
-           m_discretModels->addPhysicsModel(v);
-
-        auto atomic_models = gidifactory.createPhotonGIDIModel(shrink2element(isotopes), 1.);
-        for(const auto &v: atomic_models)
-           m_discretModels->addPhysicsModel(v);
-      }
     }
     else
     #endif
     {
-      if(scatter_bias > 0.)
-        m_discretModels->addPhysicsModel(std::make_shared<NCrystalScat>(nccfg, scatter_bias, 0));
-      if(abs_bias > 0.)
-        m_discretModels->addPhysicsModel(std::make_shared<NCrystalAbs>(nccfg, abs_bias, 0));
+      // plugin #0: the factory applies the same channel-enablement rule
+      // (bias <= 0 skips, before construction) and the Scat-then-Abs order
+      cfgNCrystalViaPlugin(cfgstr, scatter_bias, abs_bias);
     }
   }
-  else if (type == PhysicsFactory::PhysicsType::NC_IDEALSCAT)
+  else if (type == PhysicsFactory::PhysicsType::PLUGIN)
   {
-    auto idsct = pfact.createIdealElaScat(cfgstr);
-    m_discretModels->addPhysicsModel(idsct);
-    m_numdensity =  reinterpret_cast<IdealElaScat *>(idsct.get())->getNumberDensity();
+    // generic plugin route: physics=<ns> without a dedicated host branch.
+    // The host consumes only the reserved keys (absorp_in_weight above, the
+    // biases below); every other key belongs to the factory, which validates
+    // its own key set. Replaces the former hardwired idealElaScat branch.
+    CfgParser::StringCfg cfg = Singleton<CfgParser>::getInstance().parse(cfgstr);
+
+    std::string ns;
+    if(!cfg.getStringIfExist("physics", ns))
+      PROMPT_THROW(BadInput, "\"physics\" keyword is not defined. ");
+
+    double scatter_bias = 1.0;
+    cfg.getDoubleIfExist("scatter_bias", scatter_bias);
+
+    double abs_bias = 1.0;
+    cfg.getDoubleIfExist("abs_bias", abs_bias);
+
+    cfgPluginViaRegistry(cfgstr, ns, scatter_bias, abs_bias);
   }
 
+}
+
+void Prompt::ParticleProcess::cfgNCrystalViaPlugin(const std::string &cfgstr, double scatter_bias, double abs_bias)
+{
+  auto *factory = Plugin::PluginRegistry::instance().lookup("ncrystal");
+  if(!factory)
+    PROMPT_THROW(BadInput, "the builtin ncrystal plugin factory is not registered");
+
+  Plugin::HostBias hb;
+  hb.scatter = scatter_bias;
+  hb.abs = abs_bias;
+
+  bool numdensityChecked = false;
+  factory->produceAll(Plugin::CfgView(cfgstr), hb,
+    [this,scatter_bias,abs_bias,&numdensityChecked](std::unique_ptr<Plugin::ScatterModel> model,
+                                                    Plugin::ModelRole role)
+    {
+      // Cross-check the plugin number-density contract against m_numdensity
+      // (the host keeps calling nccalNumDensity; both values go through the
+      // identical NCrystal call, so a mismatch means a lying plugin, not a
+      // unit problem). The ABI delivers atoms/A^3; m_numdensity is atoms/mm^3.
+      if(!numdensityChecked)
+      {
+        numdensityChecked = true;
+        double mdd = model->numberDensity() / Unit::Aa3;
+        if(mdd > 0. && std::abs(mdd - m_numdensity) > 1e-12*std::abs(m_numdensity))
+          PROMPT_THROW2(CalcError, "plugin number density " << mdd
+                        << " disagrees with the material density " << m_numdensity);
+      }
+
+      double bias = (role == Plugin::ModelRole::Absorption) ? abs_bias : scatter_bias;
+      m_discretModels->addPhysicsModel(
+        std::make_shared<PluginModelAdapter>(std::move(model), "ncrystal", bias));
+    });
+}
+
+void Prompt::ParticleProcess::cfgPluginViaRegistry(const std::string &cfgstr, const std::string &ns,
+                                                   double scatter_bias, double abs_bias)
+{
+  auto *factory = Plugin::PluginRegistry::instance().lookup(ns);
+  if(!factory)
+    PROMPT_THROW2(BadInput, "unknown physics " << ns);
+
+  Plugin::HostBias hb;
+  hb.scatter = scatter_bias;
+  hb.abs = abs_bias;
+
+  bool numdensitySet = false;
+  factory->produceAll(Plugin::CfgView(cfgstr), hb,
+    [this,ns,scatter_bias,abs_bias,&numdensitySet](std::unique_ptr<Plugin::ScatterModel> model,
+                                                   Plugin::ModelRole role)
+    {
+      // The first emission decides the process number density. The ABI
+      // delivers atoms/A^3; the host keeps atoms/mm^3. A value <= 0 means
+      // the plugin reports a macroscopic xs (it scales xs itself), so the
+      // neutral factor 1.0 is stored.
+      if(!numdensitySet)
+      {
+        numdensitySet = true;
+        double nd = model->numberDensity();
+        m_numdensity = nd > 0. ? nd / Unit::Aa3 : 1.0;
+      }
+
+      double bias = (role == Plugin::ModelRole::Absorption) ? abs_bias : scatter_bias;
+      m_discretModels->addPhysicsModel(
+        std::make_shared<PluginModelAdapter>(std::move(model), ns, bias));
+    });
 }

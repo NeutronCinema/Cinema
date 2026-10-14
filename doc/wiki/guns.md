@@ -292,11 +292,11 @@ sim.simulate("gun=MCPLGun;mcplfile=source.mcpl.gz;", 1000000)
 MCPL output — writing particle records at the other end of a simulation — is covered on
 [scorers](scorers) (`MCPLOutHelper`) and [results-analysis](results-analysis) (`PTMCPL`,
 `PromptFileReader`): the standard pattern is to dump particles at a surface with one run and
-feed the file back as a gun source for the next stage of the instrument. Mind the unit
-convention when crossing tools: Cinema's own files store internal units (eV/s/mm) while
-`MCPLGun` (and every standard MCPL reader) expects cm/MeV/ms — the round trip works because
-each side converts, but a file handed to other codes first needs the conversion recipe on the
-[Units](units) page.
+feed the file back as a gun source for the next stage of the instrument. Both sides speak
+the MCPL standard units (cm/MeV/ms): the writer converts on the way out, `MCPLGun` converts
+on the way in, so the round trip needs no manual conversion. (Files written by Cinema
+v2.0.1a1 through v2.1.0 stored the internal eV/s/mm — the conversion recipe for those is on the
+[Units](units) page.)
 
 ---
 
@@ -306,11 +306,11 @@ each side converts, but a file handed to other codes first needs the conversion 
    `energy=0` (the Python default) selects a fixed built-in thermal spectrum with mean
    0.0380 eV (measured); `energy>0` selects monoenergetic emission. There is no way to emit
    E = 0 particles — and you would not want to.
-2. **`UniModeratorGun` docstring is wrong about the band.** The docstring (Python and C++)
-   says `U[mean−range, mean+range]`; the code draws `mean + range·(r − 0.5)`, i.e. the band is
-   `[mean − range/2, mean + range/2]` with `range_wl` the **full width** (measured: exact
-   span [1.75, 2.25] Å for `mean_wl=2.0; range_wl=0.5`). This page documents the actual
-   behaviour; the docstring defect is known.
+2. **`UniModeratorGun` band is a half-window in `range_wl`.** The code draws
+   `mean + range·(r − 0.5)`, i.e. the band is `[mean − range/2, mean + range/2]` with
+   `range_wl` the **full width** (measured: exact span [1.75, 2.25] Å for
+   `mean_wl=2.0; range_wl=0.5`). Docstrings (Python and C++) state the same; this page
+   documents the behaviour.
 3. **A source/slit gun without source/slit aborts the process.** The factory requires all six
    `src_*`/`slit_*` keys; `simulate(MaxwellianGun(), n)` with a bare constructor kills the
    process with an uncatchable `Prompt::Error::BadInput`. Unknown extra keys abort the same

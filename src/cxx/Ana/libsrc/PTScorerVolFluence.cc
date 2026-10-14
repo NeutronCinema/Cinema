@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -20,12 +20,17 @@
 
 #include "PTScorerVolFluence.hh"
 
-Prompt::ScorerVolFluence::ScorerVolFluence(const std::string &name, double xmin, double xmax, unsigned nxbins, 
-                                            double volme, unsigned int pdg, ScorerType stype, bool linear, int groupid)
-:Scorer1D("ScorerVolFluence_"+ name, stype, std::make_unique<Hist1D>("ScorerVolFluence_"+ name, xmin, xmax, nxbins, linear), pdg, groupid), 
-m_iVol(1./volme), 
+Prompt::ScorerVolFluence::ScorerVolFluence(const std::string &name, double xmin, double xmax, unsigned nxbins,
+                                            unsigned int pdg, ScorerType stype, bool linear, int groupid)
+:Scorer1D("ScorerVolFluence_"+ name, stype, std::make_unique<Hist1D>("ScorerVolFluence_"+ name, xmin, xmax, nxbins, linear), pdg, groupid),
 m_weight(-1.)
-{ }
+{
+  if(stype==ScorerType::PROPAGATE_PRE || stype==ScorerType::PROPAGATE_POST)
+    PROMPT_THROW2(BadInput, "ScorerVolFluence does not accept ptstate " << (stype==ScorerType::PROPAGATE_PRE ? "PROPAGATE_PRE" : "PROPAGATE_POST")
+                  << ": those hooks only fire at interaction sites, so the boundary-exit tracks would be silently dropped and the flux undercounted. "
+                  << "Use PEA_PRE (every track segment, pre-collision energy) or PEA_POST (post-collision energy); "
+                  << "divide the histogram by the volume after the run to get the fluence.");
+}
 
 Prompt::ScorerVolFluence::~ScorerVolFluence() {}
 
@@ -48,6 +53,6 @@ void Prompt::ScorerVolFluence::score(Particle &particle)
     << std::endl;
   #endif
   
-  m_hist->fill(particle.getEKin(), m_iVol*particle.getStep()*particle.getSurviveP());
+  m_hist->fill(particle.getEKin(), particle.getStep()*particle.getSurviveP());
   
 }

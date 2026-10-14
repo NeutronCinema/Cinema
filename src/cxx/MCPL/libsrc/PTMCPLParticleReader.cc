@@ -5,6 +5,8 @@ Prompt::MCPLParticleReader::MCPLParticleReader(const std::string &fn, bool repea
 { 
     m_file_r = mcpl_open_file(fn.c_str());
     m_parNum = mcpl_hdr_nparticles(m_file_r);
+    if(!m_parNum)
+        PROMPT_THROW(BadInput, "MCPL file contains 0 particles: " + fn);
     m_with_extraUserUnsigned = mcpl_hdr_has_userflags(m_file_r);
     m_with_extra3double = mcpl_hdr_has_polarisation(m_file_r);
     m_using_double = mcpl_hdr_has_doubleprec(m_file_r);

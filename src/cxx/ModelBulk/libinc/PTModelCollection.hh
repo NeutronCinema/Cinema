@@ -3,9 +3,9 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -27,6 +27,9 @@
 #include "PTVector.hh"
 #include "PTRandCanonical.hh"
 #include "PTDiscreteModel.hh"
+#ifdef ENABLE_GIDI
+#include "PTMaterialDecomposer.hh"
+#endif
 
 
 namespace Prompt {
@@ -42,6 +45,20 @@ namespace Prompt {
     double tot;
   };
 
+#ifdef ENABLE_GIDI
+  // The settings of a gidi material, frozen at configuration time (P2.2):
+  // everything the deferred GNDS build needs, so that later changes of the
+  // global GidiSetting cannot alter an already-configured material.
+  struct PendingGidi {
+    std::vector<IsotopeComposition> isotopes;
+    double temperature;
+    double bias;            // neutron interaction bias
+    double elasticThreshold;
+    bool photon;            // snapshot of gammaTransport at configuration time
+    bool sampleNTP;         // snapshot of sampleNTP at configuration time
+  };
+#endif
+
   // This class is used to represent a collection of models.
   // The upstream should make should it is the right one for the material
   // Only discrete models for now.
@@ -53,8 +70,29 @@ namespace Prompt {
     virtual ~ModelCollection();
 
     void addPhysicsModel(std::shared_ptr<DiscreteModel> model);
-    const std::vector<std::shared_ptr<DiscreteModel>>& getModels() const 
+    const std::vector<std::shared_ptr<DiscreteModel>>& getModels() const
     { return m_models; }
+
+#ifdef ENABLE_GIDI
+    // Defer the gidi models of this material: register the frozen settings
+    // now, build nothing (P2.1). Entries materialise in registration order.
+    void registerPendingGidi(std::vector<IsotopeComposition> isotopes, double temperature,
+                             double bias, double elasticThreshold, bool photon, bool sampleNTP);
+
+    // Hold back an already-built model so that prepareGidi() can append it
+    // AFTER the deferred gidi models — preserving the eager model order of
+    // the physics=ncrystal configuration (gidi first, NCrystal second).
+    void registerDeferredModel(std::shared_ptr<DiscreteModel> model);
+
+    // The single materialization point: build all pending gidi models of this
+    // collection. Consumes no random numbers, so the RNG stream is untouched.
+    void prepareGidi();
+
+    // prepareGidi() for every live collection; called once at the top of each
+    // transport entry (Launcher::simOneEvent covers go, goWithSecondStack and
+    // the python-gun loop).
+    static void prepareAllGidi();
+#endif
 
     double totalCrossSection(int pdg, double ekin, const Vector &dir) const;
 
@@ -78,6 +116,11 @@ namespace Prompt {
     mutable std::shared_ptr<DiscreteModel> m_disappearingModel;
 
     SingletonPTRand &m_rng;
+
+#ifdef ENABLE_GIDI
+    std::vector<PendingGidi> m_pendingGidi;
+    std::vector<std::shared_ptr<DiscreteModel> > m_deferredModels;
+#endif
   };
 }
 

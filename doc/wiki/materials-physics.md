@@ -30,13 +30,14 @@ Material(nccfg).cfg                      (python, physics.py)
        PhysicsFactory::checkPhysicsType  PTPhysicsFactory.cc
          NC_RAW       string failed key=value parsing -> raw NCrystal cfg
          NC_SCATTER   physics=ncrystal;nccfg='...';scatter_bias=..;abs_bias=..
-         NC_IDEALSCAT physics=idealElaScat;xs_barn=..;density_per_aa3=..
+         PLUGIN       physics=<ns> with no dedicated host branch: resolved
+                      through the physics-model plugin registry
   -> ModelCollection (one per particle type, cached per config string)
        built from DiscreteModel(s):
          NCrystalScat   thermal + elastic scattering kernel
          NCrystalAbs    absorption (kills the particle, analog mode)
          GIDIModel      ENDF-based reactions, if GIDI is enabled
-         IdealElaScat   analytic test scatterer
+         idealElaScat   analytic test scatterer (ships as builtin plugin #1)
   -> macroscopic cross section = number_density * sum(biased microscopic xs)
 ```
 
@@ -58,6 +59,72 @@ optional GIDI gamma transport (section 8).
 Physics is cached: volumes that share the same material config string share one
 `ParticleProcess`. In the Python layer the same machinery is reachable offline through
 `Cinema.Prompt.compoundModel.ModelCollection` (section 9).
+
+### 1.1 The modular model layer
+
+Everything a material does at a collision is a *model*. The layer has three pieces
+(all under `src/cxx`):
+
+```text
+PhysicsFactory                    classifies the cfg string (PTPhysicsFactory.cc)
+  -> ParticleProcess              one per material cfg; owns the number density
+       -> ModelCollection         one per particle type (PDG): the model bag
+            [DiscreteModel]       NCrystalScat / NCrystalAbs / GIDIModel /
+                                  PluginModelAdapter — each declares the
+                                  validity domain it answers for (pdg, emin, emax)
+       -> PluginRegistry          resolves physics=<ns> to a model factory;
+                                  builtins register on first cfg dispatch
+```
+
+- **`DiscreteModel`** ([PTDiscreteModel.hh](https://code.ihep.ac.cn/cinema-developers/cinema/-/blob/master/src/cxx/ModelBulk/libinc/PTDiscreteModel.hh))
+  is the common base: metadata (name, PDG, open energy interval, oriented flag) plus
+  `getCrossSection(ekin[, dir])` and `sampleReaction(ekin, dir)`. A model never sees
+  the geometry or other materials — it answers "how likely, and what happens" for one
+  process on one particle type.
+- **`ModelCollection`** ([PTModelCollection.hh](https://code.ihep.ac.cn/cinema-developers/cinema/-/blob/master/src/cxx/ModelBulk/libinc/PTModelCollection.hh))
+  is the per-material *model bag*, one per particle type. At a collision it sums the
+  biased cross sections of the models whose validity domain covers the particle
+  (`totalCrossSection`), picks a channel proportional to those sums, and samples it
+  (`pickAndSample`). It owns the xs cache, the `scatter_bias`/`abs_bias` split, the
+  disappearing-reaction (absorption) election and the lazy-gidi materialisation queue
+  (section 8.3). Models are `shared_ptr`s; identical config strings share one
+  `ParticleProcess`, hence one collection.
+- **Built-in models**: `NCrystalScat` (thermal + elastic kernel), `NCrystalAbs`
+  (analog absorption), `GIDIModel` (ENDF reactions: neutrons elastic/non-elastic;
+  photons arrive as `GIDIModel`s too, built in the two disjoint passes of section 8),
+  and plugin-hosted models bridged by `PluginModelAdapter`.
+- **The plugin registry** (PluginAPI): `physics=<ns>` with no dedicated host branch
+  resolves through `PluginRegistry`, a name → factory map bootstrapped with the
+  builtins — NCrystal as plugin #0, the analytic `idealElaScat` as plugin #1 (the
+  template for external models). A factory's `produceAll` emits `ScatterModel`
+  objects — the stable plugin ABI (metadata + `crossSection` + `sample`, with the
+  RNG stream and the secondary stack injected by the host) — and the adapter bridges
+  each onto `DiscreteModel`, so biasing, caching and channel picking stay host code.
+  Host-reserved cfg keys (`scatter_bias`, `abs_bias`, `density`) are applied by the
+  host, never by the plugin, and a plugin that declares a number density is
+  cross-checked against the material's density.
+
+New physics therefore enters as one `ScatterModel` + factory registered under a
+namespace — the transport loop, bias machinery and scorers are untouched. That is how
+`idealElaScat` ships, and the same seam is where the planned gidi-plugin and
+relaxation-model components will land (the in-core `GIDIModel` stays until the plugin
+conversion is decided).
+
+**What the layer promises for growth** — the dispatch invariant is
+`(material, particle PDG, kinetic energy) → set of answering models`:
+
+- *More energy bands* need no new machinery: a band is just a model whose declared
+  `[emin, emax)` covers it, and the existing NCrystal↔GIDI hybrid switch is exactly
+  two models with adjacent intervals. Three bands (say thermal, epithermal, fast) are
+  three models — the transport sums whichever answer.
+- *More particles* need one more `ModelCollection` (one exists per PDG) and models
+  declaring that PDG; photons already ride this path.
+- Honest seams that are *not* general yet: the plugin ABI carries no particle
+  dimension (a `ScatterModel` factory cannot yet supply a photon or electron model —
+  the gidi photon models are host-wired); low-energy policies such as the photon
+  production cutoff are PDG-special-cased in the host process; and the model bag's
+  name/structure is due a simplification pass. These are tracked as roadmap items,
+  not hidden behind the diagram.
 
 ## 2. The `Material` class
 
@@ -95,9 +162,7 @@ Rendering rules worth knowing (verified in `physics.py`):
 - Reading `.cfg` before a config string was set raises
   `ValueError("Material config string is not set")`.
 - Setting both biases to `0` does **not** throw: both models are skipped and the volume
-  becomes transparent (total cross section 0). Keep at least one bias non-zero. (A
-  `BadInput` guard for this case exists in `PhysicsFactory::createParticleProcess`, but
-  that helper is not on the current `Volume`/`ModelCollection` code path.)
+  becomes transparent (total cross section 0). Keep at least one bias non-zero.
 
 `Material` stores its cfg_-prefixed attributes like every
 [`ConfigString`](https://code.ihep.ac.cn/cinema-developers/cinema/-/blob/master/src/python/Cinema/Prompt/configstr.py)
@@ -265,13 +330,18 @@ them proportionally (section 7).
 | `NCrystalScat` | bulk, scattering | Bragg diffraction + S(α,β) thermal scattering + free-gas elastic from NCrystal data; oriented-aware (`crossSection(E)` or `crossSection(E, dir)`); `sampleReaction` returns the final energy and direction; xs in barn, energies in eV; carries an energy-validity range and asserts `ekin < maxEkin` when its cross section is evaluated |
 | `NCrystalAbs` | bulk, absorption | NCrystal capture; not direction-dependent; sampling marks the result "disappeared" with `deposition = ekin`; in analog mode the particle is killed |
 | `GIDIModel` | bulk, reactions | continuous-energy ENDF reactions via GIDI+ (one MCGIDI protare per isotope per reaction group: elastic MT=2 and non-elastic); URR probability tables enabled for neutrons; delayed-neutron data handled (warning printed where incomplete); optional photon production; compile-time optional |
-| `IdealElaScat` | bulk, scattering | analytic isotropic elastic scatterer: `xs_barn` (default 1, non-zero), `density_per_aa3` (default 0.05), optional fixed `energy_transfer_eV`, optional `scatter_bias`; intended for verification and tests |
+| `idealElaScat` | bulk, scattering | analytic isotropic elastic scatterer: `xs_barn` (default 1, non-zero), `density_per_aa3` (default 0.05), optional fixed `energy_transfer_eV`, optional `scatter_bias`; intended for verification and tests. Ships as builtin plugin #1 of the physics-model plugin registry |
 | `Mirror`, `DiskChopper`, `EnergyReflector` | surface | neutron-optics models, attached via `surfaceCfg` (section 6) |
 
 The dispatch between them is purely the config string: a raw NCrystal string creates
 `NCrystalAbs` + `NCrystalScat` (unbiased); `physics=ncrystal;...` creates the two models
-honouring the bias values; `physics=idealElaScat;...` creates the analytic model. GIDI
-rearranges the combination (section 8). Only **one** disappearing (absorption-type) model
+honouring the bias values; `physics=idealElaScat;...` creates the analytic model. Any
+**other** `physics=<ns>` resolves through the physics-model plugin registry: plugin
+files listed in `CINEMA_PLUGIN_LIST` (colon-separated `.so` paths, the same policy as
+NCrystal's `NCRYSTAL_PLUGIN_LIST`) register their namespaces, and an unknown namespace
+raises `ValueError("unknown physics <ns>")` at
+`Volume` construction in Python (the C++ side rejects with the same message at launch).
+GIDI rearranges the combination (section 8). Only **one** disappearing (absorption-type) model
 per `ModelCollection` is allowed — adding a second throws.
 
 ## 6. Surface physics
@@ -282,7 +352,7 @@ model; like everything else it is a config string, and it must use the explicit
 
 | Surface | Config string | Behaviour |
 |:---|:---|:---|
-| `Mirror` | `physics=Mirror;m=<m>[;threshold=<w>]` | specular reflection with a McStas-style reflectivity model (fixed `R0=0.99`, `Qc=0.0219`, `alpha=6.07`, `W=0.003`); `m` scales the critical Q (`m` should always be set: the Python wrapper defaults it to 1.0, but a hand-crafted string without the `m` key is read as `m=0` by the C++ factory; `m=-1` always reflects; no weight change); when the reflectivity is at or above the cut, the reflected particle's weight is scaled by the reflectivity; `threshold` (default `1e-3`) is a weight cut below which Russian roulette activates — reflect with probability reflectivity/cut at weight `threshold`, otherwise the particle continues without reflection or weight change (no kill) |
+| `Mirror` | `physics=Mirror;m=<m>[;threshold=<w>]` | specular reflection with a McStas-style reflectivity model (fixed `R0=0.99`, `Qc=0.0219`, `alpha=6.07`, `W=0.003`); `m` scales the critical Q and defaults to `1` (matching the Python wrapper `Mirror(m=1.0)` and McStas); `m=-1` always reflects with no weight change. The reflectivity is clamped at zero (the McStas linear factor would go negative beyond `Qc+1/alpha`, where the tanh factor is already zero). When the reflectivity is at or above the cut, the reflected particle's weight is scaled by the reflectivity; `threshold` (default `1e-3`) is a weight cut below which Russian roulette activates — reflect with probability reflectivity/cut at weight `threshold`, otherwise the particle is **absorbed** (kill type `ABSORB`, so it is scored like any other absorption and never transmitted through the wall); `threshold=0` disables the roulette entirely (pure weighting: every hit reflects with its weight scaled by the reflectivity) |
 | `DiskChopper` | `physics=DiskChopper;theta0=<deg>;r=<mm>;phase=<deg>;rotFreq=<Hz>;n=<slits>` | rotating disk chopper with `n` slits of opening angle `theta0`; particles hitting the central disk of radius `r` are absorbed, particles in an open slit at their arrival time survive; throws if `theta0` exceeds the slit period `360°/n` |
 | `EnergyReflector` | `physics=EnergyReflector;ekin=<eV>;islessthan=<0\|1>` | specularly reflects particles with `ekin <= threshold` (`islessthan=1`) or `ekin > threshold` (`islessthan=0`); `ekin=-1` reflects everything; no weight change |
 
@@ -355,58 +425,134 @@ tools — in particular `VolFluence` scoring is invalid in volumes where weights
 The GIDI+ module (gidiplus) adds continuous-energy ENDF data on top of NCrystal. It is a
 compile-time option: `option(ENABLE_GIDI ...)` in `src/cxx/CMakeLists.txt` (ON for a
 plain cmake configure; `cimbuild` needs `--enablegidi` to keep it on — see
-[Installation](install) for the feature-flag gotcha).
+[Installation](install) for the feature-flag gotcha). GIDI *data* is strictly optional
+and only ever touched by a simulation that explicitly enables GIDI.
+
+### 8.1 The front-end API
 
 ```python
 from Cinema.Prompt.GidiSetting import GidiSetting
 
-cd = GidiSetting()                  # singleton over the C++ settings object
-cd.isCompiled                       # False when built without GIDI -> skip GIDI code paths
-cd.setEnableGidi(True)              # default False
-cd.setGidiThreshold(5.)             # eV; default 5.0; <= 0 means GIDI handles everything
-cd.setGammaTransport(False)         # default False; adds photon transport + atomic models
-cd.setEnableGidiPowerIteration(False)  # for k-eigenvalue style calculations
-cd.setGidiPops('/path/to/pops.xml') # PoPI database
-cd.setGidiMap('/path/to/all.map')   # GIDI map file
+gidi = GidiSetting()       # singleton over the C++ settings object
+
+gidi.available()           # True: compiled in AND pops/map data readable
+gidi.enable()              # turn on; refuses loudly when it cannot be honoured
+gidi.disable()             # turn off
+gidi.defaults()            # introspection dict of the build defaults
+
+gidi.isCompiled            # attribute: False when built without GIDI
 ```
+
+`enable()` has an explicit contract — the request is honoured or loudly
+refused, never silently degraded:
+
+- **not compiled in** → `RuntimeWarning` (the flag is set, but nothing will
+  use it; rebuild with `--enablegidi` to actually run GIDI);
+- **data files missing/unreadable** → `ValueError` naming the missing file
+  and the way out (`setGidiPops` / `setGidiMap`, or another data root);
+- otherwise it is exactly `setEnableGidi(True)`.
+
+The default path of a simulation never probes anything: users who never call
+`enable()` stay completely unaware of GIDI — no data probing, no warnings,
+no build cost — whether or not the data is present. Compiled-in is *not* the
+same as runtime-usable; only `available()` answers the data question, and
+only when called. Scripts that treat GIDI as optional branch on it:
+
+```python
+if gidi.available():
+    gidi.enable()
+```
+
+### 8.2 Settings and timing
 
 | Setting | Default | Meaning |
 |:---|:---|:---|
-| `setEnableGidi` | `False` | master switch |
+| `setEnableGidi` / `enable()` | `False` | master switch |
 | `setGidiThreshold` | `5.0` eV | hybrid switching energy; `> 0`: NCrystal below, GIDI above; `<= 0`: GIDI does *all* reactions including elastic (no NCrystal scattering model is created) |
 | `setGammaTransport` | `False` | creates photon transport models and atomic (element-level) photon data |
+| `setGammaCutEkin` | `1000.0` eV | photons below this kinetic energy are killed at their next collision with the full energy deposited locally (Boundary crossings are not collisions, so a photon below the cut still escapes through vacuum). `0` disables the cut |
 | `setEnableGidiPowerIteration` | `False` | power-iteration (criticality-style) mode |
 | `setGidiPops` / `setGidiMap` | `$CINEMAPATH/external/ptdata/pops.xml` / `all.map` | ENDF data description files; point at a local ENDF data directory containing your data (the test suite uses a `testdata/` tree with `pops.xml`, `all.map` and `neutron/`) |
 | `.isCompiled` | — | attribute, `True` only when the library was built with GIDI; all GIDI tests guard with it |
 
-**Configure before creating volumes.** The settings are read once when a volume's physics
-is configured, and the GIDI factory (a singleton) bakes the pops/map paths at first use —
-a `GidiSetting` call after `Volume(...)` construction has no effect. Configure it at the
-top of `makeWorld()`, before any `Material`/`Volume` is created. (Known fixme: paths with
-backslashes do not decode.)
+The old setters are kept as aliases — existing scripts keep working. All of
+them only take effect **before the material is configured**, i.e. before the
+`Volume(...)` carrying the material is constructed. Configure at the top of
+`makeWorld()`. (Known fixme: paths with backslashes do not decode.)
+
+### 8.3 Lazy model building
+
+GIDI model building is **deferred**: configuring a GIDI material is cheap and
+parses no ENDF data. At `Volume` construction time the material is decomposed
+into isotopes and its settings (threshold, temperature, biases, gamma flag,
+non-transporting-particle flag) are frozen into a *pending* entry of the
+material's model collection; the
+GNDS parsing and protare building happen once, at the **first transport
+event** (`simulate` / `simulateSecondStack` / a `simOneEvent` call).
+`makeWorld()` therefore costs NCrystal-level time only, and the first event
+absorbs the data-loading cost. Repeated isotopes across materials share one
+set of cached Monte Carlo tables — a nuclide appearing in several materials
+is parsed and broadened once per (isotope, temperature). The same holds for
+the photon models since the 2026-10 photon round: neutron and photo-atomic
+protares are cached under their *canonical* PoPI identity `(Z, A)` (aliases
+and different spellings of one nuclide collapse onto a single entry), so two
+materials sharing a nuclide hold one copy of the tables, never two. The
+reuse is pinned by a unit test
+(`test_gidi_photon.cc::gidi protare reuse across materials`).
+
+Offline cross-section queries (`ModelCollection.totalCrossSection` and the
+Python `xs()` helper) materialise the pending models on first use, so they
+give the same numbers before or after a transport run. Construction consumes
+no random numbers: identical seeds give identical results to the
+pre-lazy build, histogram by histogram.
+
+Errors surface catchable: a data problem found at the first event raises a
+normal Python `RuntimeError` (not a process abort) on all transport entry
+points, and the same holds for the offline cross-section path (`xs()` /
+`generate()`). Front-load what can be front-loaded by calling `available()`
+before the run.
 
 What happens per material when GIDI is enabled (`PTParticleProcess.cc` +
-`PTGIDIFactory.cc`):
+`PTModelCollection.cc` + `PTGIDIFactory.cc`):
 
-1. The NCrystal material is decomposed into isotopes
-   (`MaterialDecomposer::decompose(nccfg, T)`), which expands composite atoms and natural
-   elements into isotope lists; the NCMAT temperature `T` is carried along.
-2. For each isotope the ENDF protare is loaded, selecting the **nearest available ENDF
-   temperature** (the selection is printed to stdout: "The specified temperature is X,
-   the selected data is at Y Kelvin"). With a positive threshold two protares are built
-   per isotope — elastic (MT=2) and non-elastic — otherwise a single combined protare.
-3. Hybrid: with `gidiThreshold > 0` the `NCrystalScat` model is created with its energy
-   range capped at the threshold (thermal scattering below), GIDI models covering above;
-   with `gidiThreshold <= 0` GIDI covers the full range and no NCrystal scattering model
-   is created.
-4. Bias split: `abs_bias` is handed to the GIDI models; `scatter_bias` applies to the
-   below-threshold NCrystal model. Note `abs_bias=0.` cannot remove GIDI's absorption
-   handling (there is an explicit todo about this in the source).
-5. `setGammaTransport(True)` additionally creates photon models from the isotope list
-   *and* from the element-collapsed list (`shrink2element`) for atomic (photoelectric-
-   style) data; isotopes with missing photon data are skipped with a warning.
-6. URR probability tables are enabled for the neutron protares; incomplete delayed-neutron
-   data prints a warning and is not included.
+1. *At configuration time:* the NCrystal material is decomposed into isotopes
+   (`MaterialDecomposer::decompose(nccfg, T)`), which expands composite atoms
+   and natural elements into isotope lists; the NCMAT temperature `T` is
+   carried along. The settings are frozen (nothing below reads the global
+   settings again). With a positive threshold the below-threshold
+   `NCrystalScat` model is created now.
+2. *At the first transport event:* for each isotope the ENDF protare is
+   loaded, selecting the **nearest available ENDF temperature** (the
+   selection is printed to stdout: "The specified temperature is X, the
+   selected data is at Y Kelvin"). With a positive threshold two protares are
+   built per isotope — elastic (MT=2) and non-elastic — otherwise a single
+   combined protare.
+3. Hybrid: with `gidiThreshold > 0` NCrystal covers below the threshold and
+   GIDI above; with `gidiThreshold <= 0` GIDI covers the full range and no
+   NCrystal scattering model is created.
+4. Bias split: `abs_bias` is handed to the GIDI models; `scatter_bias`
+   applies to the below-threshold NCrystal model. Note `abs_bias=0.` cannot
+   remove GIDI's absorption handling (there is an explicit todo about this in
+   the source).
+5. `setGammaTransport(True)` additionally creates photon models in two
+   disjoint passes so the atomic data is registered exactly once: an
+   **isotope pass** with photonuclear data only (isotopes without a
+   photonuclear file, e.g. H1, are skipped with a warning), then an
+   **element-collapsed pass** (`shrink2element`) with photo-atomic data only.
+   Each element's photo-atomic total therefore enters a material once.
+6. URR probability tables are enabled for the neutron protares; incomplete
+   delayed-neutron data prints a warning and is not included.
+
+Two traps to know when transporting photons:
+
+- **Vacuum is not void for photons.** A gidi photon model is materialised for
+  whatever the geometry hands over, including empty world volumes, which get
+  freegas-H1 photo-atomic physics at ~1 atom/cm3. Keep sensitive vacuum
+  volumes out of a gamma field until a density gate exists.
+- **Dilute still means transport.** Trace concentrations build full-strength
+  microscopic cross sections; the macroscopic rate scales with number density
+  as usual — check the material decomposition if a dopant's effect looks
+  surprising.
 
 ## 9. Verifying materials offline
 
@@ -422,7 +568,7 @@ from Cinema.Prompt.compoundModel import ModelCollection
 
 mc = ModelCollection(mat.cfg)     # accepts any material config string
 mc.xs(0.0253)                     # total *biased* microscopic xs at 25.3 meV, in barn
-mc.generate(0.0253)               # sample one reaction (smoke test; return value unused)
+mc.generate(0.0253)               # sample one reaction (smoke test; returns sampled final ekin in eV)
 ```
 
 Example values (measured with Cinema 2.0.0a5 / NCrystal 4.2.12 on the development

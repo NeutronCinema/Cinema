@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -95,12 +95,12 @@ void Prompt::MCPLBinaryWrite::write(const Particle &p, int scatterNumber)
 
   //position in centimeters:
   const Vector &pos = p.getPosition();
-  m_particleInFile->position[0] = pos.x();
-  m_particleInFile->position[1] = pos.y();
-  m_particleInFile->position[2] = pos.z();
+  m_particleInFile->position[0] = pos.x()*0.1;
+  m_particleInFile->position[1] = pos.y()*0.1;
+  m_particleInFile->position[2] = pos.z()*0.1;
 
   //kinetic energy in MeV:
-  m_particleInFile->ekin = p.getEKin();
+  m_particleInFile->ekin = p.getEKin()*1e-6;
 
   const Vector &dir = p.getDirection();
 
@@ -109,7 +109,7 @@ void Prompt::MCPLBinaryWrite::write(const Particle &p, int scatterNumber)
   m_particleInFile->direction[2] = dir.z();
 
   //time in milliseconds:
-  m_particleInFile->time = p.getTime();
+  m_particleInFile->time = p.getTime()*1e3;
 
   //weight in unspecified units:
   m_particleInFile->weight = p.getWeight();
@@ -122,7 +122,7 @@ void Prompt::MCPLBinaryWrite::write(const Particle &p, int scatterNumber)
     // use polarisation to store scatter number info
     m_particleInFile->polarisation[0] = p.getSurviveP();
     m_particleInFile->polarisation[1] = static_cast<double>(scatterNumber);
-    m_particleInFile->polarisation[2] = (p.getEKin0()-p.getEKin()); // energy loss in MeV
+    m_particleInFile->polarisation[2] = (p.getEKin0()-p.getEKin())*1e-6; // energy loss in MeV
   }
 
 

@@ -3,9 +3,9 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -36,7 +36,9 @@ namespace Prompt {
       NC_ABSORB,
       NC_SCATTER_ABSORB,
       NC_RAW,
-      NC_IDEALSCAT,
+      // any parsed cfg whose physics=<ns> is not a host branch: resolved
+      // through the plugin registry (idealElaScat ships as plugin #1)
+      PLUGIN,
       ENDF_SCATTER,
       ENDF_ABSORB
     };
@@ -47,8 +49,6 @@ namespace Prompt {
 
     std::shared_ptr<SurfaceProcess> createSurfaceProcess(const std::string &cfgstr);
 
-    std::shared_ptr<DiscreteModel> createIdealElaScat(const std::string &cfgstr);
-    std::unique_ptr<ModelCollection> createParticleProcess(const std::string &cfgstr);
     PhysicsType checkPhysicsType(const std::string &cfgstr) const;
 
   private:

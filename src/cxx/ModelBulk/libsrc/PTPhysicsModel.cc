@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -70,6 +70,11 @@ Prompt::Vector Prompt::PhysicsBase::randIsotropicDirection() const
 Prompt::Vector Prompt::PhysicsBase::randDirectionGivenScatterMu( double mu, const Prompt::Vector& indir ) const
 {
   pt_assert(std::abs(mu)<=1.);
+
+  //Throws (in all builds, unlike pt_assert) on a null input: the invm
+  //normalisation below would turn it into NaN and the rejection loop below
+  //would never terminate.
+  pt_assert_always(indir.mag2() > 0.);
 
   double m2 = indir.mag2();
   double invm = ( std::abs(m2-1.0)<1e-12 ? 1.0 : 1.0/std::sqrt(m2) );

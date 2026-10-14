@@ -76,18 +76,56 @@ codes:
 | Value | Name             | Fires when |
 |------:|------------------|------------|
 | 0     | `SURFACE`        | An interaction at the volume *surface*, e.g. surface transmission or optics physics (mirror, chopper). |
-| 1     | `ENTRY`          | The particle enters the volume (state *before* any physics happens in it). |
-| 2     | `PROPAGATE_PRE`  | Immediately *before* a bulk-scattering interaction in the volume. |
-| 3     | `PROPAGATE_POST` | Immediately *after* the bulk scattering — energy and momentum are already updated. |
-| 4     | `EXIT`           | The particle exits the volume. |
-| 5     | `PEA_PRE`        | Fires on propagate_pre, exit **or** absorb — the pre-hit "account for everything in this volume" variant. |
+| 1     | `ENTRY`          | The particle crosses *into* the volume at a boundary (state *before* any physics happens in it). Never fires for the gun's first step. |
+| 2     | `PROPAGATE_PRE`  | Once per in-volume collision, at the collision point *before* the reaction is sampled: bins the **pre-collision** energy, step = the flight that ended there. Also fires for the flight that ends in an absorption. |
+| 3     | `PROPAGATE_POST` | Once per in-volume collision, *after* the reaction — but **only if the particle survived it**: a capture/fission event fires `PROPAGATE_PRE` and then nothing. Bins the **post-collision** energy. |
+| 4     | `EXIT`           | The particle exits the volume through a boundary. Step = the exit chord (negligible tolerance overswing); the step counter is cleared right after. |
+| 5     | `PEA_PRE`        | Fires once per track segment: propagate_pre before each in-volume interaction — the absorbing one included — plus once at exit. The pre-hit "account for everything in this volume" variant. |
 | 6     | `PEA_POST`       | The same trio (propagate_post, exit, absorb), post-hit variant. |
 | 7     | `ABSORB`         | The particle is absorbed by *real* physics in the volume. |
+
+Three properties of these hooks matter again and again (all pinned by
+[`test_prompt_ptstate.py`](https://code.ihep.ac.cn/cinema-developers/cinema/-/blob/master/src/pythontests/prompt_scorers/test_prompt_ptstate.py)
+and the scorer unit tests):
+
+- **`PROPAGATE_PRE`/`PROPAGATE_POST` never see the exit leg.** They fire at interaction
+  sites only, so a scorer on those states silently drops every track that leaves the
+  volume without interacting. `PROPAGATE_POST` additionally drops captures (the particle
+  is gone before the post-hit hook). This is why `VolFluenceHelper` rejects both states
+  with an explicit error instead of quietly undercounting.
+- **`ENTRY`/`SURFACE` do not fire on the gun's first step**, and `ENTRY` observes
+  step = 0 (the counter is cleared after every boundary crossing).
+- **The hooks balance exactly.** In a single volume without surface physics:
+  `PROPAGATE_PRE − PROPAGATE_POST = ABSORB`, `PEA_PRE = PROPAGATE_PRE + EXIT`,
+  `PEA_POST = PROPAGATE_POST + EXIT + ABSORB`, and `EXIT + ABSORB = 1` per source
+  particle that reached the volume. If your tallies violate these identities, the setup
+  (biasing, killing scorers, nested volumes) — not the physics — is to blame.
 
 `PEA_PRE`/`PEA_POST` exist so a single scorer can count every particle passing through a
 volume regardless of whether it scattered, exited or was absorbed — use them for fluence-like
 quantities. `ABSORB` fires only on genuine absorption, which is what makes the
 `TOFHelper(..., ptstate='ABSORB')` absorber-channel TOF of `doc/example_basic.py` work.
+
+### Which state for which quantity?
+
+Pick the row that matches what you want to measure — no need to reason about the transport
+loop:
+
+| I want ... | Use | Why |
+|---|---|---|
+| Flux / fluence spectrum in a volume | `VolFluenceHelper` (fixed `PEA_PRE`), then `hist.scale(1.0 / vol.getCapacity())` | every track segment counted once, pre-collision energy; dividing by the volume at the *end* keeps the scorer a pure accumulator |
+| Outgoing energy spectrum of scattered particles | `ESpectrumHelper(..., ptstate='PROPAGATE_POST')` | post-collision energy, one fill per surviving scattering; captures are excluded, which is usually what "outgoing" means |
+| Collision-rate density (φ·Σ, reactions per unit volume) | `ESpectrumHelper(..., ptstate='PROPAGATE_PRE')` | one fill per collision at the pre-collision energy — a reaction-rate density, **not** a flux; do not compare it to a track-length flux tally |
+| Energy spectrum of everything leaving the volume | `ESpectrumHelper(..., ptstate='EXIT')` | fires once per exiting track |
+| TOF of absorbed particles (absorption imaging) | `TOFHelper(..., ptstate='ABSORB')` | fires only on genuine absorption |
+| Exactly one count per source particle | `ABSORB`, `SURFACE`, or a flat (non-nested) volume with `EXIT` | boundary hooks double count in nested geometry (below) |
+| Number of scatterings per particle | `MultiScatCounter` (fixed `PEA_POST`) | purpose-built; see section 5 |
+
+Two further automatic corrections the helpers make for you: an `ESpectrumHelper` with
+`energyTransfer=True` is force-pinned to `EXIT` by the factory (a transfer needs the
+cumulative E_initial − E_final, which only exists at the end of a history), and weights are
+scored as `weight × surviveP`, so implicit-capture runs (`absorp_in_weight`) stay
+normalised — on `ABSORB` this means the hook never fires in that mode, by design.
 
 Helpers accept either the enum member (`ParticleTracingState.EXIT`) or the **exact** string
 (`'EXIT'`), see [gotcha 2](#8-gotchas).
@@ -105,8 +143,9 @@ exits the box twice, and the `ENTRY` scorer records `2 x (number of histories)` 
 For counts that must not depend on how many boundaries were crossed, score on
 `ABSORB`/`SURFACE`, or keep the scored volume free of nested daughters (flat geometry — the
 pattern of every regression test that asserts one count per history). **`PEA_PRE`/`PEA_POST`
-do not avoid the double counting**: they fire once per propagate/exit/absorb event, so in
-nested volumes they count exactly like `ENTRY`/`EXIT`. Measured with the sphere-in-box
+do not avoid the double counting**: they fire once per track segment (propagate or exit —
+the absorbing segment included), so in nested volumes they count exactly like
+`ENTRY`/`EXIT`. Measured with the sphere-in-box
 geometry above (1e4 MaxwellianGun events, seed 4096, scorers on the outer box), all four
 states record 20000 hits — twice the number of histories — while the flat box without the
 nested sphere records 10000. The role of the `PEA_*` states is counting every passing
@@ -128,9 +167,9 @@ by default.
 | `WlSpectrumHelper` | Wavelength (Å) | 0.1..10 Å, 100 bins, **log** | `ENTRY` | |
 | `TOFHelper` | Time-of-flight (s) | 0..40e-3 s, 100 bins, linear | `ENTRY` | |
 | `PSDHelper` | 2D position (mm) | ±10 mm, 100x100 bins, linear | `ENTRY` | `psdtype` = `'XY'`/`'XZ'`/`'YZ'`; volume-local frame, global if `isGlobal=True` |
-| `VolFluenceHelper` | Energy-resolved track-length fluence normalised by the volume capacity (1/mm²) | 1e-6..10 eV, 100 bins, **log** | fixed `PEA_PRE` | Divides by `vol.getCapacity()` (mm³) captured at `make()`; **invalid if particle weights change inside the volume** (gotcha 4) |
+| `VolFluenceHelper` | Energy-resolved **raw track length** (mm per source particle) | 1e-6..10 eV, 100 bins, **log** | fixed `PEA_PRE` (overriding it to `PROPAGATE_PRE`/`PROPAGATE_POST` raises `ValueError` — those hooks would silently drop the exiting tracks) | Accumulates `weight × step × surviveP`; the histogram is the volume integral of the flux — divide by the volume **after** the run: `hist.scale(1.0 / vol.getCapacity())` gives the fluence in 1/mm². **Invalid if particle weights change inside the volume** (gotcha 4); absorbed segments count exactly once |
 | `DirectSqHelper` | S(Q), momentum transfer Q (Å⁻¹) | none — `qmin`, `qmax`, `numbin` required, **log** | `ENTRY` | Requires `mod_smp_dist` (moderator-to-sample distance, mm); `refDir` incident direction, `samplePos`; `method=0` uses the real energy transfer, `method=1` the static approximation |
-| `DirectSqwHelper` | S(Q,ω), Q (Å⁻¹) x energy transfer ω = E_final − E_initial (eV) | Q 0.1..10 Å⁻¹ in 50 bins; ω −0.1..0.1 eV in 30 bins | `ENTRY` | Requires `mod_smp_dist` (mm) and `mean_ekin` (eV); Q axis is always linearly binned for now (`log=True` warns) |
+| `DirectSqwHelper` | S(Q,ω), Q (Å⁻¹) x energy transfer ω = E_initial − E_final; positive = neutron energy loss (downscatter), negative = energy gain (eV) | Q 0.1..10 Å⁻¹ in 50 bins; ω −0.1..0.1 eV in 30 bins | `ENTRY` | Requires `mod_smp_dist` (mm) and `mean_ekin` (eV); Q axis is always linearly binned for now (`log=True` warns) |
 | `DepositionHelper` | Deposited energy spectrum, weighted by weight x survival probability | none — `min`, `max`, `numbin`, `pdg`, `ptstate` all required | user-set | |
 | `MultiScatCounter` | Histogram of the number of scatterings per particle in the volume | fixed −2.5..100.5, 103 bins | fixed `PEA_POST` | See section 5 |
 | `MCPLOutHelper` | Not a histogram: writes every scored particle to an MCPL file | — | fixed `ENTRY` | `kill=True` removes the particle after scoring (absorbing boundary) — since the scorer only fires at entry, it turns the volume surface into an absorbing front face; `compress=True` gzips; under MPI each rank writes `<name>_pro<rank>` |
@@ -315,30 +354,43 @@ Under MPI, `PromptMPI.gatherHistData(name, dst=0)` sums the per-rank histograms 
    `MCPLOutHelper` fixed to `ENTRY` —
    so `ptstate` may simply be omitted unless you are using `DepositionHelper`.
 3. **`ENTRY`/`EXIT` double count in nested volumes** (each boundary crossing fires) — see
-   section 2 for the sphere-in-box example. `PEA_*` does not avoid this either: it fires per
-   propagate/exit/absorb event, so it double-counts the same way.
-4. **`VolFluenceHelper` is only valid where weights do not change.** It divides track length
-   by the volume capacity and assumes unit biasing factor D inside the volume; if a particle
+   section 2 for the sphere-in-box example. `PEA_*` does not avoid this either: it fires once
+   per track segment, so nested crossings still count multiply. A former extra count is gone,
+   though: `PEA_PRE` used to also fire on the absorption itself, scoring an absorbed segment
+   twice (fluence in absorbers came out ~2x); it now records the segment exactly once, and
+   `test_prompt_ptstate.py` pins the per-history identity `PEA_PRE == ENTRY + EXIT` on a Cd
+   slab. `PEA_POST` fires on propagate_post, exit or absorb — still never twice per segment,
+   since propagate_post no longer triggers on absorption.
+4. **`VolFluenceHelper` is only valid where weights do not change.** It accumulates raw
+   track length and assumes unit biasing factor D inside the volume; if a particle
    weight changes inside the scored volume it throws a C++ `LogicError` ("The D value for
    the material ... should be unity"). Do not combine it with non-unity
    `scatter_bias`/`abs_bias` in that volume — see [Materials and physics](materials-physics).
+   Since 2026-10 the volume is **not** a parameter of the scorer anymore: the histogram is
+   plain track length, and the fluence is one division on your side,
+   `hist.scale(1.0 / vol.getCapacity())` (older pins in tests and notes are the values
+   here multiplied by the scored volume).
 5. **Log-binned scorers need positive edges.** `ESpectrumHelper`, `WlSpectrumHelper`,
    `VolFluenceHelper` and `DirectSqHelper` default to logarithmic bins (`log=True`); the
    constructor validates the range up front and raises `ValueError`
    ("min ... must be positive for logarithmic binning", or "range min ... must be smaller
    than max") instead of failing later inside the C++ histogram. Pass a positive range, or
    `log=False` for linear bins.
-6. **Scorer names must be unique.** `Volume.scorer_dict` is keyed by name; a duplicate name
-   silently collides in the registry. (A `scorerNameConfig` helper that renames duplicates
-   with a trailing backtick exists but is never called automatically — do not rely on it.)
+6. **Scorer names must be unique.** `Volume.scorer_dict` is keyed by name; duplicates raise
+   `ValueError` at `make()`/`addScorer` — on the same volume as well as across volumes, in
+   all registration branches (helper object, legacy config string, C++-pointer branch).
+   (A `scorerNameConfig` helper that renames duplicates with a trailing backtick exists but
+   is never called automatically — do not rely on it.) GDML-declared scorers bypass the
+   Python check; the C++ side only prints a one-line warning when the same cfg is
+   registered twice on one volume.
 7. **`DirectSqHelper` ignores its `groupID`.** The argument is accepted but not forwarded to
    the C++ scorer in this version; per-placement grouping (section 4) does not apply to it.
 8. **Check units before interpreting a histogram.** TOF is in seconds, energy in eV,
    wavelength in Å, Q in Å⁻¹, PSD in mm, distances in mm. MCPL *particle* files written by
-   `MCPLOutHelper` carry the internal eV/s/mm values on disk even though their metadata
-   claims cm/MeV/ms — see [Analysing results](results-analysis) and [Units](units) before
-   feeding them to `MCPLGun`, `MCPL_Analyzer_*`, `ptplot`'s MCPL mode or any standard-unit
-   reader. (Genuine MCPL-standard files from other codes are cm/MeV/ms.)
+   `MCPLOutHelper` are in the MCPL standard cm/MeV/ms on disk (files from Cinema 2.1.0 or
+   earlier carry the internal eV/s/mm instead) — see [Analysing results](results-analysis)
+   and [Units](units) before mixing files from different sources with `MCPLGun`,
+   `MCPL_Analyzer_*`, `ptplot`'s MCPL mode or any standard-unit reader.
 9. **MPI: only the destination rank has data.** `gatherHistData` reduces to rank 0 by
    default; on other ranks the returned object holds invalid data. Gate output with
    `if sim.rank == 0:`.

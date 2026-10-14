@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -23,13 +23,129 @@
 #include "PTNCrystalAbs.hh"
 #include "PTPhysicsModel.hh"
 #include "PTActiveVolume.hh"
+#include <algorithm>
+#include <limits>
+#ifdef ENABLE_GIDI
+#include "PTGIDIFactory.hh"
+#include "PTGIDIModel.hh"
+#endif
+
+// Registry of every live collection on this thread (singletons are
+// thread_local, so collections never cross threads). It lets the transport
+// entries materialise all pending gidi models through one call without
+// walking the geometry.
+//
+// The vector is heap-allocated on purpose. A function-local thread_local
+// object would be destroyed before the thread_local singletons that own the
+// collections registered here (TLS destructors run in reverse completion
+// order, and ResourceManager completes before the first collection is
+// constructed), so ~ModelCollection would deregister from an
+// already-destroyed vector — a use-after-free on every normal process exit.
+// A raw pointer has no TLS destructor: the vector outlives every owner, the
+// deregistration stays exact, and the few-dozen-byte buffer is reclaimed
+// with the thread.
+namespace {
+  std::vector<Prompt::ModelCollection*> &liveCollections()
+  {
+    static thread_local auto *s_live = new std::vector<Prompt::ModelCollection*>;
+    return *s_live;
+  }
+}
 
 Prompt::ModelCollection::ModelCollection(int gpd)
 :m_cache({}), m_containsOriented(false), m_rng( Singleton<SingletonPTRand>::getInstance() ),
  m_forgpd(gpd), m_res(), m_disappearingModel(nullptr)
-{}
+{
+  liveCollections().push_back(this);
+}
 
-Prompt::ModelCollection::~ModelCollection() {}
+Prompt::ModelCollection::~ModelCollection()
+{
+  auto &live = liveCollections();
+  live.erase( std::remove( live.begin(), live.end(), this ), live.end() );
+}
+
+#ifdef ENABLE_GIDI
+void Prompt::ModelCollection::registerPendingGidi(std::vector<IsotopeComposition> isotopes, double temperature,
+                                                  double bias, double elasticThreshold, bool photon, bool sampleNTP)
+{
+  PendingGidi pending;
+  pending.isotopes = std::move(isotopes);
+  pending.temperature = temperature;
+  pending.bias = bias;
+  pending.elasticThreshold = elasticThreshold;
+  pending.photon = photon;
+  pending.sampleNTP = sampleNTP;
+  m_pendingGidi.push_back( std::move(pending) );
+  std::cout << "GIDI models for this material are registered as pending"
+            << " and will be built at the first transport event." << std::endl;
+}
+
+void Prompt::ModelCollection::registerDeferredModel(std::shared_ptr<DiscreteModel> model)
+{
+  m_deferredModels.push_back( std::move(model) );
+}
+
+void Prompt::ModelCollection::prepareGidi()
+{
+  if(m_pendingGidi.empty() && m_deferredModels.empty())
+    return;
+
+  auto &gidifactory = Singleton<GIDIFactory>::getInstance();
+  // Consume every entry as it completes: if the build of entry k throws, the
+  // earlier entries stay built exactly once, so a retry (next transport
+  // event) only redoes the failed one instead of duplicating whole channels.
+  while(!m_pendingGidi.empty())
+  {
+    PendingGidi pending( std::move(m_pendingGidi.front()) );
+    m_pendingGidi.erase( m_pendingGidi.begin() );
+
+    // same model order as the eager configuration used to produce:
+    // neutron models first, then photon, then the atomic photon pass.
+    // gamma/sampleNTP are the configuration-time snapshot, not the live
+    // GidiSetting — the deferred build must not read changed globals.
+    auto models = gidifactory.createNeutronGIDIModel(pending.isotopes, pending.temperature,
+                                                     pending.bias, pending.elasticThreshold,
+                                                     pending.photon, pending.sampleNTP);
+    for(const auto &v : models)
+      addPhysicsModel(v);
+
+    if(pending.photon)
+    {
+      // isotope pass: photonuclear data only (atomicPass=false); element
+      // pass: photo-atomic data only (atomicPass=true). One pass each keeps
+      // the atomic cross section registered exactly once - both passes
+      // reading nuclearAndAtomic data would double-count it in the total.
+      auto gmodels = gidifactory.createPhotonGIDIModel(pending.isotopes, 1.,
+                                                       pending.photon, pending.sampleNTP);
+      for(const auto &v : gmodels)
+        addPhysicsModel(v);
+
+      auto atomic_models = gidifactory.createPhotonGIDIModel(shrink2element(pending.isotopes), 1.,
+                                                             pending.photon, pending.sampleNTP,
+                                                             0, std::numeric_limits<double>::max(),
+                                                             0, std::numeric_limits<double>::max(),
+                                                             /*atomicPass=*/true);
+      for(const auto &v : atomic_models)
+        addPhysicsModel(v);
+    }
+  }
+
+  // held-back models land after the gidi ones, as in the eager layout
+  while(!m_deferredModels.empty())
+  {
+    std::shared_ptr<DiscreteModel> model( std::move(m_deferredModels.front()) );
+    m_deferredModels.erase( m_deferredModels.begin() );
+    addPhysicsModel( model );
+  }
+}
+
+void Prompt::ModelCollection::prepareAllGidi()
+{
+  for(auto *coll : liveCollections())
+    coll->prepareGidi();
+}
+#endif
 
 
 void Prompt::ModelCollection::addPhysicsModel(std::shared_ptr<Prompt::DiscreteModel> model)
@@ -70,6 +186,13 @@ double Prompt::ModelCollection::unbiasedAbsorptionCrossSection(int pdg, double e
 
 double Prompt::ModelCollection::totalCrossSection(int pdg, double ekin, const Vector &dir) const
 {
+  // offline callers (python xs(), unit tests) can reach the collection before
+  // any transport entry ran; self-materialise the pending gidi models. No-op
+  // once prepared, and the build consumes no random numbers.
+#ifdef ENABLE_GIDI
+  const_cast<ModelCollection*>(this)->prepareGidi();
+#endif
+
   if(sameInquiryAsLastTime(ekin, dir))
   {
     return m_cache.tot;
@@ -120,8 +243,14 @@ Prompt::SampledResult& Prompt::ModelCollection::pickAndSample(double ekin, const
 {
   if(!sameInquiryAsLastTime(ekin, dir))
   {
-    //fixme:!!
+    // Rejected pre-collision sampling when the cached inquiry went stale
+    // (see the boundary-exit note in ParticleProcess::sampleFinalState).
+    // The warning used to printf on every hit: on a hot transport loop this
+    // was a stdout hazard measurable in the profile, so it now only shows
+    // under the DEBUG_PTS build.
+#ifdef DEBUG_PTS
     printf("WARNING, sampling event with different incident energy and/or direction\n");
+#endif
     m_res.final_ekin = ekin;
     m_res.final_dir = dir;
     return m_res;
@@ -144,8 +273,21 @@ Prompt::SampledResult& Prompt::ModelCollection::pickAndSample(double ekin, const
     if(p > r1)
       break;
   }
+  if(i >= m_models.size()) //guard: the draw rounded past the summed probability
+    i = m_models.size()-1;
 
-  m_res = m_models[i]->sampleReaction(ekin, dir);
+  //oriented models sample in the local (crystal) frame: convert the incident
+  //direction like totalCrossSection does, the sampled outgoing direction is
+  //mapped back to the global frame below
+  const Vector *sampledir = &dir;
+  if(m_models[i]->isOriented())
+  {
+    auto &activeVolume = Singleton<ActiveVolume>::getInstance();
+    m_localdir =  activeVolume.getGeoTranslator().global2Local_direction(dir);
+    sampledir = &m_localdir;
+  }
+
+  m_res = m_models[i]->sampleReaction(ekin, *sampledir);
 
   if(m_models[i]->isOriented())
   {

@@ -119,12 +119,14 @@ def test_hist1d_plot_log_list_honoured():
     plt.close(fig)
 
 
+@pytest.mark.slow  # >0.7 s body: excluded from the pre-push hook, runs in cimbuild -t
 def test_hist1d_savefig(tmp_path):
     out = tmp_path / 'h1.png'
     _filledHist1D().savefig(str(out))
     assert out.stat().st_size > 0
 
 
+@pytest.mark.slow  # >0.7 s body: excluded from the pre-push hook, runs in cimbuild -t
 def test_hist2d_savefig(tmp_path):
     h = Hist2D(0., 2., 4, 0., 2., 4)
     h.fill(0.25, 0.25, 1.0)

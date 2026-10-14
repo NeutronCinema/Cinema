@@ -3,9 +3,9 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -34,6 +34,13 @@ namespace Prompt {
     explicit HistBase(const std::string &name, unsigned nbins);
     virtual ~HistBase();
 
+    //Merge another histogram of the same geometry into this one: bin content,
+    //hit counters and the under/overflow and total weight add linearly. The
+    //two error channels differ (see scale()):
+    // - Hist1D/Hist2D store sum(w^2) in m_ww, and variances add on merge, so
+    //   the merged sdev sqrt(m_ww) is the quadrature of independent runs;
+    // - Est1D stores the sdev itself in m_hit (m_ww stays 0) and overrides
+    //   merge to combine that channel in quadrature instead of linearly.
     virtual void merge(const HistBase &);
     void setWeight(double *data, size_t n);
     void setHit(double *data, size_t n);
@@ -80,7 +87,13 @@ namespace Prompt {
       return sum;
     };
 
-    void scale(double scalefact);
+    //Scale the bin content and the weight totals by the given factor. m_ww
+    //holds sum(w^2), so it scales by the factor squared and getSdev()
+    //(=sqrt(m_ww)) by the absolute value, like the content. The hit counters
+    //count fill calls and are not rescaled. Virtual because Est1D keeps its
+    //sdev in m_hit (linear in the factor) instead of m_ww, and overrides this
+    //to rescale that channel; see merge() for the same two-channel split.
+    virtual void scale(double scalefact);
     void reset();
 
     const std::vector<double>& getRaw() const {return m_data;}
@@ -104,6 +117,14 @@ namespace Prompt {
     double m_overflow;
     size_t m_nbins;
     std::string m_mcpl_file_name;
+
+    //Copy the scored state (bin content, hit counts, sum(w^2), the totals and
+    //the note) from another histogram of identical geometry; the state notion
+    //is the one of merge(). Used by the derived copy constructors, which stay
+    //allowed although copying the base itself is forbidden: the MPI gather
+    //needs an independent histogram so that reduction results never overwrite
+    //the live scorer histogram.
+    void copyTrivialFrom(const HistBase &other);
 
   private:
     //Copy/assignment are forbidden to avoid troubles

@@ -1,8 +1,8 @@
 ################################################################################
 ##                                                                            ##
-##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
+##  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    ##
 ##                                                                            ##
-##  Copyright 2021-2024 Prompt developers                                     ##
+##  Copyright 2021-2026 Cinema developers                                     ##
 ##                                                                            ##
 ##  Licensed under the Apache License, Version 2.0 (the "License");           ##
 ##  you may not use this file except in compliance with the License.          ##
@@ -252,13 +252,65 @@ def _validateNccfgContent(cfg):
 # quoted nccfg part of a Material-style string
 _nccfgQuoteRegex = re.compile(r"nccfg='([^']*)'")
 
+# first physics=<ns> key of a material cfg string (the canonical form puts it
+# in front; a later occurrence could only be inside a quoted nccfg value)
+_physicsNsRegex = re.compile(r'physics=([A-Za-z][A-Za-z0-9_]*)')
+
+# physics families the C++ host still dispatches itself, with dedicated
+# validation above; everything else resolves through the plugin registry
+_hostPhysicsFamilies = {'ncrystal'}
+
+
+def _knownPhysicsNamespaces():
+    """Namespaces the C++ plugin registry can resolve, or None (fail open).
+
+    Imported lazily: physics.py must stay importable without the core library
+    (pure-string helpers are used in contexts where the library is absent),
+    and any failure to reach the registry leaves the decision to the C++
+    side, which produces the same 'unknown physics' rejection anyway.
+    """
+    try:
+        from ..Interface import pluginNamespaces
+    except Exception:
+        return None
+    try:
+        return pluginNamespaces()
+    except Exception:
+        return None
+
+
+def _validatePhysicsNamespace(cfg):
+    """Pre-check the namespace of a physics=<ns> cfg against the plugin registry.
+
+    Since the generic registry route, every parsed physics=<ns> resolves
+    through the C++ plugin registry. An unknown namespace is already a
+    normal, catchable C++ BadInput (no abort hazard), so this check is pure
+    courtesy: it surfaces the same 'unknown physics' rejection as a Python
+    ValueError at material-construction time instead of at launch time.
+    Fails open when the registry listing is unavailable.
+    """
+    match = _physicsNsRegex.search(cfg)
+    if not match:
+        return
+    ns = match.group(1)
+    if ns in _hostPhysicsFamilies:
+        return
+    known = _knownPhysicsNamespaces()
+    if known is None or ns in known:
+        return
+    raise ValueError(
+        f"unknown physics {ns} (known physics namespaces: "
+        f"{', '.join(sorted(known))})")
+
 
 def _validateMatCfg(cfg):
-    """Validate a volume material cfg: data files and NCrystal cfg content.
+    """Validate a volume material cfg: data files, NCrystal cfg content, and
+    the physics namespace.
 
     Only the NCrystal part of a `physics=ncrystal;nccfg='...'` string is
-    content-checked; other physics families (e.g. idealElaScat) and raw
-    compound-material cfgs are decided by the C++ side.
+    content-checked; other physics families and raw compound-material cfgs
+    are decided by the C++ side, with just the namespace existence checked
+    against the plugin registry here.
     """
     _validateNccfgFiles(cfg)
     if not isinstance(cfg, str):
@@ -271,6 +323,7 @@ def _validateMatCfg(cfg):
         # no physics= key: the C++ parser falls back to treating the whole
         # string as a raw NCrystal cfg
         _validateNccfgContent(cfg)
+    _validatePhysicsNamespace(cfg)
 
 
 def wrapRawNccfg(cfg):

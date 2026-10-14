@@ -3,9 +3,9 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -43,6 +43,15 @@ namespace Prompt {
 
   private:
     double macroCrossSection(const Prompt::Particle &particle) const;
+    // Route the non-gidi ncrystal paths (NC_RAW and NC_SCATTER) through the
+    // plugin registry: the builtin NCrystalFactory emits the same Abs/Scat
+    // channels in the legacy order and each becomes a PluginModelAdapter.
+    void cfgNCrystalViaPlugin(const std::string &cfgstr, double scatter_bias, double abs_bias);
+    // Generic plugin route (PhysicsType::PLUGIN): any parsed physics=<ns>
+    // without a dedicated host branch resolves through the registry; unknown
+    // namespaces surface here as "unknown physics".
+    void cfgPluginViaRegistry(const std::string &cfgstr, const std::string &ns,
+                              double scatter_bias, double abs_bias);
     std::string m_name;
     SingletonPTRand &m_rng;
     std::unique_ptr<ModelCollection> m_discretModels;

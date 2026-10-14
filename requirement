@@ -13,7 +13,7 @@
 # ncrystal-pypluginmgr
 # git+https://code.ihep.ac.cn/cinema-developers/ncplugin-bzscope
 # git+https://github.com/highness-eu/ncplugin-SANSND.git
-# mpi4py
+mpi4py
 # pyvista
 # matplotlib
 mcpl
@@ -43,5 +43,9 @@ gvar
 #motor  #asynchronous
 
 # optimization
-# optuna
+optuna
 # mysqlclient
+
+#testing (gates cimbuild -t and the pre-push hook via scripts/pytest_tree.py)
+pytest
+pytest-forked

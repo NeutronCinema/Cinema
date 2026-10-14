@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import pytest
 from Cinema.Prompt import Prompt
 from Cinema.Prompt.geo import Volume
 from Cinema.Prompt.solid import Box
@@ -9,6 +10,7 @@ from Cinema.Prompt.geo import Transformation3D as Tsf
 import numpy as np
 
 
+@pytest.mark.slow  # >0.7 s body: excluded from the pre-push hook, runs in cimbuild -t
 def test_simulation():
     expE = [0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 2.0, 8.0, 23.0, 75.0, 287.0, 638.0, 1085.0, 1637.0, 648.0, 30.0, 0.0, 0.0, 0.0, 0.0]
     expdE = [0.0, 0.0, 0.0, 0.0, 358.0, 35.0, 0.0, 0.0]

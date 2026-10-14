@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -28,7 +28,6 @@
 #include "PTScorerTOF.hh"
 #include "PTScorerVolFluence.hh"
 #include "PTScorerMultiScat.hh"
-#include "PTScorerRotatingObj.hh"
 #include "PTScorerWlSpectrum.hh"
 #include "PTScorerAngular.hh"
 #include "PTScorerSplit.hh"
@@ -38,7 +37,7 @@ Prompt::ScorerFactory::ScorerFactory()
 {}
 
 
-Prompt::Scorer* Prompt::ScorerFactory::createScorer(const std::string &cfgstr, double vol)
+Prompt::Scorer* Prompt::ScorerFactory::createScorer(const std::string &cfgstr)
 {
   std::cout << "Parsing scorer with config string: \n";
   std::cout << cfgstr << "\n";
@@ -566,7 +565,7 @@ Prompt::Scorer* Prompt::ScorerFactory::createScorer(const std::string &cfgstr, d
         PROMPT_THROW2(BadInput, "Scorer type VolFluence is missing or with extra config parameters" << ", " << cfg.size() << " are given, but there is " <<   parCount <<" known parameters"  );
       }
 
-      return new ScorerVolFluence(name, xmin, xmax, nxbins, vol, const_neutron_pgd, ptstate, linear);
+      return new ScorerVolFluence(name, xmin, xmax, nxbins, const_neutron_pgd, ptstate, linear);
 
     }
     else if(ScorDef == "Split")
@@ -574,19 +573,6 @@ Prompt::Scorer* Prompt::ScorerFactory::createScorer(const std::string &cfgstr, d
       std::string name = cfg.find("name", true);
       int split = ptstoi(cfg.find("split", true));
       return new ScorerSplit(name, split, const_neutron_pgd);
-    }
-    else if(ScorDef == "RotatingObj")
-    {
-      // "Scorer=RotatingObj;name=ro1;rotation_axis=0,1,0;point_on_axis=0,0,0;rot_fre=100;type=Entry or Proprogate or Exit"/
-
-      int parCount = 5;
-      bool force = true;
-
-      std::string name = cfg.find("name", force);
-      auto rotAxis = string2vec(cfg.find("rotation_axis", force));
-      auto pointAxis = string2vec(cfg.find("point_on_axis", force));
-      double rotFreq = ptstod(cfg.find("rot_fre", force));
-      return new ScorerRotatingObj(name, rotAxis, pointAxis, rotFreq, const_neutron_pgd);
     }
     else if(ScorDef == "WlAngle")
     {

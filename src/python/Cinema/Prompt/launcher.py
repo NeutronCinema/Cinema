@@ -2,9 +2,9 @@
 
 ################################################################################
 ##                                                                            ##
-##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
+##  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    ##
 ##                                                                            ##
-##  Copyright 2021-2024 Prompt developers                                     ##
+##  Copyright 2021-2026 Cinema developers                                     ##
 ##                                                                            ##
 ##  Licensed under the Apache License, Version 2.0 (the "License");           ##
 ##  you may not use this file except in compliance with the License.          ##
@@ -20,6 +20,7 @@
 ##                                                                            ##
 ################################################################################
 
+import ctypes
 import os
 import socket
 import sys
@@ -32,18 +33,32 @@ from .histogram import Hist1D, Hist2D, _pt_HistBase_dimension
 
 _pt_Launcher_getInstance = importFunc('pt_Launcher_getInstance', type_voidp, [] )
 _pt_Launcher_setSeed = importFunc('pt_Launcher_setSeed', None, [type_voidp, type_sizet] )
-_pt_Launcher_loadGeometry = importFunc('pt_Launcher_loadGeometry', None, [type_voidp, type_cstr] )
+# loadGeometry/go/setGun are bridged (int status + pt_last_error message,
+# surfaced through raiseOnBridgeError) so a C++ cfg rejection raises a normal
+# RuntimeError instead of aborting the process at the ctypes boundary
+_pt_Launcher_loadGeometry = importFunc('pt_Launcher_loadGeometry', type_int, [type_voidp, type_cstr] )
 _pt_Launcher_getTrajSize = importFunc('pt_Launcher_getTrajSize', type_sizet, [type_voidp])
 _pt_Launcher_getTrajectory = importFunc('pt_Launcher_getTrajectory', None, [type_voidp, type_npdbl2d])
-_pt_Launcher_go = importFunc('pt_Launcher_go', None, [type_voidp, type_sizet, type_dbl, type_bool, type_bool, type_bool])
-_pt_Launcher_setGun = importFunc('pt_Launcher_setGun', None, [type_voidp, type_cstr])
-_pt_Launcher_goWithSecondStack = importFunc('pt_Launcher_goWithSecondStack', type_sizet, [type_voidp, type_sizet])
+_pt_Launcher_go = importFunc('pt_Launcher_go', type_int, [type_voidp, type_sizet, type_dbl, type_bool, type_bool, type_bool])
+_pt_Launcher_setGun = importFunc('pt_Launcher_setGun', type_int, [type_voidp, type_cstr])
+# goWithSecondStack/simOneEvent are bridged like go: since the lazy gidi
+# rewrite the first event builds the pending gidi models, and a data problem
+# (DataLoadError) must raise a catchable RuntimeError, not abort the process
+_pt_Launcher_goWithSecondStack = importFunc('pt_Launcher_goWithSecondStack', type_int, [type_voidp, type_sizet, type_sizetp])
+
+# Fission-bank exchange for the parallel power iteration (PromptMPI allgathers
+# the blobs between ranks). loadSecondStack is bridged: a corrupted or foreign
+# blob raises DataLoadError through the bridge instead of crashing.
+_pt_Launcher_secondStackSize = importFunc('pt_Launcher_secondStackSize', type_int, [type_voidp, type_sizetp])
+_pt_Launcher_dumpSecondStack = importFunc('pt_Launcher_dumpSecondStack', type_int, [type_voidp, type_cstr, type_sizet, type_sizetp])
+_pt_Launcher_loadSecondStack = importFunc('pt_Launcher_loadSecondStack', type_int, [type_voidp, type_cstr, type_sizet, type_sizet])
+_pt_Launcher_extractSecondStack = importFunc('pt_Launcher_extractSecondStack', type_int, [type_voidp, type_cstr, type_sizet, type_cstr, type_sizet, type_cstr, type_sizet, type_sizetp])
 
 _pt_ResourceManager_getHist = importFunc('pt_ResourceManager_getHist', type_voidp, [type_cstr])
 
 _pt_setWorld = importFunc('pt_setWorld', None, [type_voidp])
 
-_pt_Launcher_simOneEvent = importFunc('pt_Launcher_simOneEvent', None, [type_voidp, type_bool])
+_pt_Launcher_simOneEvent = importFunc('pt_Launcher_simOneEvent', type_int, [type_voidp, type_bool])
 
 # Shared by Launcher.setWorld and Prompt.setWorld. Do not suggest clear() as a
 # remedy here: clear() would destroy the world another Prompt instance in this
@@ -105,7 +120,12 @@ def ensureDisplayUsable(timeout=2.0):
     return False
 
 
-ensureDisplayUsable()
+# NOTE: ensureDisplayUsable() used to run here, at import time. That made
+# importing Cinema.Prompt mutate os.environ and the matplotlib backend and
+# print the headless WARNING before any user code ran. The probe now runs
+# lazily on first actual use - Launcher.showWorld and Visualiser.show both
+# call it - with the same once-per-process semantics and the same warning
+# text and headless fallback behaviour.
 
 
 @singleton
@@ -118,7 +138,7 @@ class Launcher():
         _pt_Launcher_setSeed(self.cobj, seed)
 
     def loadGeometry(self, fileName):
-        _pt_Launcher_loadGeometry(self.cobj, fileName.encode('utf-8'))
+        raiseOnBridgeError(_pt_Launcher_loadGeometry(self.cobj, fileName.encode('utf-8')))
 
     def setWorld(self, logicalvol):
         if self.worldExist:
@@ -167,7 +187,7 @@ class Launcher():
             v.show()
 
     def setGun(self, cfg):
-        _pt_Launcher_setGun(self.cobj, cfg.encode('utf-8'))      
+        raiseOnBridgeError(_pt_Launcher_setGun(self.cobj, cfg.encode('utf-8')))
         
 
     def getTrajSize(self):
@@ -190,10 +210,65 @@ class Launcher():
             warnings.warn("Launcher.go() argument 'save2Dis' is a typo, use 'save2Disk' (alias kept for backward compatibility)",
                           DeprecationWarning, stacklevel=2)
             save2Disk = save2Dis
-        _pt_Launcher_go(self.cobj, numPrimary, printPercent, recordTrj, timer, save2Disk)
+        raiseOnBridgeError(_pt_Launcher_go(self.cobj, numPrimary, printPercent, recordTrj, timer, save2Disk))
 
     def goWithSecondStack(self, numPrimary):
-        return _pt_Launcher_goWithSecondStack(self.cobj, numPrimary)
+        num = type_sizet()
+        raiseOnBridgeError(_pt_Launcher_goWithSecondStack(self.cobj, int(numPrimary), ctypes.pointer(num)))
+        return num.value
+
+    def secondStackSize(self):
+        """The byte size the next exportSecondStack blob would have.
+
+        A header-only query on the C++ side (O(1)), so callers can probe
+        the bank — e.g. an MPI entry guard checking for an empty bank —
+        without serialising it. 12 bytes means an empty bank."""
+        size = type_sizet()
+        raiseOnBridgeError(_pt_Launcher_secondStackSize(self.cobj, ctypes.pointer(size)))
+        return size.value
+
+    def exportSecondStack(self):
+        """The fission bank (second stack) as an opaque bytes blob.
+
+        Fixed-layout records owned by the C++ side (see StackManager.cc);
+        the only legal consumer is importSecondStack, possibly after an
+        MPI allgather to pool the banks of all ranks."""
+        buf = ctypes.create_string_buffer(max(self.secondStackSize(), 1))
+        written = type_sizet()
+        raiseOnBridgeError(_pt_Launcher_dumpSecondStack(self.cobj, buf, len(buf), ctypes.pointer(written)))
+        return buf.raw[:written.value]
+
+    def importSecondStack(self, blob, normaliseTo):
+        """Replace the fission bank with an exportSecondStack blob.
+
+        normaliseTo (an int in [0, 1e9], ValueError outside) resamples the
+        pooled bank to the local share with the same sampling (and the same
+        RNG draws per bank state) as the serial goWithSecondStack entry
+        path. normaliseTo == 0 replaces the bank verbatim (the
+        nearest-neighbour exchange hands back an already exactly-sized
+        bank)."""
+        normaliseTo = int(normaliseTo)
+        if normaliseTo < 0 or normaliseTo > 10**9:
+            raise ValueError(f'normaliseTo out of range [0, 1e9]: {normaliseTo}')
+        raiseOnBridgeError(_pt_Launcher_loadSecondStack(self.cobj, blob, len(blob), normaliseTo))
+
+    def extractSecondStack(self, blob, local_indices):
+        """Pick records out of an exportSecondStack blob by local index.
+
+        Returns a fresh self-describing blob holding the selected records in
+        the order given; duplicate indices duplicate the record (the
+        nearest-neighbour exchange samples with replacement). local_indices
+        is a sequence of non-negative ints bounded by the blob's record
+        count; anything else raises DataLoadError through the bridge."""
+        idx = np.asarray(local_indices, dtype=np.uint64)
+        if idx.ndim != 1:
+            raise ValueError('local_indices must be one-dimensional')
+        out = ctypes.create_string_buffer(12 + idx.size * 84)
+        written = type_sizet()
+        raiseOnBridgeError(_pt_Launcher_extractSecondStack(
+            self.cobj, blob, len(blob),
+            idx.tobytes(), idx.size, out, len(out), ctypes.pointer(written)))
+        return out.raw[:written.value]
 
 
     def getHist(self, cfg):
@@ -219,4 +294,4 @@ class Launcher():
             raise RuntimeError("no implemented")
         
     def simOneEvent(self, recordTrj=False):
-        _pt_Launcher_simOneEvent(self.cobj, recordTrj)
+        raiseOnBridgeError(_pt_Launcher_simOneEvent(self.cobj, recordTrj))

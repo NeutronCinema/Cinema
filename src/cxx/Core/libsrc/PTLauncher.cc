@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -30,6 +30,7 @@
 #include "PTNeutron.hh"
 #include "PTGunFactory.hh"
 #include "PTPythonGun.hh"
+#include "PTModelCollection.hh"
 #include "NCrystal/NCrystal.hh"
 
 class SingletonPTRandWrapper : public NCrystal::RNGStream{
@@ -92,6 +93,15 @@ void Prompt::Launcher::setGun(const char* cfg)
 
 void Prompt::Launcher::simOneEvent(bool recordTrj)
 {
+#ifdef ENABLE_GIDI
+  // P2.1 single materialization point: go(), goWithSecondStack() and the
+  // python-gun loop all funnel through here, so the pending gidi models of
+  // every configured material are built exactly once before the first
+  // transport event. The build consumes no random numbers, hence the RNG
+  // stream (and with it every pinned histogram) is unchanged.
+  ModelCollection::prepareAllGidi();
+#endif
+
       //add a primary particle into the stack
     while(!m_stackManager.empty())
     {
@@ -201,6 +211,27 @@ size_t Prompt::Launcher::goWithSecondStack(uint64_t numParticle)
   std::cout << "Simulating " << m_stackManager.getNumParticleInStack()<< " particles using the swapped secondary stack.\n";
   simOneEvent(false);
   return m_stackManager.getNumParticleInSecondStack();
+}
+
+std::vector<char> Prompt::Launcher::exportSecondStack() const
+{
+  return m_stackManager.dumpSecondStack();
+}
+
+size_t Prompt::Launcher::secondStackSize() const
+{
+  return m_stackManager.secondStackBlobSize();
+}
+
+void Prompt::Launcher::importSecondStack(const std::vector<char> &blob, uint64_t normaliseTo)
+{
+  m_stackManager.importSecondStack(blob, normaliseTo);
+}
+
+std::vector<char> Prompt::Launcher::extractSecondStack(const std::vector<char> &blob,
+                                                       const std::vector<uint64_t> &localIndices) const
+{
+  return m_stackManager.extractSecondStack(blob, localIndices);
 }
 
 void Prompt::Launcher::go(uint64_t numParticle, double printPrecent, bool recordTrj, bool timer, bool save)

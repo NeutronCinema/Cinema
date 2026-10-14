@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -58,9 +58,12 @@ m_hashIndex(0)
   protares[0]= m_mcprotare.get();
   m_urr_info = new MCGIDI::URR_protareInfos(protares);
 
-  m_input->m_temperature = const_boltzmann*temperature/Unit::keV;   // In keV/k;
+  // gidiplus 3.35: Sampling::Input carries temperature/energy privately; both are
+  // (re)written per sampling call in MeV via setTemperatureAndEnergy, so the value
+  // stored here is a placeholder only.
+  m_input->setTemperatureAndEnergy( temperatureMeV(), 0. );
 
-//     std::cout << "!!!!!!!!! m_input->m_temperature "  << m_input->m_temperature << std::endl;
+//     std::cout << "!!!!!!!!! m_input->temperature "  << m_input->temperature() << std::endl;
 // abort();
   int numberOfReactions = m_mcprotare->numberOfReactions();
   std::cout <<"Model " << m_modelName << " has " << numberOfReactions << " reactions"<< ". " ;
@@ -92,12 +95,18 @@ Prompt::GIDIModel::~GIDIModel()
 
 
 
+double Prompt::GIDIModel::temperatureMeV() const
+{
+  // kT in keV (see the constructor of the pre-3.35 code) converted to MeV.
+  return const_boltzmann*m_temperature/Unit::keV*1e-3;
+}
+
 double Prompt::GIDIModel::getCrossSection(double ekin) const
 {
   if(!m_modelvalid.ekinValid(ekin))
     return 0.;
 
-  // ekin==m_cacheEkin is the case for thermal neutron elastic scattering 
+  // ekin==m_cacheEkin is the case for thermal neutron elastic scattering
   // or neutron crossing geometry to the volume of the same material
   if(ekin!=m_cacheEkin)
   {
@@ -105,19 +114,20 @@ double Prompt::GIDIModel::getCrossSection(double ekin) const
     double ekin_MeV = ekin*1e-6;
     m_hashIndex = m_factory.getHashID(ekin_MeV);
     if(m_mcprotare->hasURR_probabilityTables())  {
-      if(ekin_MeV>m_mcprotare->URR_domainMin() && ekin_MeV<m_mcprotare->URR_domainMax()) 
+      if(ekin_MeV>m_mcprotare->URR_domainMin() && ekin_MeV<m_mcprotare->URR_domainMax())
       {
-        m_urr_info->updateProtare(m_mcprotare.get(), ekin_MeV, getRandNumber, nullptr);
-        m_cacheGidiXS = m_mcprotare->crossSection( *m_urr_info, m_hashIndex,  0, ekin_MeV );  
+        // gidiplus 3.35 takes the user RNG as a callable instead of a fnptr+state pair.
+        m_urr_info->updateProtare(m_mcprotare.get(), ekin_MeV, []() -> double { return getRandNumber(nullptr); });
+        m_cacheGidiXS = m_mcprotare->crossSection( *m_urr_info, m_hashIndex,  0, ekin_MeV );
       }
       else
       {
-        m_urr_info->updateProtare(m_mcprotare.get(), ekin_MeV, getZero, nullptr);
-        m_cacheGidiXS = m_mcprotare->crossSection( *m_urr_info, m_hashIndex, m_input->m_temperature*1e-3, ekin_MeV );  
+        m_urr_info->updateProtare(m_mcprotare.get(), ekin_MeV, []() -> double { return getZero(nullptr); });
+        m_cacheGidiXS = m_mcprotare->crossSection( *m_urr_info, m_hashIndex, temperatureMeV(), ekin_MeV );
       }
     }
     else
-      m_cacheGidiXS = m_mcprotare->crossSection( *m_urr_info, m_hashIndex, m_input->m_temperature*1e-3, ekin_MeV );  
+      m_cacheGidiXS = m_mcprotare->crossSection( *m_urr_info, m_hashIndex, temperatureMeV(), ekin_MeV );
   }
   return m_cacheGidiXS*m_bias*Unit::barn*m_frac;
 
@@ -137,13 +147,23 @@ const Prompt::SampledResult& Prompt::GIDIModel::sampleReaction(double ekin, cons
 
   std::vector<Particle> secondaries;
 
-  int reactionIndex =  m_mcprotare->sampleReaction( *m_urr_info, m_hashIndex, m_input->m_temperature*1e-3, ekin_MeV, m_cacheGidiXS, getRandNumber, nullptr );
+  // gidiplus 3.35: temperature and projectile energy travel inside Sampling::Input (MeV);
+  // the URR branch index is picked internally and the reaction index is size_t.
+  m_input->setTemperatureAndEnergy( temperatureMeV(), ekin_MeV );
+  std::size_t reactionIndex = m_mcprotare->sampleReaction( *m_input, *m_urr_info, m_hashIndex, m_cacheGidiXS,
+                                                           []() -> double { return getRandNumber(nullptr); } );
 
   MCGIDI::Reaction const *reaction = m_mcprotare->reaction( reactionIndex );
   pt_assert_always(m_mcprotare->threshold( reactionIndex ) < ekin_MeV);
 
   m_products->clear();
-  reaction->sampleProducts( m_mcprotare.get(), ekin_MeV, *m_input, getRandNumber, nullptr, *m_products );
+  // In 3.35 the PUSHBACK callback is invoked unconditionally and is the ONLY route
+  // products take into the handler (ProductHandler::add never appends internally),
+  // so it must do the push itself (cf. MCGIDI/Test/upscatterModelB).
+  reaction->sampleProducts( m_mcprotare.get(), *m_input,
+                            []() -> double { return getRandNumber(nullptr); },
+                            [this]( MCGIDI::Sampling::Product &aproduct ) { m_products->push_back( aproduct ); },
+                            *m_products );
   pt_assert_always(m_input->m_reaction==reaction);
 
   double totalekin = 0;
@@ -163,8 +183,13 @@ const Prompt::SampledResult& Prompt::GIDIModel::sampleReaction(double ekin, cons
       totalekin += gidi_ekin_ev; // accumulate the energy that will be carried by a particle in the later simulation. 
 
       // make secondary
-      const Particle & primary = m_launcher.getCurrentParticle(); 
-      // m_launcher.copyCurrentParticle(primary); 
+      // Offline sampling (ModelCollection::generate through the checked bridge)
+      // runs without a current particle; a null m_curParicle would segfault
+      // here, so fall back to a stub particle sitting at the origin.
+      Particle offlineStub(0., Vector{0., 0., 1.}, Vector{0., 0., 0.});
+      const Particle & primary = m_launcher.hasCurrentParticle()
+          ? m_launcher.getCurrentParticle() : offlineStub;
+      // m_launcher.copyCurrentParticle(primary);
       if(aproduct.m_userProductIndex==const_neutron_pgd)
       {
         #ifdef DEBUG

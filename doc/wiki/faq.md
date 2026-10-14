@@ -77,6 +77,23 @@ duplicating it.
   `from Cinema.Prompt import ...`). Details:
   [Installation and environments](install).
 
+### GIDI material setup dies with "Cannot read from HDF5 file"
+
+- **Symptom:** building a GIDI-enabled world aborts with
+  `terminate called after throwing an instance of 'GIDI::Exception'` /
+  `what(): parseValuesOfDoubles: Cannot read from HDF5 file as GIDI+ was
+  compiled without HDF5 support.`
+- **Cause:** the gidiplus static library was compiled without its HDF5 reader.
+  This happens when `make install4prompt` is invoked by hand without
+  `HDF5_PATH` (the GNDS nuclear-data files under `external/ptdata/` are
+  HDF5-backed, so without it every parse fails at runtime, not at link time).
+- **Fix:** rebuild gidiplus with the HDF5 variables, exactly as `install.sh`
+  does: `make realclean && make install4prompt HDF5_PATH=$PROMPT_HDF5_PATH
+  HDF5_LIB=$PROMPT_HDF5_LIB HDF5_INCLUDE=$PROMPT_HDF5_HEADER` (plus
+  `CXXFLAGS=-fPIC`), then rebuild Cinema with `cimbuild -r --enablegidi`.
+  The HDF5 symbols themselves are resolved from Cinema's own link line.
+  See [Installation and environments](install).
+
 ### conda wants to downgrade libxml2 (or refuses to)
 
 - **Symptom:** while sourcing `env.sh`, conda resolves a `libxml2=2.9.3`
@@ -99,15 +116,19 @@ duplicating it.
 - **Fix:** run it once on a network-connected machine; later sources skip
   everything already built. See [Installation and environments](install).
 
-### `ModuleNotFoundError: No module named 'mpi4py'` on `import Cinema.Prompt`
+### `PromptMPI` raises `ImportError` about mpi4py (or mpi4py failed to install)
 
-- **Symptom:** `import Cinema` works (found via `PYTHONPATH`), but
-  `import Cinema.Prompt` fails in a freshly created `cinemavirenv`.
-- **Cause:** `promptCore.py` imports `mpi4py` at module level, while the
-  `requirement` file that builds the venv has its mpi4py line commented out.
+- **Symptom:** `import Cinema.Prompt` and plain serial `Prompt` runs work, but
+  constructing `PromptMPI` raises
+  `ImportError: PromptMPI requires the mpi4py package ...`.
+- **Cause:** `mpi4py` is an optional dependency: `promptCore.py` guards its
+  import and only the `PromptMPI` subclass needs it, so serial runs have no
+  mpi4py dependency. The `requirement` file lists mpi4py, but in an env where
+  that one line failed to build (it needs MPI headers) the package is missing.
 - **Fix:** once per venv: `cinemavirenv/bin/python3 -m pip install mpi4py`
   (needs MPI headers — the apt route's `libopenmpi-dev` or conda
-  `openmpi`/`mpi4py` provide them). See [Installation and environments](install).
+  `openmpi`/`mpi4py` provide them), or stay with the serial `Prompt` class.
+  See [Installation and environments](install).
 
 ---
 
@@ -182,7 +203,26 @@ duplicating it.
   has no effect.
 - **Fix:** configure `GidiSetting` before building any volume or material, and
   confirm the library was built with GIDI (`GidiSetting().isCompiled` — see the
-  GIDI/CATIMA entry in section 1). See [Materials and physics](materials-physics).
+  GIDI/CATIMA entry in section 1). Prefer the checked front-end API:
+  `GidiSetting().enable()` warns when GIDI is not compiled in and refuses with
+  `ValueError` when the data files are missing, instead of failing this quietly.
+  See [Materials and physics](materials-physics).
+
+### gidi.enable() raises ValueError about missing data files
+
+- **Symptom:** `GidiSetting().enable()` refuses with a `ValueError` naming a
+  `pops.xml` or `all.map` path that "is missing or unreadable".
+- **Cause:** compiled-in is not the same as runtime-usable — the GIDI data
+  package (pops database + map + ENDF files) is optional and not installed (or
+  the configured paths point elsewhere). The refusal is deliberate: an enable
+  that cannot be honoured must never degrade silently into "looks like GIDI
+  but is not".
+- **Fix:** install the GIDI data under the cinema data path, or point at an
+  existing installation with `GidiSetting().setGidiPops(...)` /
+  `.setGidiMap(...)` before `enable()`. Probe a build without side effects
+  with `GidiSetting().available()`, e.g. `if gidi.available(): gidi.enable()`.
+  Users who never enable GIDI are unaffected either way — the default path
+  never reads the data. See [Materials and physics](materials-physics).
 
 ### A scorer returns another scorer's numbers
 
@@ -258,29 +298,24 @@ duplicating it.
 ### Numbers read from an MCPL file do not match my scorer ranges
 
 - **Symptom:** e.g. a TOF histogram binned over 0..40e-3 while the MCPL `time`
-  field reads up to 40; energies off by a factor 1e6 — or the reverse: a
-  Cinema-written *particle* dump run through `MCPL_Analyzer_1D`/`2D` or
-  re-shot with `MCPLGun` comes back with energies x1e6, positions x10, times
-  x1e-3 off.
+  field reads up to 40; energies off by a factor 1e6.
 - **Cause:** the MCPL standard fixes the particle fields to position **cm**,
-  kinetic energy **MeV**, time **ms**, and Cinema's *reading* side honours
-  that — `MCPLGun` rescales when sampling, the analysers treat on-disk
-  energies as MeV. The *writing* side does not — for one of the two file
-  classes Cinema produces. `MCPLOutHelper` (C++ `KillerMCPL`) writes
-  `<name>` / `<name>_pro<rank>.mcpl.gz` files whose particle records carry
-  Prompt's internal mm / eV / s, unconverted. The `<name>_seed<seed>.mcpl.gz`
-  dumps of `save2Disk=True` are a different container: they hold **no
-  particle records at all** (`nparticles` is 0, measured on a 2.0.0a5 dump) —
-  only histogram header blobs (`edge`, `content`, ...), plain arrays in
-  internal units, with no time/ekin/position fields to convert or
-  mis-convert.
-- **Fix:** the cm/MeV/ms rule applies to MCPL-standard particle files only.
-  Convert external data at the boundary, but do **not** convert
-  `MCPLOutHelper` files and do not feed them to the auto-converting analysers
-  or `MCPLGun` — read them as mm/eV/s with `PTMCPL` or the `mcpl` package.
-  Read the seed dumps only as histograms — with `PromptFileReader`,
-  `McplAnalysor`, or the generated `_view.py` script. The measured writer
-  table is in [Units and conversions](units), section 2.1.
+  kinetic energy **MeV**, time **ms**, and Cinema honours that on both
+  sides — `MCPLGun` rescales when sampling, the analysers treat on-disk
+  energies as MeV, and the writer (`MCPLOutHelper`, C++ `KillerMCPL`)
+  converts on output. The exception is **files written by Cinema 2.1.0 or
+  earlier**, whose particle records carry Prompt's internal mm / eV / s,
+  unconverted. The `<name>_seed<seed>.mcpl.gz` dumps of `save2Disk=True` are
+  a different container: they hold **no particle records at all**
+  (`nparticles` is 0, measured on a 2.0.0a5 dump) — only histogram header
+  blobs (`edge`, `content`, ...), plain arrays in internal units, with no
+  time/ekin/position fields to convert or mis-convert.
+- **Fix:** current files need no conversion anywhere — `MCPL_Analyzer_1D/2D`,
+  `MCPLGun` and the `mcpl` tools read them correctly as written. For the old
+  internal-unit files, convert at the boundary (the recipe is in [Units and
+  conversions](units), section 2.1) or read them as mm/eV/s with `PTMCPL` or
+  the `mcpl` package. Read the seed dumps only as histograms — with
+  `PromptFileReader`, `McplAnalysor`, or the generated `_view.py` script.
 
 ### Are these error bars Poisson?
 

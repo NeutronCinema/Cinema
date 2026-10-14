@@ -29,8 +29,9 @@ Conventions:
 - **The beam axis is +z.** Guns fire along z by default, and downstream components are placed at
   positive z — `Transformation3D(0, 0, 1000)` is the idiom for "a detector 1 m downstream"
   (used in `doc/example_sas.py`).
-- The interactive viewer's default camera is `view_zy()` (looking down x, z drawn vertical), and
-  there is no automatic scaling — a long beamline needs the `xscale/yscale/zscale` options of
+- The interactive viewer's default camera is `view_zy()`: the camera looks **along −x** with the
+  view-up vector (0, 1, 0), so **y is drawn vertical and the +z beam axis horizontal**. There is
+  no automatic scaling — a long beamline needs the `xscale/yscale/zscale` options of
   `PromptMPI.show` to be readable (see [Visualisation](visualization)).
 
 ## 2. `Volume`: logical volumes and the world assembly
@@ -177,7 +178,9 @@ Inspection and scipy interop:
   property `euler_xyz` → extrinsic xyz angles in degrees.
 - `setRotByAlignment(rotated, original)` **replaces** the rotation, setting it from **exactly
   two** vector pairs per argument (scipy `Rotation.align_vectors`); it returns `self`. The
-  classmethod `from_alignment(rotated=..., original=..., rot=...)` builds a frame with it
+  resulting rotation **maps `original` onto `rotated`** (`R @ original[i] == rotated[i]`, like
+  `scipyRot.align_vectors(rotated, original)`). The classmethod
+  `from_alignment(x=0., y=0., z=0., rotated=..., original=...)` builds a frame with it
   directly. The old spellings `setRotByAlignement`/`from_alignement` still work but emit a
   `DeprecationWarning`.
 - `applyRotbyMatrix(refMatrix)` multiplies in a 3×3 matrix and returns `self`, so it can be
@@ -215,13 +218,13 @@ all angles degrees.
 | `Polyhedron` | `(zPlanes, rMin, rMax, sideCount=6, phiStart_deg=0, phiDelta_deg=360)` | equal-length arrays; per-plane `rMin <= rMax` checked |
 | `PolyCone` | `(vec_z, vec_rmin, vec_rmax, phiStart_deg=0, phiDelta_deg=360)` | equal-length arrays; the z-planes must be monotonic |
 | `Cone` | `(rmaxBot, rmaxTop, z, rminBot=0, rminTop=0, phiStart_deg=0, phiDelta_deg=360)` | conical frustum; **the docstring says "Height" for `z`, but the value is passed straight to VecGeom's `UnplacedCone(..., dz, ...)` — it is a *half*-height.** |
-| `Paraboloid` | `(rbot, rtop, halfHeight)` | |
+| `Paraboloid` | `(rbot, rtop, halfHeight)` | `halfHeight` = **half**-height; `rbot < rtop` is **enforced** — the constructor raises `ValueError` for `rbot >= rtop` (the vendored transport kernel is written for `rhi > rlo`: inverted radii make the distance kernels return garbage, and `rbot == rtop` divides by zero and does not define a unique shape, unlike `Cone` where equal radii are the cylinder limit) |
 | `HyperbolicTube` | `(rmax, inst, outst, halfHeight, rmin=0)` | hyperbolic tube; `inst`/`outst` stereo angles in deg, must not exceed 90° (the check rejects a value above 90°; "less than 90° suggested"). The old misspelling `HypebolicTube` still constructs but emits a `DeprecationWarning` |
 | `Ellipsoid` | `(dx, dy, dz, zBottomCut=0, zTopCut=0)` | semi-axes; optional z cut planes (both 0 = uncut) |
 | `Tetrahedron` | `(p1, p2, p3, p4)` | the 4 corner vectors |
 | `ArbTrapezoid` | `(xy1, xy2, ..., xy8, halfz)` | 8 corner `(x, y)` points (VecGeom Arb8) |
 | `Tessellated` | `(polydata, tranMat=None)` | **pyvista `PolyData` only** (checked); optional pre-transform of the points via a `Transformation3D`; prints a warning above 100 faces — triangulate the mesh first for safety |
-| `CutTube` | `(rmax, halfHeight, botNormal, topNormal, rmin=0, sphi=0, dphi=360)` | **unimplemented — raises `NotImplementedError`** ("got problems, see issue") |
+| `CutTube` | `(rmax, halfHeight, botNormal, topNormal, rmin=0, phiStart_deg=0, phiDelta_deg=360)` | **unimplemented — raises `NotImplementedError`** ("got problems, see issue"); the constructor takes the canonical `phiStart_deg`/`phiDelta_deg` spellings |
 
 Two traps to know about:
 
@@ -384,9 +387,11 @@ calls with explicit `Transformation3D` objects — as all examples and tests do.
    announced with a one-time `RuntimeWarning`. Use `'void.ncmat'` for true void, and give every
    volume an explicit, resolvable `matCfg` (bad configs raise `ValueError`).
 9. **`placeChild` always prints** `"<name> Group ID <copyNo>"` — a C++-side notice, not an error.
-10. **Registries are class-global.** `Volume.scorer_dict` is keyed by scorer name (duplicates
-    collide); `Volume.volume_list` grows for the lifetime of the process (by design, for C++
-    memory ownership).
+10. **Registries are class-global.** `Volume.scorer_dict` is keyed by scorer name, and a
+    duplicate name raises `ValueError` ("a scorer named '...' is already registered ... scorer
+    names must be unique") on every registration route — duplicates fail loudly, they do not
+    collide silently. `Volume.volume_list` grows for the lifetime of the process (by design,
+    for C++ memory ownership).
 11. **Shape limits.** `CutTube` raises `NotImplementedError`; `Tessellated` accepts only pyvista
     `PolyData` and warns above 100 faces; boolean solids mesh only via the experimental vtkbool
     path.
@@ -406,6 +411,8 @@ material now has its own pages — see the wiki map on [home](home).
 ## Where to go next
 
 - [Your first simulation](first-simulation) — a line-by-line walkthrough of the example above
+- [Visualisation](visualization) — what this geometry looks like: `sim.show`, the viewer options, headless recipes
+- [Runnable examples](https://code.ihep.ac.cn/cinema-developers/cinema/-/blob/master/doc/wiki/examples) — small runnable scripts, including the units/half-size checks (`ex_materials_units.py`) and nested volumes (`ex_nested_volumes.py`)
 - [The Simulation class](simulation-lifecycle) — life-cycle, seeds, MPI
 - [Materials and physics](materials-physics) — NCrystal config strings, surfaces, biasing
 - [Scoring](scorers) — the scorer catalogue and `ptstate` semantics

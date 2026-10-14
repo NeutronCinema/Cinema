@@ -3,7 +3,7 @@
 This page covers the ways to install Cinema/Prompt, what the `env.sh` environment
 script actually does, the NCrystal environment policy, and the known build and
 environment gotchas. It documents Cinema **2.0.0a5** (`Cinema.__version__`, which is
-authoritative for packages; the `Version` file in the repo says `v2.0.0`).
+authoritative for packages; the `Version` file in the repo says `v2.0.1`).
 
 This wiki uses the Python API (`Cinema.Prompt`, `Simulation`) as the supported way to
 define simulations everywhere. See [First simulation](first-simulation) for the
@@ -131,18 +131,24 @@ wiki) — and then it sources `install.sh` from the repo root. Sourcing it has t
    dependencies (mcpl, scipy, h5py, gvar, psutil, tqdm); **Cinema itself is
    not pip-installed there** — it is found via `PYTHONPATH`. Note that the
    `requirement` file has its NCrystal and visualisation lines commented out on
-   purpose (section 6), and its `mpi4py` line is commented out too. That omission
-   matters: `promptCore.py` imports mpi4py at module level, so a venv created this
-   way cannot import `Cinema.Prompt` at all until mpi4py is installed (`pip install
-   mpi4py` — the apt route's `libopenmpi-dev` prerequisite supplies what it needs —
-   or take mpi4py from conda). The existing `cinemavirenv` on the development
-   machine this wiki was written on carries mpi4py 4.1.1.
+   purpose (section 6). Its `mpi4py` line is active, but mpi4py is an *optional*
+   dependency of the Python layer: a plain serial `Prompt` runs fine without it,
+   and only `PromptMPI` (mpirun-launched runs) requires it — constructing
+   `PromptMPI` in an env without mpi4py raises a clear `ImportError` saying so.
+   If pip's mpi4py build fails (it needs MPI headers — the apt route's
+   `libopenmpi-dev` or conda `openmpi`/`mpi4py` supply them), serial work can
+   continue while mpi4py is sorted out; the existing `cinemavirenv` on the
+   development machine this wiki was written on carries mpi4py 4.1.1.
 4. **Builds missing C++ externals into `<cinema-checkout>/external/`** (skipped when
    already present): MCPL, libxml2 **2.9.3** (pinned for KDSource), KDSource
    (default branch, currently `master`), xerces-c **v3.2.3** (shared libs, GDML parser dependency), VecGeom (branch
    `cinema` of the project's VecGeom fork, static library, built with GDML +
    navigation-index + built-in VecCore), hdf5 (**1.12.2** preferred), gidiplus
-   (branch `pt`, `make install4prompt`), the SSSP pseudopotentials (BzScope/DFT side
+   (branch `pt`, gidiplus **3.35.0** plus the project's build patches — fPIC
+   coverage and GNDS `2.2.rc1` acceptance; built via `make install4prompt`
+   with `HDF5_PATH` pointing at the hdf5 above, without which the library
+   links but every HDF5-backed GNDS file fails at runtime), the SSSP
+   pseudopotentials (BzScope/DFT side
    only — BzScope was formerly named PiXiu; the in-repo package directory is still
    `Cinema/PiXiu`) and the `ptgeo` git submodule.
 5. **Exports the daily-use environment**:
@@ -243,6 +249,18 @@ GIDI-dependent material models require the flag to have been ON for the
 `libprompt_core.so` you actually run. Mixed rebuilds produce libraries with different
 capabilities from the same checkout.
 
+**The GIDI data is strictly optional.** Compiling with `--enablegidi` builds the
+capability; it does not provide the nuclear data. The data package (a `pops.xml`
+PoPI database, an `all.map` map file and the ENDF neutron files they reference,
+shipped in the project's `external/ptdata/` tree) is only ever read by a run that
+explicitly enables GIDI — a user who never does stays completely unaware of it,
+and a build without the data works identically for everything else. Scripts can
+branch on `GidiSetting().available()` (compiled in *and* data readable) before
+`GidiSetting().enable()`; an `enable()` without usable data refuses with an
+actionable `ValueError` instead of failing later mid-run. To point a run at a
+data tree outside the checkout, set `setGidiPops`/`setGidiMap` before any volume
+is created (see [Materials and physics](materials-physics)).
+
 ## 8. Verify your installation
 
 ```bash
@@ -295,12 +313,21 @@ broken install.
 
 ## 9. Running the test suite
 
-`cimbuild -t` (after a build) runs everything, in two halves:
+`cimbuild -t` (after a build) runs the C++ tests plus the **fast** Python tier;
+repeat the flag for wider tiers:
 
-1. **C++ tests** — `ctest -j<n/2>` in `cinemabin/`: doctest-based unit tests
-   (`src/cxxtests/`) plus one ctest entry per Python test file.
-2. **Python tests** — `scripts/pytest_tree.py`: runs
-   `pytest src/pythontests --forked` and prints the result as a tree.
+| command | C++ (`ctest`) | Python tier |
+|---|---|---|
+| `cimbuild -t` | all | fast only — `-m "not medium and not slow"` |
+| `cimbuild -tt` | all | fast + medium — `-m "not slow"` |
+| `cimbuild -ttt` | all | everything |
+
+Tiers are set by test-body duration, via the markers registered in
+`src/pythontests/conftest.py`: **fast** = unmarked, body under ~50 ms;
+**medium** = `@pytest.mark.medium`, roughly 50 ms–0.7 s; **slow** =
+`@pytest.mark.slow`, over 0.7 s (real simulations, plotting, CLI
+round-trips). The pre-push hook (`scripts/git-hooks/pre-push`) runs the same
+checks as `cimbuild -t` minus the rebuild, so pushes stay fast.
 
 Three prerequisites, or the suites fail for environment reasons rather than code
 reasons:
@@ -317,31 +344,33 @@ reasons:
 ### Direct invocations (faster than a full `cimbuild -t`)
 
 ```bash
-# Python suite only — the fast, authoritative check (~10 s):
+# Python suite only — the fast tier, same as the pre-push hook (~15 s):
+cd cinemabin && ../cinemavirenv/bin/python3 -m pytest ../src/pythontests --forked --tb=line -q -m "not medium and not slow"
+
+# Python suite only — everything, incl. the slow tier:
 cd cinemabin && ../cinemavirenv/bin/python3 -m pytest ../src/pythontests --forked --tb=line -q
 
-# C++ suite only:
-cd cinemabin && ctest -j$(($(nproc)/2))
+# C++ suite only (python-tests is the ctest entry that wraps pytest):
+cd cinemabin && ctest -j$(($(nproc)/2)) -E "^python-tests$"
 
 # One C++ test:            ctest -R test_geonav -V
 # One Python test:         pytest ../src/pythontests/test_prompt_hist.py -q
-# The tree view cimbuild:  ../scripts/pytest_tree.py
+# The tree view cimbuild:  ../scripts/pytest_tree.py --tier fast
 ```
 
-### What a green suite looks like (2.0.0a5, measured 2026-10)
+### What a green suite looks like (2.1.0, measured 2026-10)
 
-- **pytest: 44 passed, 9 skipped, 0 failed.** The 9 skips are environmental, not
-  bugs: numba and `makeChopper` not installed, tests needing external gdml/mcpl
-  data files, a broken `ParticleParameter` API, and three expected-value
-  mismatches (`mirror`, `pythongun`, `scorerCfg`). The geometry solids
-  expectations (Box/Cone/Orb/Tet/ellipsoid/...) all pass on the current VecGeom
-  and are no longer excluded.
-- **ctest: 68 entries — 64 pass.** The 4 permanent reds are the *same* files
-  conftest.py excludes (`python-test_cinema_array_ops`, `python-test_prompt_chopper`,
-  `python-test_tak_parfft`, `python-test_tak_trj`): ctest runs each file as a
-  bare script and does not see conftest exclusions. Run ctest with
-  `-E "^(python-test_cinema_array_ops|python-test_prompt_chopper|python-test_tak_parfft|python-test_tak_trj)$"`
-  to match the pytest verdict.
+- **pytest: 460 passed, 11 skipped, 0 failed.** The 11 skips are environmental,
+  not bugs: numba and `makeChopper` not installed, tests needing external
+  gdml/mcpl data files, a broken `ParticleParameter` API, and three
+  expected-value mismatches (`mirror`, `pythongun`, `scorerCfg`). The geometry
+  solids expectations (Box/Cone/Orb/Tet/ellipsoid/...) all pass on the current
+  VecGeom and are no longer excluded.
+- **ctest: 47 entries — 46 C++ binaries pass + 1 wrapped.** 46 entries are the
+  doctest binaries under `src/cxxtests/unittest/` (auto-registered, one per
+  `.cc`); the remaining entry, `python-tests`, re-runs the whole pytest suite
+  — exclude it (`ctest -E "^python-tests$"`) wherever you run pytest yourself,
+  as the hook and `cimbuild -t` do.
 
 Many Python tests are **golden-anchor** regressions: exact per-bin values at a
 fixed seed (e.g. the expected wavelength spectrum in the solids tests). A red
@@ -350,10 +379,10 @@ physics review item, not noise.
 
 ### Automatic tests on every push
 
-The repo ships a pre-push hook that runs the suite (ctest with the 4 known-red
-entries excluded, plus the full pytest run; it sources `env.sh` and normalises
-`NCRYSTAL_PLUGIN_LIST` itself, so it works from any shell). Total cost: roughly
-20-30 s.
+The repo ships a pre-push hook running the **fast tier**: ctest (the
+`python-tests` entry excluded) plus pytest `-m "not medium and not slow"`; it
+sources `env.sh` and normalises `NCRYSTAL_PLUGIN_LIST` itself, so it works from
+any shell. Total cost: under a minute.
 
 ```bash
 git config core.hooksPath scripts/git-hooks   # activate, once per clone

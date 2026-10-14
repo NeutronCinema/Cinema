@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -21,11 +21,12 @@
 #include "PTGidiSetting.hh"
    
 Prompt::GidiSetting::GidiSetting()
-: m_enablegidi(false), m_gidithreshold(5.), 
-m_gidiSampleNonTransportingParticles(true), 
+: m_enablegidi(false), m_gidithreshold(5.),
+m_gammaCutEkin(1000.),
+m_gidiSampleNonTransportingParticles(true),
 m_gidiEnableGamma(false),
 m_gidiPowerIteration(false),
-m_gidipops(getDataPath()+"pops.xml"), 
+m_gidipops(getDataPath()+"pops.xml"),
 m_gidimap(getDataPath()+"all.map")
 {
 }

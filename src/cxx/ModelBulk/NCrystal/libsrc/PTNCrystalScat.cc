@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -74,6 +74,11 @@ double Prompt::NCrystalScat::getCrossSection(double ekin, const Prompt::Vector &
 
 const Prompt::SampledResult& Prompt::NCrystalScat::sampleReaction(double ekin, const Vector &dir) const
 {
+  // NCrystal normalises the incident direction internally: on a null vector
+  // that division yields NaN and its rejection loop never terminates.
+  if(dir.isStrictNullVector())
+    PROMPT_THROW(BadInput, "null incident direction, NCrystal direction sampling would loop forever");
+
   auto outcome1 = m_scat.sampleScatter( NCrystal::NeutronEnergy(ekin), {dir.x(), dir.y(), dir.z()});
   m_res.final_ekin = outcome1.ekin.get();
   auto &outdir = outcome1.direction;

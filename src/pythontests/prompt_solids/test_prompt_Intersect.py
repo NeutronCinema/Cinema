@@ -31,7 +31,9 @@ def test_simulation():
             self.clear()
             world = Volume("world", Box(400, 400, 400))
 
-            lw = Material("'LiquidWaterH2O_T293.6K.ncmat;density=1gcm3'") 
+            # no embedded quotes: NCrystal (and its python-side pre-check)
+            # rejects "'" in configuration strings
+            lw = Material('LiquidWaterH2O_T293.6K.ncmat;density=1gcm3')
             if self.test_geo:
                 ssphere = Sphere(0, 300)
                 sbox = Box(100, 100, 100)
@@ -56,7 +58,15 @@ def test_simulation():
     sim.simulate(gun, partnum)
     spct = sim.gatherHistData('spct')
     sum1 = spct.getWeight().sum()
-    np.testing.assert_allclose(sum1, 0.05853522444914256)
+    # Pins re-recorded 2026-10-11 on the gidi-enabled baseline (gidiplus 3.28.22,
+    # external/ptdata GNDS-2.0 endf80, current NCrystal). The 2024-10-24 pins
+    # (0.05853522444914256 / 0.06053628305891873) predate NCrystal/gidi drift;
+    # their 3.4% spread was RNG-stream vintage, not geometry: sphere(300) n box
+    # (100) IS box(100), so sum1 and sumref must agree to numerical noise.
+    # 2026-10-12: VolFluence now accumulates raw track length, so the pins are
+    # the 2026-10-11 fluence values times the volume 200^3 = 8e6 mm^3 (Box takes
+    # half-lengths). Divide the histogram by vol.getCapacity() for the fluence.
+    np.testing.assert_allclose(sum1, 473843.23441)
 
     # geo reference
     sim.clear()
@@ -66,6 +76,11 @@ def test_simulation():
     sim.simulate(gun, partnum)
     spct = sim.gatherHistData('spct')
     sumref = spct.getWeight().sum()
-    np.testing.assert_allclose(sumref, 0.06053628305891873)
+    np.testing.assert_allclose(sumref, 473843.2344021093)  # 0.059230404300263766 * 8e6
+    # semantic anchor: SolidIntersection must reproduce the equivalent solid.
+    # Tightened from rtol=1e-5 (2026-10-11): the old scorer normalised by the
+    # VecGeom capacity, whose ~3e-6 numerical error for the intersection shape
+    # was baked into sum1; raw track length removes that noise entirely.
+    np.testing.assert_allclose(sum1, sumref, rtol=1e-9)
 
     print(sum1, sumref)

@@ -3,9 +3,9 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -57,6 +57,9 @@ namespace Prompt {
     virtual const SampledResult& sampleReaction(double ekin, const Vector &dir) const override;
 
   protected:
+    // gidiplus >= 3.35 keeps Sampling::Input's temperature/energy private: they are
+    // written per sampling call via setTemperatureAndEnergy, in MeV.
+    double temperatureMeV() const;
 
     const GIDIFactory &m_factory;
     Launcher &m_launcher; 
@@ -68,7 +71,7 @@ namespace Prompt {
     mutable double m_cacheEkin, m_cacheGidiXS;  
     const double m_temperature, m_frac;
     MCGIDI::Sampling::Input *m_input;
-    mutable int m_hashIndex;
+    mutable std::size_t m_hashIndex;
   };
 
   

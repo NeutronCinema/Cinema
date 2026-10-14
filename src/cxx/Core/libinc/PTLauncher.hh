@@ -3,9 +3,9 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -32,6 +32,16 @@ namespace Prompt {
     void go(uint64_t numParticle, double printPrecent, bool recordTrj=false, bool timer=true, bool save2Disk=true);
     size_t goWithSecondStack(uint64_t numParticle);
 
+    // fission-bank exchange for the parallel power iteration: the python
+    // side (PromptMPI + mpi4py) allgathers the blobs across ranks between
+    // cycles and hands them back; normaliseTo mirrors the per-rank share
+    // the serial path would normalise to
+    std::vector<char> exportSecondStack() const;
+    size_t secondStackSize() const;
+    void importSecondStack(const std::vector<char> &blob, uint64_t normaliseTo);
+    std::vector<char> extractSecondStack(const std::vector<char> &blob,
+                                         const std::vector<uint64_t> &localIndices) const;
+
     void loadGeometry(const std::string &geofile); 
 
     void simOneEvent(bool recordTrj);
@@ -46,6 +56,9 @@ namespace Prompt {
     const std::vector<Vector> &getTrajectory() { return m_trajectory; }
     size_t getTrajSize() { return m_trajectory.size(); }
     const Particle &getCurrentParticle() const {return *m_curParicle.get(); }
+    // offline sampling (ModelCollection::xs/generate through the checked
+    // bridges) runs without a current particle
+    bool hasCurrentParticle() const { return m_curParicle != nullptr; }
     void registerDeposition (double edp) {m_curParicle->setDeposition(edp); }
 
   private:

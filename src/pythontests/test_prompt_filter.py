@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import pytest
 from Cinema.Prompt import Prompt
 from Cinema.Prompt.geo import Volume, Transformation3D
 from Cinema.Prompt.solid import Box,Tube
@@ -9,6 +10,7 @@ from Cinema.Prompt.scorer import ESpectrumHelper
 import numpy as np
 
 
+@pytest.mark.slow  # >0.7 s body: excluded from the pre-push hook, runs in cimbuild -t
 def test_simulation():
     class MySim(Prompt):
         def __init__(self, seed=4096) -> None:

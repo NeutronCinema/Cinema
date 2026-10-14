@@ -3,9 +3,9 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -32,6 +32,12 @@ namespace Prompt {
     void fill(double val) override;
     void fill(double val, double weight) override;
     void fill(double val, double weight, double error);
+    //Est1D keeps its sdev in m_hit (m_ww stays 0): merge combines that
+    //channel in quadrature and scale rescales it by the absolute factor,
+    //both instead of the base-class linear/variance treatment. See
+    //HistBase::merge()/scale() for the two-channel documentation.
+    void merge(const HistBase &hist) override;
+    void scale(double scalefact) override;
   };
 }
 

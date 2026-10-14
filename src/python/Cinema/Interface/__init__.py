@@ -2,9 +2,9 @@
 
 ################################################################################
 ##                                                                            ##
-##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
+##  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    ##
 ##                                                                            ##
-##  Copyright 2021-2024 Prompt developers                                     ##
+##  Copyright 2021-2026 Cinema developers                                     ##
 ##                                                                            ##
 ##  Licensed under the Apache License, Version 2.0 (the "License");           ##
 ##  you may not use this file except in compliance with the License.          ##
@@ -73,6 +73,41 @@ def importFunc(funcName, resType, argType):
     func.restype = resType
     func.argtypes = argType
     return func
+
+# Status protocol of the bridged extern "C" wrappers (Launcher.setGun/go/
+# loadGeometry, Volume.addScorer/setSurface): a C++ cfg rejection must not
+# propagate as a C++ exception across the ctypes boundary (that ends in
+# std::terminate and aborts the whole python process), so those wrappers
+# catch, record the message in a thread-local C-side buffer and return a
+# nonzero status instead. raiseOnBridgeError turns a nonzero status into a
+# normal RuntimeError carrying the C++ message text. c_char_p restype: ctypes
+# copies the buffer into an immutable bytes object at call time.
+_pt_last_error = importFunc('pt_last_error', type_cstr, [])
+
+# Namespace listing of the C++ physics-model plugin registry (builtin
+# factories plus any loaded plugin files): "ns\tdescription\n" lines in a
+# thread-local C-side buffer. Checked protocol like the other bridges.
+pt_PluginRegistry_list = importFunc('pt_PluginRegistry_list', type_int,
+                                    [ctypes.POINTER(type_cstr)])
+
+
+def pluginNamespaces():
+    """Set of physics namespaces the C++ plugin registry can resolve (builtin
+    factories and loaded plugins), or None when the listing is unavailable -
+    callers fail open and let the C++ side decide."""
+    out = type_cstr()
+    if pt_PluginRegistry_list(ctypes.byref(out)) != 0:
+        return None
+    return {line.split('\t', 1)[0]
+            for line in out.value.decode('utf-8', 'replace').splitlines() if line}
+
+
+def raiseOnBridgeError(status):
+    """Raise RuntimeError with the recorded C++ message when a bridged
+    extern "C" wrapper reported failure (nonzero status); pass on status 0
+    (and None, so stubbed bindings in tests keep working)."""
+    if status:
+        raise RuntimeError(_pt_last_error().decode('utf-8', 'replace'))
 
 def plotStyle(fontSize=16):
     import matplotlib.style

@@ -1,8 +1,8 @@
 ################################################################################
 ##                                                                            ##
-##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
+##  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    ##
 ##                                                                            ##
-##  Copyright 2021-2022 Prompt developers                                     ##
+##  Copyright 2021-2026 Cinema developers                                     ##
 ##                                                                            ##
 ##  Licensed under the Apache License, Version 2.0 (the "License");           ##
 ##  you may not use this file except in compliance with the License.          ##
@@ -21,7 +21,6 @@
 import warnings
 from typing import Union
 
-from scipy.spatial.transform import Rotation as scipyRot
 from ..Interface import *
 from .Mesh import _pt_Transformation3D_transform
 from copy import deepcopy
@@ -29,6 +28,22 @@ from .scorer import Scorer
 from .physics import _validateNccfgFiles, _validateMatCfg, wrapRawNccfg
 
 __all__ = ['Volume', 'Transformation3D']
+
+# scipy's Rotation is imported lazily: pulling in scipy.spatial.transform
+# costs a significant fraction of `import Cinema.Prompt`, while rotations
+# are only needed when a Transformation3D is actually constructed or
+# queried. All sites go through _scipyRot(), which imports once and caches.
+scipyRot = None
+
+
+def _scipyRot():
+    """Return scipy's Rotation class, importing scipy.spatial.transform on
+    first use (see the note above)."""
+    global scipyRot
+    if scipyRot is None:
+        from scipy.spatial.transform import Rotation as _sr
+        scipyRot = _sr
+    return scipyRot
 
 
 # C function imports for Volume class
@@ -47,9 +62,12 @@ _pt_Transformlation3D_setTranslation  = importFunc('pt_Transformlation3D_setTran
 
 
 # Resource manager C function imports
+# addScorer/addSurface are bridged (int status + pt_last_error message,
+# surfaced through raiseOnBridgeError) so a rejected cfg raises a normal
+# RuntimeError instead of aborting the process at the ctypes boundary
 _pt_ResourceManager_addNewVolume = importFunc('pt_ResourceManager_addNewVolume', None, [type_uint])
-_pt_ResourceManager_addScorer = importFunc('pt_ResourceManager_addScorer', None, [type_uint, type_cstr, type_voidp])
-_pt_ResourceManager_addSurface = importFunc('pt_ResourceManager_addSurface', None, [type_uint, type_cstr])
+_pt_ResourceManager_addScorer = importFunc('pt_ResourceManager_addScorer', type_int, [type_uint, type_cstr, type_voidp])
+_pt_ResourceManager_addSurface = importFunc('pt_ResourceManager_addSurface', type_int, [type_uint, type_cstr])
 _pt_ResourceManager_cfgVolPhysics = importFunc('pt_ResourceManager_cfgVolPhysics', None, [type_uint, type_cstr])
 
 
@@ -100,7 +118,7 @@ class Transformation3D:
                 "vector, unpack it first: Transformation3D(*pos)") from None
         # Rotation follows ZXZ convention in vecgeom backend
         self.cobj = _pt_Transformation3D_newfromdata(x, y, z, rot_z, rot_new_x, rot_new_z, 1, 1, 1)
-        self.__sciRot = scipyRot.from_euler('ZXZ', [rot_z, rot_new_x, rot_new_z], degrees)
+        self.__sciRot = _scipyRot().from_euler('ZXZ', [rot_z, rot_new_x, rot_new_z], degrees)
         self.__translation = np.array([x, y, z])
         # self.update_cpp_rot()
 
@@ -124,7 +142,7 @@ class Transformation3D:
             Transformation3D: New transformation object
         """
         obj = cls(x,y,z)
-        sciRot = scipyRot.from_euler('xyz', [rx, ry, rz], degrees)
+        sciRot = _scipyRot().from_euler('xyz', [rx, ry, rz], degrees)
         obj.setSciRot(sciRot)
         return obj
 
@@ -132,6 +150,9 @@ class Transformation3D:
     def from_alignment(cls, x=0., y=0., z=0., rotated:np.ndarray=None, original:np.ndarray=None):
         """
         Create transformation by aligning vectors.
+
+        The resulting rotation maps the original vectors onto the rotated
+        vectors (R . original[i] == rotated[i]).
 
         Args:
             x (float, optional): X translation. Default: 0.0
@@ -185,7 +206,7 @@ class Transformation3D:
         memo[id(self)] = copy
         copy.cobj = _pt_Transformation3D_newfromdata(self.__translation[0], self.__translation[1], self.__translation[2],
                                                      0, 0, 0, 1.,1.,1.)
-        copy._Transformation3D__sciRot = scipyRot.from_matrix(self.__sciRot.as_matrix())
+        copy._Transformation3D__sciRot = _scipyRot().from_matrix(self.__sciRot.as_matrix())
         # the mangled attribute must be set explicitly: the copy used to get
         # the value in a non-mangled "_translation" attribute (aliasing the
         # source array), so the documented getTranslation() accessor reported
@@ -241,7 +262,7 @@ class Transformation3D:
         """
         rot = self.getRotMatrix().dot(other.getRotMatrix())
         transl = self.getTranslation() + self.getRotMatrix().dot(other.getTranslation())
-        return type(self)(transl[0], transl[1], transl[2]).setSciRot(scipyRot.from_matrix(rot))
+        return type(self)(transl[0], transl[1], transl[2]).setSciRot(_scipyRot().from_matrix(rot))
 
     def update_cpp_rot(self):
         """Push Python side roation to C++ side."""
@@ -263,7 +284,7 @@ class Transformation3D:
             Transformation3D: Self for method chaining
         """
         axis = np.array(axis)
-        rot = scipyRot.from_rotvec(angle * axis/np.linalg.norm(axis), degrees=degrees)
+        rot = _scipyRot().from_rotvec(angle * axis/np.linalg.norm(axis), degrees=degrees)
         self.__sciRot *= rot
         self.update_cpp_rot()
         return self
@@ -279,7 +300,7 @@ class Transformation3D:
         Returns:
             Transformation3D: Self for method chaining
         """
-        rot = scipyRot.from_rotvec(angle * np.array([1,0,0.]), degrees=degrees)
+        rot = _scipyRot().from_rotvec(angle * np.array([1,0,0.]), degrees=degrees)
         self.__sciRot *= rot
         self.update_cpp_rot()
         return self
@@ -295,7 +316,7 @@ class Transformation3D:
         Returns:
             Transformation3D: Self for method chaining
         """
-        rot = scipyRot.from_rotvec(angle * np.array([0,1,0.]), degrees=degrees)
+        rot = _scipyRot().from_rotvec(angle * np.array([0,1,0.]), degrees=degrees)
         self.__sciRot *= rot
         self.update_cpp_rot()
         return self
@@ -311,7 +332,7 @@ class Transformation3D:
         Returns:
             Transformation3D: Self for method chaining
         """
-        rot = scipyRot.from_rotvec(angle * np.array([0,0,1.]), degrees=degrees)
+        rot = _scipyRot().from_rotvec(angle * np.array([0,0,1.]), degrees=degrees)
         self.__sciRot *= rot
         self.update_cpp_rot()
         return self
@@ -329,7 +350,7 @@ class Transformation3D:
         Returns:
             Transformation3D: Self for method chaining
         """
-        rot = scipyRot.from_euler('xyz', [rotx, roty, rotz], degrees=degrees)
+        rot = _scipyRot().from_euler('xyz', [rotx, roty, rotz], degrees=degrees)
         self.__sciRot *= rot
         self.update_cpp_rot()
         return self
@@ -349,7 +370,7 @@ class Transformation3D:
         # C++/Python transforms diverged and deepcopy silently dropped
         # the applied rotation
         mat = self.__sciRot.as_matrix().dot(refMatrix)
-        self.__sciRot = scipyRot.from_matrix(mat)
+        self.__sciRot = _scipyRot().from_matrix(mat)
         _pt_Transformlation3D_setRotation(self.cobj, mat[0,0], mat[0,1], mat[0,2],
                                           mat[1,0], mat[1,1], mat[1,2],
                                           mat[2,0], mat[2,1], mat[2,2])
@@ -357,7 +378,9 @@ class Transformation3D:
 
     def setRotByAlignment(self, rotated, original):
         """
-        Set rotation by aligning original vectors to rotated vectors.
+        Set rotation so that it maps the original vectors onto the rotated
+        vectors (R . original[i] == rotated[i], like
+        scipyRot.align_vectors(rotated, original)).
 
         Args:
             rotated (ndarray): Target vectors after rotation (shape: Nx3)
@@ -371,7 +394,10 @@ class Transformation3D:
         """
         if len(original)!= len(rotated) or len(original)!=2:
             raise RuntimeError('rotated and original should be contain 2 vectors')
-        self.__sciRot, rssd = scipyRot.align_vectors(original, rotated)
+        # argument order matters: align_vectors(a, b) returns the rotation
+        # with a.apply(b) == a, i.e. R maps original onto rotated; the old
+        # align_vectors(original, rotated) stored the inverse rotation
+        self.__sciRot, rssd = _scipyRot().align_vectors(rotated, original)
         self.update_cpp_rot()
         return self
 
@@ -434,7 +460,7 @@ class Transformation3D:
             rot_new_z (float, optional): Second Z rotation angle. Default: 0.0
             degrees (bool, optional): Whether angles are in degrees. Default: True
         """
-        self.__sciRot = scipyRot.from_euler('ZXZ', [rot_z, rot_new_x, rot_new_z], degrees)
+        self.__sciRot = _scipyRot().from_euler('ZXZ', [rot_z, rot_new_x, rot_new_z], degrees)
         self.update_cpp_rot()
 
     def transform(self, input):
@@ -490,9 +516,123 @@ _OVERLAP_SCAN_DIST_FACTOR = 50.
 _OVERLAP_SCAN_MAX_PROBES = 200
 # intersections below this volume (in mm^3) are Monte-Carlo noise
 _OVERLAP_SCAN_MIN_OVERLAP = 1e-6
+# a daughter is reported as (partly) outside its parent when more than this
+# fraction of its volume lies outside (the 1e6-point boolean-capacity
+# Monte-Carlo stays well below it for any non-sliver shape)
+_CONTAIN_SCAN_NOISE_FRACTION = 0.01
+# a containment probe is skipped (the daughter is provably inside a
+# box-exact parent) only when the daughter fills at least this fraction of
+# its own bounding box; then the Monte-Carlo relative noise of the measured
+# inside volume is below ~1e-3, three orders of magnitude under
+# _CONTAIN_SCAN_NOISE_FRACTION, so the probe could not have changed the
+# verdict. Smaller-filling (sliver) daughters escalate to the probe.
+_CONTAIN_SCAN_MIN_FILL = 0.5
 
 # (solidA cobj, solidB cobj, relative rotation, relative translation) -> overlap
 _overlapProbeCache = {}
+
+
+def _solidLocalBounds(solid):
+    """Conservative local-frame axis-aligned bounds of a solid, or None.
+
+    Returns the ``(lo, hi)`` corner pair (mm) reported by the solid layer's
+    ``bounds()`` (contract: may over-estimate the solid's extent, never
+    under-estimate). Anything unexpected - the method missing, raising, or
+    returning shapes that are not two finite 3-vectors with lo <= hi - means
+    "unknown" and the caller falls back to the Monte-Carlo probe, exactly as
+    before this fast path existed.
+    """
+    try:
+        lo, hi = solid.bounds()
+    except Exception:
+        return None
+    lo = np.asarray(lo, dtype=np.float64)
+    hi = np.asarray(hi, dtype=np.float64)
+    if lo.shape != (3,) or hi.shape != (3,):
+        return None
+    if not (np.all(np.isfinite(lo)) and np.all(np.isfinite(hi))):
+        return None
+    if np.any(lo > hi):
+        return None
+    return lo, hi
+
+
+def _aabbInCommonFrame(bounds, rot, trans):
+    """Conservative AABB of a solid placed by (rot, trans) in a common frame.
+
+    Rotating a box and re-aligning it with the axes can only grow it: each
+    half-extent is contracted with the element-wise |rot| (the largest
+    possible projection of the rotated box onto the axis), so the result
+    always contains the placed solid when ``bounds`` contains the unplaced
+    one.
+    """
+    lo, hi = bounds
+    center = (lo + hi) * 0.5
+    half = (hi - lo) * 0.5
+    c = rot.dot(center) + trans
+    h = np.abs(rot).dot(half)
+    return c - h, c + h
+
+
+def _pairProvablyDisjoint(solidA, transfA, solidB, transfB):
+    """True when the two placed solids cannot touch, so their intersection
+    is exactly empty and the boolean-capacity Monte-Carlo below would
+    measure precisely zero (which is below _OVERLAP_SCAN_MIN_OVERLAP, i.e.
+    the probe could not have produced an overlap warning).
+
+    Disjointness follows from the solids' conservative bounding boxes: boxes
+    that do not overlap cannot contain overlapping solids. Unresolvable
+    inputs (no bounds available) return False -> full probe as before.
+    """
+    boundsA = _solidLocalBounds(solidA)
+    boundsB = _solidLocalBounds(solidB)
+    if boundsA is None or boundsB is None:
+        return False
+    rotA, transA = transfA.getRotMatrix(), transfA.getTranslation()
+    rotB, transB = transfB.getRotMatrix(), transfB.getTranslation()
+    relRot = rotA.T.dot(rotB)
+    relTrans = rotA.T.dot(transB - transA)
+    loA, hiA = boundsA
+    loB, hiB = _aabbInCommonFrame(boundsB, relRot, relTrans)
+    # a strictly separated axis proves disjointness; touching boxes
+    # escalate to the Monte-Carlo probe, which is always safe
+    return bool(np.any(hiA < loB) or np.any(loA > hiB))
+
+
+def _daughterProvablyContained(parent, daughter, transf, capDaughter):
+    """True when the probe in _checkDaughterContainment could not have
+    warned, so it can be skipped: the daughter's conservative bounding box
+    lies inside the parent's box AND the parent fills that box exactly (only
+    then does box containment prove solid containment - a hollow or cut
+    parent shape can leave parts of the nested box outside the solid), AND
+    the daughter fills enough of its own box that the Monte-Carlo noise
+    stays far below _CONTAIN_SCAN_NOISE_FRACTION.
+
+    Unresolvable inputs return False -> full probe as before.
+    """
+    boundsP = _solidLocalBounds(parent.solid)
+    boundsD = _solidLocalBounds(daughter.solid)
+    if boundsP is None or boundsD is None:
+        return False
+    loP, hiP = boundsP
+    boxVol = float(np.prod(hiP - loP))
+    if boxVol <= 0.:
+        return False
+    # the parent must be exactly its bounding box: same-volume equivalence
+    # at 1e-9 relative tolerance. Volume.getCapacity() is analytic for
+    # primitives, so a plain Box passes exactly while any other shape (or a
+    # Monte-Carlo-estimated capacity) falls outside the tolerance.
+    capParent = float(parent.getCapacity())
+    if abs(capParent - boxVol) > 1e-9 * boxVol:
+        return False
+    loD, hiD = _aabbInCommonFrame(boundsD, transf.getRotMatrix(),
+                                  transf.getTranslation())
+    if np.any(loD < loP) or np.any(hiD > hiP):
+        return False
+    daughterBoxVol = float(np.prod(hiD - loD))
+    if daughterBoxVol <= 0.:
+        return False
+    return capDaughter / daughterBoxVol >= _CONTAIN_SCAN_MIN_FILL
 
 
 def _equivalentSphereRadius(volume):
@@ -509,6 +649,17 @@ def _intersectionCapacity(solidA, solidB, transfA, transfB):
 
     Returns the Monte-Carlo capacity of solidA . (transfA^-1 transfB)(solidB),
     cached per solid pair and relative placement.
+
+    Probe reuse: the bridge bakes the placement into the boolean solid
+    (pt_solid_intersection places both children and returns a new
+    UnplacedBooleanVolume per call) and a LogicalVolume binds its solid at
+    construction, so one throw-away registration per distinct
+    (pair, relative placement) is the cheapest the exported C API allows.
+    The cache below is what keeps that at exactly one probe volume per
+    distinct key per process: repeat placements (component assemblies
+    placed many times) reuse the first probe's result without touching the
+    GeoManager again, and Capacity() itself caches inside the boolean solid,
+    so even a cache-miss race re-sampling the same probe volume is free.
     """
     rotA, transA = transfA.getRotMatrix(), transfA.getTranslation()
     rotB, transB = transfB.getRotMatrix(), transfB.getTranslation()
@@ -517,7 +668,7 @@ def _intersectionCapacity(solidA, solidB, transfA, transfB):
     key = (solidA, solidB, np.round(relRot, 9).tobytes(), np.round(relTrans, 9).tobytes())
     if key in _overlapProbeCache:
         return _overlapProbeCache[key]
-    rel = Transformation3D(relTrans[0], relTrans[1], relTrans[2]).setSciRot(scipyRot.from_matrix(relRot))
+    rel = Transformation3D(relTrans[0], relTrans[1], relTrans[2]).setSciRot(_scipyRot().from_matrix(relRot))
     inter = _pt_solid_intersection(solidA, solidB, rel.cobj)
     # wrap the intersection in a throw-away logical volume to reach the
     # capacity binding; it stays registered in the GeoManager on purpose,
@@ -630,17 +781,43 @@ class Volume:
         cfg = wrapRawNccfg(cfg)
         _pt_ResourceManager_cfgVolPhysics(self.volid, cfg.encode('utf-8'))
 
+    def _raiseIfScorerNameTaken(self, name: str):
+        """Raise ValueError when a scorer name is already registered.
+
+        A duplicate scorer name would silently alias to the first
+        registration: both volumes would report the same histogram and the
+        results could not be told apart. The registry is shared by all
+        volumes, so a name must be unique across the whole world. This is the
+        single contract enforcement point; the C++ ResourceManager only
+        prints a warning when the same cfg is re-registered on one volume.
+        """
+        if name in self.__class__.scorer_dict:
+            raise ValueError(
+                f"a scorer named '{name}' is already registered (registering "
+                f"volume '{self.volname}'); scorer names must be unique - "
+                "give the scorer a different name instead of registering it "
+                "twice")
+
     def addScorer(self, scorer: Union[Scorer, str], cppScorer=ctypes.c_voidp()):
         """
         Add a scorer to the volume.
-        
+
         Args:
             scorer (Union[Scorer, str]): Scorer object or configuration string
             cppScorer (ctypes.c_voidp, optional): C++ scorer object pointer. Default: empty
+
+        Raises:
+            ValueError: A scorer with the same name is already registered,
+                on this or any other volume of the world.
         """
+        # The registry entry is written only AFTER the C++ bridge accepts the
+        # cfg: a rejected registration must leave no ghost behind (a ghost
+        # would fail a same-name retry with a false "already registered" and
+        # send later gathers into an unregistered scorer).
         if isinstance(cppScorer, int):
+            self._raiseIfScorerNameTaken(scorer.name)
+            raiseOnBridgeError(_pt_ResourceManager_addScorer(self.volid, scorer.name.encode('utf-8'), cppScorer))
             self.__class__.scorer_dict[scorer.name] = scorer.name
-            _pt_ResourceManager_addScorer(self.volid, scorer.name.encode('utf-8'), cppScorer)
         else:
             import re
             if isinstance(scorer, str):
@@ -649,13 +826,15 @@ class Volume:
                 name = [n for n in nameList if 'name' in n][0]
                 name = re.search(r'=.*', name)
                 name = re.sub(r'=', '', name.group()).strip()
+                self._raiseIfScorerNameTaken(name)
+                raiseOnBridgeError(_pt_ResourceManager_addScorer(self.volid, scorer.encode('utf-8'), cppScorer))
                 self.__class__.scorer_dict[name] = scorer
-                _pt_ResourceManager_addScorer(self.volid, scorer.encode('utf-8'), cppScorer)
             else:
                 cfg = scorer.cfg
                 _validateNccfgFiles(cfg)
+                self._raiseIfScorerNameTaken(scorer.cfg_name)
+                raiseOnBridgeError(_pt_ResourceManager_addScorer(self.volid, cfg.encode('utf-8'), cppScorer))
                 self.__class__.scorer_dict[scorer.cfg_name] = cfg
-                _pt_ResourceManager_addScorer(self.volid, cfg.encode('utf-8'), cppScorer)
 
     def setSurface(self, cfg: str):
         """
@@ -665,7 +844,7 @@ class Volume:
             cfg (str): Surface physics configuration string
         """
         _validateNccfgFiles(cfg)
-        _pt_ResourceManager_addSurface(self.volid, cfg.encode('utf-8'))
+        raiseOnBridgeError(_pt_ResourceManager_addSurface(self.volid, cfg.encode('utf-8')))
 
     def placeChild(self, name, logVolume, transf=None, scorerGroup=0, checkOverlap=True):
         """
@@ -676,9 +855,11 @@ class Volume:
             logVolume (Volume): Child volume to place
             transf (Transformation3D, optional): Transformation for placement. Default: identity
             scorerGroup (int, optional): Scorer group identifier. Default: 0
-            checkOverlap (bool, optional): Run the best-effort overlap scan
-                against the already-placed daughter volumes and warn on
-                intersections (see _checkDaughterOverlap). Default: True
+            checkOverlap (bool, optional): Run the best-effort assembly scan
+                and warn on intersections between the already-placed daughter
+                volumes (see _checkDaughterOverlap) and on daughters lying
+                outside their parent (see _checkDaughterContainment).
+                Default: True
 
         Returns:
             Volume: Self
@@ -691,9 +872,10 @@ class Volume:
         if checkOverlap:
             try:
                 self._checkDaughterOverlap(name, logVolume, transf)
+                self._checkDaughterContainment(name, logVolume, transf)
             except Exception as exc:
                 # the scan is diagnostic-only and must never break assembly
-                warnings.warn(f"Overlap scan of volume '{self.volname}' was "
+                warnings.warn(f"Assembly scan of volume '{self.volname}' was "
                               f"skipped ({exc.__class__.__name__}: {exc})",
                               RuntimeWarning, stacklevel=2)
         self._placed.append((name, logVolume, transf))
@@ -714,6 +896,9 @@ class Volume:
           _OVERLAP_SCAN_DIST_FACTOR radii of their capacity-equivalent
           spheres are assumed disjoint (only extreme sliver shapes could
           defeat this),
+        - pairs whose conservative bounding boxes are disjoint skip the
+          probe: their intersection is exactly empty, so the probe could
+          not have produced an overlap warning (see _pairProvablyDisjoint),
         - at most _OVERLAP_SCAN_MAX_PROBES probes run per parent volume,
         - results are cached per (solid pair, relative placement).
         """
@@ -734,6 +919,14 @@ class Volume:
                 self._overlapProbeCount = _OVERLAP_SCAN_MAX_PROBES + 1
                 continue
             self._overlapProbeCount += 1
+            # two-stage scan, stage 1: an analytic bounding-box pre-test.
+            # Disjoint boxes prove an exactly-empty intersection, so the
+            # Monte-Carlo capacity would come out precisely zero (below
+            # _OVERLAP_SCAN_MIN_OVERLAP) and the probe - ~45 ms of 1e6-point
+            # sampling in VecGeom - cannot change the verdict. Borderline
+            # pairs fall through to the full probe unchanged.
+            if _pairProvablyDisjoint(pvol.solid, ptransf, logVolume.solid, transf):
+                continue
             overlap = _intersectionCapacity(pvol.solid.cobj, logVolume.solid.cobj,
                                             ptransf, transf)
             if overlap > _OVERLAP_SCAN_MIN_OVERLAP:
@@ -743,6 +936,47 @@ class Volume:
                     f"volume {overlap:.3f} mm^3. Overlapping daughters have "
                     "an undefined transport order; adjust the placements.",
                     RuntimeWarning, stacklevel=3)
+
+    def _checkDaughterContainment(self, name, logVolume, transf):
+        """Warn when a part of the new daughter lies outside its parent.
+
+        Like the sibling-overlap scan, the transport cannot diagnose this at
+        run time: VecGeom silently tracks a daughter placed outside its
+        parent, so neutrons get transported into the misplaced region and
+        world ENTRY/EXIT scorers over-count. The check reuses the overlap
+        machinery: the Monte-Carlo capacity of
+        parent . (placed daughter) divided by the daughter capacity is the
+        contained fraction, so one boolean-capacity probe measures the
+        outside fraction directly. It is best effort (see the noise
+        threshold _CONTAIN_SCAN_NOISE_FRACTION) and never raises. Daughters
+        whose conservative bounding box nests inside an exactly-filled
+        parent bounding box skip the probe - the probe's measured outside
+        fraction would sit at the Monte-Carlo noise floor, far below the
+        warning threshold (see _daughterProvablyContained).
+        """
+        capDaughter = float(logVolume.getCapacity())
+        if capDaughter <= 0.:
+            return
+        # two-stage scan, stage 1: when the daughter's conservative bounding
+        # box sits inside the exactly-filled bounding box of the parent and
+        # the daughter fills enough of its own box (see
+        # _daughterProvablyContained), the Monte-Carlo inside-volume lands
+        # within ~0.2% of capDaughter, i.e. the measured outside fraction
+        # stays below _CONTAIN_SCAN_NOISE_FRACTION and the probe could not
+        # have warned. Anything else runs the full probe unchanged.
+        if _daughterProvablyContained(self, logVolume, transf, capDaughter):
+            return
+        # the parent solid lives in its own frame, i.e. at identity placement
+        capInside = _intersectionCapacity(self.solid.cobj, logVolume.solid.cobj,
+                                          Transformation3D(), transf)
+        outsideFraction = 1. - capInside / capDaughter
+        if outsideFraction > _CONTAIN_SCAN_NOISE_FRACTION:
+            warnings.warn(
+                f"Daughter volume '{name}' of volume '{self.volname}' lies "
+                f"{max(outsideFraction, 0.) * 100:.1f}% outside its parent "
+                "(Monte-Carlo volume estimate). Daughters outside their "
+                "parent are silently transported into; adjust the placement.",
+                RuntimeWarning, stacklevel=3)
     
     # TODO: need review, to place a collection of Volume
     # def placeArray(self, array, transf=None, marker='', count=0):

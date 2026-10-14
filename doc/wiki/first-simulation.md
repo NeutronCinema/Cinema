@@ -39,7 +39,7 @@ same five steps:
 | 2. Build the world in `makeWorld()` | `Material`, `Volume`, shape solids, scorer helpers, then `self.setWorld(world)` | `makeWorld` is abstract on the base class; `setWorld` closes the geometry and applies the random seed |
 | 3. Make a gun | `UniModeratorGun()` (or another built-in gun, a gun config string, or a custom `PythonGun`) | the primary generator: position, direction and energy spectrum of every neutron |
 | 4. Look before you leap | `sim.show(gun, 100)` | interactive 3D check of geometry plus 100 trajectories before burning production time |
-| 5. Run and read out | `sim.simulate(gun, n)`, then `sim.gatherHistData('name')` and/or `sim.save_all_scorers()` (PromptMPI only) | transport `n` primaries and retrieve the scorer histograms by name |
+| 5. Run and read out | `sim.simulate(gun, n)`, then `sim.gatherHistData('name')` and/or `sim.save_all_scorers()` | transport `n` primaries and retrieve the scorer histograms by name |
 
 Two things to internalise early:
 
@@ -224,8 +224,7 @@ gun.setSlit([5,5,-20])
 `UniModeratorGun` emits neutrons with wavelengths uniform in
 `[wl_mean − wl_range/2, wl_mean + wl_range/2]` — `wl_range` is the **full width** of the
 band — with defaults `wl_mean=1.0` Å and `wl_range=0.0001` Å, a quasi-monoenergetic
-1 Å beam. (The class docstring's `U[mean - range, mean + range]` is misleading; the C++
-sampler draws `wl0 + range·(r − 0.5)`, a half-window.) `setSource([w, h, z])` defines a 10 x 10 mm emitting
+1 Å beam. `setSource([w, h, z])` defines a 10 x 10 mm emitting
 rectangle at `z = -200 mm`; `setSlit([w, h, z])` a 5 x 5 mm collimator slit at
 `z = -20 mm`. The beam then flies along **+z** into the tilted slab at `z = +100 mm`.
 All gun variants and their parameters are catalogued on [Particle guns](guns).

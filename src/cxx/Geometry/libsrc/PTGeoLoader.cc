@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -135,6 +135,10 @@ void Prompt::GeoLoader::initFromGDML(const std::string &gdml_file)
           if (info.GetType() == "Scorer")
           {
             std::string scorercfg = info.GetValue();
+            // duplicate-name contract: the Python Volume.addScorer raises
+            // ValueError on a duplicate registration. GDML loads go through
+            // ResourceManager::addScorer, which only prints a one-line
+            // warning when the same cfg is registered twice on this volume.
             m_resman.addScorer(volID, scorercfg);
 
             // std::shared_ptr<Prompt::Scorer> scor = getScorer(info.GetValue());

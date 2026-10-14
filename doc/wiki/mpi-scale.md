@@ -2,10 +2,11 @@
 
 This page takes a working simulation ([Your first simulation](first-simulation)) to production
 statistics: launching under MPI, how events and random seeds are distributed over ranks,
-collecting results safely, multi-seed production with merged output, parameter scans in a single
-process, and the rules that keep batch jobs sane. The underlying class mechanics (`Prompt` vs
-`PromptMPI`, the life cycle, the seed chain) are documented in
-[The Simulation class](simulation-lifecycle); this page is the scale-oriented companion.
+collecting results safely, the parallel power iteration for `keff`, multi-seed production with
+merged output, parameter scans in a single process, and the rules that keep batch jobs sane.
+The underlying class mechanics (`Prompt` vs `PromptMPI`, the life cycle, the seed chain) are
+documented in [The Simulation class](simulation-lifecycle); this page is the scale-oriented
+companion.
 
 It documents **Cinema 2.0.0a5**. Every number below was measured on the machine used to prepare
 this wiki (October 2026) with the Ge-slab example `doc/example_basic.py`
@@ -190,7 +191,88 @@ four files, holding 2503 / 2500 / 2500 / 2500 hits.
 
 ---
 
-## 4. Multi-seed production
+## 4. The parallel power iteration: `keff` with exchanged fission banks
+
+Everything above parallelises *independent* histories. The power iteration for the multiplication
+factor `keff` cannot work that way: cycle N's source is cycle N−1's fission sites, so the ranks
+must advance **one shared chain**, not p independent ones. `PromptMPI.simulateSecondStack(num)`
+does exactly that and returns the pooled fission-birth count of the cycle:
+
+```python
+sim.simulate(gun, batchsize)                 # the initial source cycle, split like any run
+births = []
+for cycle in range(n_cycles):
+    births.append(sim.simulateSecondStack(batchsize))   # every rank, every cycle
+k_active = [b / batchsize for b in births[skip:]]
+keff, err = np.mean(k_active), np.std(k_active) / np.sqrt(len(k_active))
+```
+
+The rules that keep this correct:
+
+- **The split is automatic.** The first `num % size` ranks transport one extra particle so the
+  pooled source is exactly `num`; a rank whose share is zero sits out the cycle but still joins
+  every collective.
+- **Never gate the collective.** `simulateSecondStack` contains MPI collectives: call it on every
+  rank the same number of times, exactly like `gatherHistData` (section 3).
+- **One return value, one meaning.** The return value is the *total* fission births of the pooled
+  chain in this cycle — divide by the total source size per cycle, exactly as in the serial loop.
+- The `GidiSetting` power iteration must be enabled as in the serial case
+  ([Materials & physics](materials-physics)).
+
+### The two bank exchanges
+
+Between cycles the ranks exchange fission sites; `PromptMPI(bank_exchange=...)` selects the
+scheme (default `'nearest'`):
+
+| | `'nearest'` (default) | `'pooled'` |
+|---|---|---|
+| Idea | every rank draws the same `num` source sites against the conceptual pooled bank from one shared seed (the OpenMC "nearest neighbours" scheme); only sites that change owner travel | every rank allgathers the raw banks, then resamples its share from the pooled bank with the exact serial sampling |
+| Data per rank per cycle | expected O(√num) sites at the worst boundary, independent of the rank count | the whole bank: O(num) sites per rank |
+| Sampling | with replacement, like OpenMC | shuffle/truncate or with-replacement fill — exactly the serial path |
+| Use when | many ranks or large source banks | you want bit-level serial sampling semantics per bank state |
+
+Both schemes advance the same shared chain and differ only in where the resampling happens.
+Measured on the U7H993 keff sphere (r = 87.407 mm, seed 1010, batchsize 2000, 12 cycles with
+the first 3 skipped as the source transient, gidi power iteration on):
+
+| Run | Exchange | keff | deviation from serial |
+|---|---|---|---|
+| serial `Prompt`, 1 rank | — | 0.9638 ± 0.0162 | reference (± is the active-cycle spread) |
+| `PromptMPI`, 1 rank | (bypassed) | = serial, **bit-identical** | the size-1 path *is* the serial path, pinned by `test_parallel_keff.py` |
+| 3 ranks | `nearest` | 0.9728 | 0.6σ |
+| 3 ranks | `pooled` | 0.9851 | 1.3σ |
+
+Beware short runs: the first cycles are a transient (the source-cycle bank still carries the
+fixed-source spectrum), and two correct realizations of the same chain differ by far more at
+3 cycles than the naive σ/√n suggests — serial and 3-rank pooled, both correct, read 0.96 vs
+1.05 keff over their first 3 cycles. Skip at least a few cycles and judge nothing by fewer
+than ~10. The first-cycle birth counts above (2236 serial, 2213 for both MPI variants) already
+differ from the serial run, and that is expected: each rank carries its own seed (seed + rank)
+and normalises the parked bank to its own share, so a parallel chain is a different realization
+from cycle 1 on — the two MPI variants coincide in cycle 1 only because the first exchange
+engages after the first transport leg.
+
+Mechanically, `'nearest'` costs one allgather of the per-rank bank sizes plus one alltoall of
+the site blobs; every rank derives the same assignment from the shared sample (seeded by the
+`seed` argument of `PromptMPI`, which must therefore be identical on every rank), so no request
+phase is needed. A bank blob is 84 bytes per particle, so even the pooled exchange moves well
+under a megabyte per rank at batchsize 2000 — the schemes only part ways at many ranks and
+large source banks, where the pooled allgather costs O(num) sites per rank while the
+nearest-neighbour exchange stays at the O(√num) boundary fluctuation regardless of rank count.
+If no rank fissions at all, `simulateSecondStack` raises the same
+`RuntimeError: secondary stack is empty` the serial path raises — collectively, in lockstep on
+every rank.
+
+### An MPI-specific gotcha: OpenBLAS worker threads
+
+Under `mpirun`, unpinned OpenBLAS worker threads spin on the core the rank is bound to and
+roughly **double** the cycle time (1.57 → 0.78 s/cycle on the toy above, birth counts
+identical). Export `OPENBLAS_NUM_THREADS=1` before `mpirun` for transport runs — the parallel-keff
+tests do — but do not set it globally: serial numpy-heavy post-processing still wants its threads.
+
+---
+
+## 5. Multi-seed production
 
 One `mpirun -n 4` job already gives you four statistically independent random streams and one
 merged answer — that is the simplest way to production statistics, and section 1–3 are all it
@@ -208,9 +290,9 @@ needs. Run **separate seeds that you keep separate** when you want one of the fo
 > use the Python API below. The merge tooling itself is unchanged and remains the recommended
 > way to combine independent runs.
 
-### 4.1 Producing one run per seed
+### 5.1 Producing one run per seed
 
-Run one seed per process, each in **its own directory** (why becomes clear in section 4.3): keep the
+Run one seed per process, each in **its own directory** (why becomes clear in section 5.3): keep the
 [first-simulation](first-simulation) script, take the seed from `sys.argv`, and let the shell
 drive the loop.
 
@@ -240,7 +322,7 @@ seed flag) is process-wide, so a second `Simulation(seed=...)` in the same proce
 `makeWorld()` with `RuntimeError: World exist already: only one world can be set per process`,
 stopping every run after the first (the error is catchable, but a scan loop has no reason to
 trip it). Cycling seeds inside
-one process is possible but requires `sim.clear()` before each new build — see section 4.4.
+one process is possible but requires `sim.clear()` before each new build — see section 5.4.
 
 Measured on the Ge-slab example, 1e5 events per seed, serial:
 
@@ -256,7 +338,7 @@ statistics expectation of √1577 ≈ 40 per run. The seed spread *is* your erro
 "1577 ± 44" here uses four independent runs and no error model at all. A single 4e5-event run
 would deliver the same central value with only the internal √N estimate.
 
-### 4.2 Merging independent runs
+### 5.2 Merging independent runs
 
 Three routes, all measured with the seed-1 and seed-2 runs above (1634 and 1562 absorbed):
 
@@ -272,11 +354,11 @@ print(merged.sum())        # 3196(57)  -- 1634(40) + 1562(40), sqrt(40^2+40^2) =
 ```
 
 **MCPL route** — `sim.simulate(gun, n, save2Disk=True)` writes each scorer as an MCPL
-container (`ScorerTOF_TOF_seed5489.mcpl.gz` for the example; see section 4.3 for the name).
+container (`ScorerTOF_TOF_seed5489.mcpl.gz` for the example; see section 5.3 for the name).
 The kwarg is accepted by `PromptMPI.simulate` as well and takes effect on rank 0 — in a
 serial (one-rank) `PromptMPI` process that is the only rank, so the same script works for
 both bases and no class swap is needed any more. (Serial `Prompt` and serial `PromptMPI`
-runs with the same seed are equivalent — the section 4.1 table is reproduced exactly.)
+runs with the same seed are equivalent — the section 5.1 table is reproduced exactly.)
 Merge every
 file matching a glob; files are ordered by the last integer in their names:
 
@@ -288,16 +370,16 @@ print(merged.weight.sum())   # 3196.0
 
 `getHistMany(offset=0, num=None)` returns an `ErrorPropagator` (weights summed, errors in
 quadrature) that you can plot or analyse further; this is the modernised `runExample`
-machinery. Measured for the two section 4.1 seeds re-run with the `Prompt` base: the two
+machinery. Measured for the two section 5.1 seeds re-run with the `Prompt` base: the two
 `ScorerTOF_TOF_seed5489.mcpl.gz` files carry 1634 and 1562 absorbed, and the merge prints
-`3196.0`. Per-rank *particle-record* MCPL files are merged differently — see section 7.
+`3196.0`. Per-rank *particle-record* MCPL files are merged differently — see section 8.
 
 **In-memory route** — `hist1.merge(hist2)` on two `Hist1D`/`Hist2D` objects sums weight and
 hit and combines Σw² in quadrature. It refuses histograms whose free-text `note` differs
 (`addNote` the same label on both first). Use it when you already hold both histograms in one
 session.
 
-### 4.3 Why one directory per seed
+### 5.3 Why one directory per seed
 
 The MCPL file name embeds the **C++ RNG seed current when the scorer was created** — which, on
 the first build in a process, is the library default `5489`, *not* your constructor seed. The
@@ -306,19 +388,19 @@ directory the second run silently overwrites the first (the `.h5` names have no 
 at all). Separate directories are the only safe naming. The full story is in
 [The Simulation class, section 7](simulation-lifecycle).
 
-### 4.4 Several seeds in one process
+### 5.4 Several seeds in one process
 
 Seeds can also be cycled inside a single process: `clear()` the simulation, then build a
 **fresh** `Simulation(seed=s)` object (the `.seed` property is read-only). This works because
 `clear()` resets the C++ seed flag, so the new object's `setWorld` may seed again. Measured in
 one process, 1e5 events each: seed 1 → 1634, same object after `clear()` → 1634 again
 (bit-identical), fresh `Simulation(seed=2)` after `clear()` → 1562 — the same value the
-standalone seed-2 run of section 4.1 produced. Sequential seeds in one process are exactly
+standalone seed-2 run of section 5.1 produced. Sequential seeds in one process are exactly
 equivalent to separate runs.
 
 ---
 
-## 5. Parameter scans in one process
+## 6. Parameter scans in one process
 
 A scan over geometry or physics parameters does not need one process per point. `sim.clear()`
 tears the world down in place — C++ resource manager, `worldExist` flag, scorer registry — so
@@ -343,41 +425,41 @@ Semantics that matter at scale:
   [The Simulation class, section 8](simulation-lifecycle).
 - Each scan point restarts the random stream from the same seed (because `setWorld` re-applies
   it), so points are comparable with minimal noise between them — and a re-run of one point
-  reproduces it bit for bit (measured: 1634 → 1634, section 4.4).
+  reproduces it bit for bit (measured: 1634 → 1634, section 5.4).
 - To also vary the *seed* per point, construct a fresh `Simulation(seed=...)` after `clear()`
-  (section 4.4).
+  (section 5.4).
 - Long scans accumulate Python-side bookkeeping (`Volume.volume_list` is deliberately not
   cleared — it owns memory); for hundreds of points, batch your scans into separate processes.
 
 ---
 
-## 6. Tuning free parameters: the Optuna-based `Optimiser`
+## 7. Tuning free parameters: the Optuna-based `Optimiser`
 
 When a scan becomes a search — fitting simulation free parameters against measured data — the
 module `Cinema.Prompt.parameterOptimizer` provides an Optuna-based `Optimiser`: subclass it,
 implement `objective(trial)` (inside it: `self.sim.clear()`, `makeWorld(params)` from
 `self.getParameters(trial)`, `simulate`, return a score), register search ranges with
-`addParameter(name, lower, upper)`, and call `optimize(name, n_trials, localhost=True)` —
+`addParameter(name, lower, upper)`, and call `optimize(name, n_trials, storage="sqlite:///optuna_study.db")` —
 `optimize_botorch` swaps in a Bayesian sampler. Two things to know: the class is **not**
 exported from `Cinema.Prompt` — import it as
 `from Cinema.Prompt.parameterOptimizer import Optimiser` (several in-repo scripts still use the
-broken shorter import) — and `optimize` defaults to a hardcoded remote study-storage location
-with embedded credentials; **always configure local storage**. Note `localhost=True` alone gives
-an Optuna *in-memory* study that dies with the process — fine for a quick scan, but for anything
-worth keeping pass a durable `storage=` URL (e.g. a sqlite file path such as
-`storage="sqlite:///optuna_study.db"`). A fuller treatment is planned as its own page (see the planned-pages list
+broken shorter import) — and `optimize` requires an explicit `storage=` URL for anything worth keeping (the former
+hardcoded remote study-storage default with embedded credentials was removed for security;
+calls without one raise a `ValueError` pointing at `sqlite:///optuna_study.db`). The deprecated
+`localhost=True` still selects an Optuna *in-memory* study that dies with the process — fine for
+a quick scan, not for results you want to keep. A fuller treatment is planned as its own page (see the planned-pages list
 on [home](home)); everything needed to use the class safely is in this section.
 
 ---
 
-## 7. Batch etiquette
+## 8. Batch etiquette
 
 1. **Never call `show()` in a batch job.** It opens an interactive pyvista window; under MPI
    rank 0 renders while every other rank waits at a barrier behind it. Use it for interactive
    checks only ([visualization](visualization)).
 2. **Assume every output file name collides.** `<scorer>.h5` and `<scorer>.pdf` are plain
    scorer names — every run overwrites them; the histogram MCPL names embed the library-default
-   seed, not yours (section 4.3). Structure production runs as one directory per seed or per
+   seed, not yours (section 5.3). Structure production runs as one directory per seed or per
    point, and have the job move results out before exiting.
 3. **The `save2Disk=True` dump is root-rank-only under MPI.** `PromptMPI.simulate` accepts
    the flag and rank 0 writes the `<...>_seed<seed>.mcpl.gz` histogram containers; non-root
@@ -394,10 +476,12 @@ on [home](home)); everything needed to use the class safely is in this section.
    broken plugin environment during NCrystal model configuration) kills only that child, not
    the whole run. Write long multi-case batch scripts
    the same way if they exercise rough edges.
+6. **Set `OPENBLAS_NUM_THREADS=1` under `mpirun`.** Unpinned OpenBLAS worker threads spin on
+   the rank's core and roughly double the transport time (section 4).
 
 ---
 
-## 8. Gotchas
+## 9. Gotchas
 
 | Symptom | Cause and remedy |
 |---|---|
@@ -405,11 +489,12 @@ on [home](home)); everything needed to use the class safely is in this section.
 | Result file contains one rank's data, not the total | Plotting/saving was not rank-gated: all ranks wrote the same file name and the last writer won. Gate with `if sim.rank == 0:` (section 3). |
 | `.h5` total is implausibly large, roughly double the expected count | `gatherHistData` was called manually and `save_all_scorers()` afterwards: the first call already merged the data into rank `dst`'s live scorer, so the second gather counts it again. Per scorer use one or the other (section 3). |
 | `getTotalWeight()` after a gather returns one rank's count, not the total | The MPI reduction updates the per-bin arrays only; the cached totals keep the destination rank's pre-reduce values. Use `hist.getWeight().sum()` / `getHit().sum()` (section 3). |
-| `save2Disk=True` produced no files on most ranks | The dump is root-rank-only under MPI: rank 0 writes, non-root ranks never do. For per-scorer `.h5` files use `save_all_scorers()` (section 2, section 7). |
-| Second seed's output overwrote the first | Histogram MCPL names embed the library-default seed (5489), `.h5` names have none. One directory per seed (section 4.3). |
+| `save2Disk=True` produced no files on most ranks | The dump is root-rank-only under MPI: rank 0 writes, non-root ranks never do. For per-scorer `.h5` files use `save_all_scorers()` (section 2, section 8). |
+| Second seed's output overwrote the first | Histogram MCPL names embed the library-default seed (5489), `.h5` names have none. One directory per seed (section 5.3). |
 | `RuntimeError: World exist already: only one world can be set per process` during a scan | `setWorld` ran twice without `clear()`. Call `sim.clear()` before every rebuild (section 5). |
-| Want a different seed for the next scan point | `.seed` is read-only; construct a fresh `Simulation(seed=s)` after `clear()` — legal, because `clear()` resets the C++ seed flag (section 4.4). |
+| Want a different seed for the next scan point | `.seed` is read-only; construct a fresh `Simulation(seed=s)` after `clear()` — legal, because `clear()` resets the C++ seed flag (section 5.4). |
 | All ranks abort right after `Configuring physics model` | Not an MPI problem: a known environment defect taints `NCRYSTAL_PLUGIN_LIST`; the remedy is on [Install](install). |
+| MPI run transports at half the expected speed | Unpinned OpenBLAS worker threads spin-wait on the rank's core. `export OPENBLAS_NUM_THREADS=1` before `mpirun` (section 4); leave it unset for serial work. |
 | `from Cinema.Prompt import Optimiser` fails | It is not exported there; use `from Cinema.Prompt.parameterOptimizer import Optimiser`, and configure local storage for `optimize` (section 6). |
 
 ---

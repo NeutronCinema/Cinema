@@ -1,9 +1,9 @@
 
 ################################################################################
 ##                                                                            ##
-##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
+##  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    ##
 ##                                                                            ##
-##  Copyright 2021-2024 Prompt developers                                     ##
+##  Copyright 2021-2026 Cinema developers                                     ##
 ##                                                                            ##
 ##  Licensed under the Apache License, Version 2.0 (the "License");           ##
 ##  you may not use this file except in compliance with the License.          ##
@@ -20,7 +20,7 @@
 ################################################################################
 
 from ..Interface import *
-from ctypes import Structure, c_int32, c_uint64
+from ctypes import Structure, c_int32, c_uint32
 
 _pt_MCPLBinaryWrite_new = importFunc('pt_MCPLBinaryWrite_new', type_voidp, [type_cstr, type_bool, type_bool, type_bool] )
 _pt_MCPLBinaryWrite_delete = importFunc('pt_MCPLBinaryWrite_delete', type_voidp, [type_voidp] )
@@ -48,14 +48,13 @@ class MCPLParticle(Structure):
                 ("time", type_dbl),
                 ("weight", type_dbl),
                 ("pdgcode", c_int32),
-                ("userflags", c_uint64)]
+                ("userflags", c_uint32)]
     
     def __repr__(self):
         return f'ekin {self.ekin}, polarisation_x {self.polarisation_x}, polarisation_y {self.polarisation_y}, polarisation_z {self.polarisation_z}, position_x {self.position_x}, position_y {self.position_y}, position_z {self.position_z}, direction_x {self.direction_x}, direction_y {self.direction_y}, direction_z {self.direction_z}, time {self.time}, weight {self.weight}, pdgcode {self.pdgcode}, userflags {self.userflags}'
 
 
 _pt_MCPLBinaryWrite_write = importFunc('pt_MCPLBinaryWrite_write', type_voidp, [type_voidp, ctypes.POINTER(MCPLParticle)] )
-_pt_MCPLBinaryRead_read = importFunc('pt_MCPLBinaryWrite_write', ctypes.POINTER(MCPLParticle), [type_voidp] )
 
 
 class MCPLBinaryWrite:

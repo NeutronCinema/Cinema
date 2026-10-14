@@ -3,9 +3,9 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -28,13 +28,22 @@ namespace Prompt {
 
   class ScorerVolFluence  : public Scorer1D {
   public:
+    // Track-length scorer: each fill is weight*step*surviveP, i.e. the raw
+    // track length binned in the flight energy. Divide by the volume AFTER
+    // the run (hist.scale(1/volume)) to obtain the volume fluence; the
+    // volume is deliberately not taken here so that the scorer stays a pure
+    // statistics accumulator.
+    // stype must be a hook that sees every track segment (PEA_PRE is the
+    // canonical one, PEA_POST bins the incoming length at the outgoing
+    // energy); PROPAGATE_PRE/POST only see interaction-ending segments and
+    // would silently undercount the flux, so they are rejected.
     ScorerVolFluence(const std::string &name, double xmin, double xmax,
-                  unsigned nxbins, double volme, unsigned int pdg, 
+                  unsigned nxbins, unsigned int pdg,
                   ScorerType stype=Scorer::ScorerType::PEA_PRE, bool linear=true, int groupid=0);
     virtual ~ScorerVolFluence();
     virtual void score(Particle &particle) override;
   private:
-    double m_iVol, m_weight;
+    double m_weight;
   };
 }
 #endif

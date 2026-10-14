@@ -5,6 +5,8 @@
 
 #include <VecGeom/management/GeoManager.h>
 
+#include <algorithm>
+
 
 Prompt::ResourceManager::ResourceManager()
 :  m_volumes(), m_globelPhysics(), m_globelScorers(), m_globelSurface()
@@ -118,13 +120,10 @@ void Prompt::ResourceManager::addScorer(size_t volID, const std::string& cfg, Sc
   if(it==m_globelScorers.end())
   {
 
-    auto &geoManager = vecgeom::GeoManager::Instance();
-    auto volume = geoManager.FindLogicalVolume(volID);
-    double capacity = volume->GetUnplacedVolume()->Capacity();
     if(scorer==nullptr)
     {
       auto &scorerFactory = Singleton<ScorerFactory>::getInstance();
-      sc = scorerFactory.createScorer(cfg, capacity );
+      sc = scorerFactory.createScorer(cfg);
       m_globelScorers[cfg] = sc;
     }
     else
@@ -138,6 +137,15 @@ void Prompt::ResourceManager::addScorer(size_t volID, const std::string& cfg, Sc
   {
     sc = it->second;
   }
+
+  // Backstop against silent aliasing: re-registering a scorer cfg on the
+  // SAME volume would double-score every event under one name. The Python
+  // Volume.addScorer rejects duplicates with a ValueError; GDML loads and
+  // other C++ callers only get this warning. Sharing one cfg across
+  // different volumes stays allowed.
+  auto &vscorers = it_vol->second->scorers;
+  if(std::find(vscorers.begin(), vscorers.end(), sc) != vscorers.end())
+    std::cout << "WARNING: scorer " << cfg << " is registered more than once on the same volume " << volID << std::endl;
 
   it_vol->second->scorers.push_back(sc);
 
@@ -174,9 +182,11 @@ void Prompt::ResourceManager::addScorer(size_t volID, const std::string& cfg, Sc
   }
   else if(type==Scorer::ScorerType::PEA_PRE)
   {
+    // fires exactly once per track segment: propagate_pre before each
+    // in-volume interaction (incl. the absorbing one) plus exit. The absorb
+    // registration used to double-score absorbed segments (VolFluence ~2x).
     it_vol->second->propagate_pre_scorers.push_back(sc);
     it_vol->second->exit_scorers.push_back(sc);
-    it_vol->second->absorb_scorers.push_back(sc);
     std::cout << "Added PEA_PRE type scorer: " << sc->getName() << std::endl;
   }
   else if(type==Scorer::ScorerType::PEA_POST)

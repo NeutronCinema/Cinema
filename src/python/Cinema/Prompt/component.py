@@ -1,8 +1,8 @@
 ################################################################################
 ##                                                                            ##
-##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
+##  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    ##
 ##                                                                            ##
-##  Copyright 2021-2024 Prompt developers                                     ##
+##  Copyright 2021-2026 Cinema developers                                     ##
 ##                                                                            ##
 ##  Licensed under the Apache License, Version 2.0 (the "License");           ##
 ##  you may not use this file except in compliance with the License.          ##
@@ -161,8 +161,8 @@ class EntityArray(Array):
         for i_anc in self.members:
             origin_transf = deepcopy(i_anc.refFrame)
             for i_num in np.arange(1, num):
-                gap = gap * i_num
-                new_anc = Transformation3D(direction[0] * gap, direction[1] * gap, direction[2] * gap) * origin_transf 
+                off = gap * i_num
+                new_anc = Transformation3D(direction[0] * off, direction[1] * off, direction[2] * off) * origin_transf
                 new_anchors.append(new_anc)
         for i_new_anc in new_anchors:
             self.create(i_new_anc)
@@ -253,13 +253,18 @@ class FlatAnalyser(EntityArray):
         self.make_plane(cur_h, cur_v, points)
 
     def set_rect_position(self, num_h, num_v):
+        if num_h < 1 or num_v < 1:
+            raise ValueError(f'num_h and num_v should be >= 1, '
+                             f'got num_h={num_h}, num_v={num_v}.')
         xx = np.arange(0, num_h) * self.spacing[0]
         yy = np.arange(0, num_v) * self.spacing[1]
         midx = xx[-1] * 0.5
         midy = yy[-1] * 0.5
         xx = xx - midx
         yy = yy - midy
-        return zip(xx, yy)
+        # num_v rows along y, each holding num_h points along x; a plain list
+        # of lists because make_plane iterates over the points twice
+        return [[[x, y] for x in xx] for y in yy]
 
     def set_trape_position(self, upper_l, lower_l, height): # fixme: need another algorithm 
         positions = []
@@ -313,11 +318,17 @@ class FlatAnalyser(EntityArray):
                     pass
                 elif cur_h == 0:
                     # print('Using vertical single curved surface')
+                    # iy is already centred on 0 by set_rect_position/
+                    # set_trape_position, so use it directly like the
+                    # double-curve branch below
                     tilt_h = 0
-                    tilt_v = - np.arcsin((iy - height * 0.5) / cur_v) * np.rad2deg(1)
+                    tilt_v = - np.arcsin(iy / cur_v) * np.rad2deg(1)
                 elif cur_v == 0:
                     # print('Using horizontal single curved surface')
-                    tilt_h = np.arcsin((ix - length * 0.5) / cur_h) * np.rad2deg(1)
+                    # ix is already centred on 0 by set_rect_position/
+                    # set_trape_position, so use it directly like the
+                    # double-curve branch below
+                    tilt_h = np.arcsin(ix / cur_h) * np.rad2deg(1)
                     tilt_v = 0
                 else:
                     # print('Using double curved surface')

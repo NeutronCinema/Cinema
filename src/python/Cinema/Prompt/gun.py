@@ -1,8 +1,8 @@
 ################################################################################
 ##                                                                            ##
-##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
+##  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    ##
 ##                                                                            ##
-##  Copyright 2021-2024 Prompt developers                                     ##
+##  Copyright 2021-2026 Cinema developers                                     ##
 ##                                                                            ##
 ##  Licensed under the Apache License, Version 2.0 (the "License");           ##
 ##  you may not use this file except in compliance with the License.          ##
@@ -325,8 +325,8 @@ class UniModeratorGun(SurfaceSource):
     
     Attributes:
         cfg_mean_wl (float): Central wavelength in Ångström
-        cfg_range_wl (float): Wavelength range around mean, 
-            resulting in a uniform distribution of wavelengths U[mean-range, mean+range]
+        cfg_range_wl (float): Full wavelength band width around mean,
+            resulting in a uniform distribution of wavelengths U[mean-range/2, mean+range/2]
     """
     def __init__(self, src_whz=None, slit_whz=None, wl_mean=1., wl_range=0.0001):
         """
@@ -357,8 +357,8 @@ class UniModeratorGun(SurfaceSource):
         Set wavelength distribution range.
         
         Args:
-            wl_range (float): Wavelength range around mean in Ångström, 
-                resulting in a uniform distribution of wavelengths U[mean-range, mean+range]
+            wl_range (float): Full wavelength band width around mean in Ångström,
+                resulting in a uniform distribution of wavelengths U[mean-range/2, mean+range/2]
         """
         self.cfg_range_wl = wl_range
 

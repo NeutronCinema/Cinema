@@ -2,6 +2,7 @@
 # Aims to test gun and scorer change, there is no other material along the neutron rays path,
 # except world default: 'freegas::H1/1e-26kgm3/H_is_1_H1'
 
+import pytest
 from Cinema.Prompt import Prompt, PromptMPI
 from Cinema.Prompt.geo import Volume, Transformation3D
 from Cinema.Prompt.solid import Box, Sphere, Tube, Trapezoid, ArbTrapezoid
@@ -13,6 +14,7 @@ from Cinema.Prompt import Prompt
 from Cinema.Prompt.geo import Volume
 
 
+@pytest.mark.medium  # ~0.33 s body: medium tier (cimbuild -tt/-ttt), skipped by the pre-push hook
 def test_simulation():
     expWl = [419.,447.,452.,477.,436.,444.,395.,386.,349.,316.,302.,290.,294.,250.,235.,199.,220.,179.,162.,143.]
 
