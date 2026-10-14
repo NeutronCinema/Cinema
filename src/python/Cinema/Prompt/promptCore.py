@@ -123,15 +123,17 @@ class Prompt:
         self.l.setSeed(self.seed)
         self.l.setWorld(world)
 
-    def show(self, gun, num: int = 0):
+    def show(self, gun, num: int = 0, **kwargs):
         """
         Display geometries and particle trajectories.
-        
+
         Args:
             gun: Particle gun configuration or object
             num: Number of particles to display, defaults to 0 (no trajectory, only show geometries)
+            kwargs: forwarded to :class:`Cinema.Prompt.Visualiser.Visualiser`,
+                e.g. web=True, web_mode='client' to serve the window in a browser
         """
-        self.l.showWorld(gun, num)
+        self.l.showWorld(gun, num, **kwargs)
 
     def simulateSecondStack(self, num):
         """
@@ -274,10 +276,10 @@ class PromptMPI(Prompt):
         else:
             super().simulate(gun, num - batchSize * (self.size - 1))
 
-    def show(self, gun, num: int = 0, mergeMesh=False, xscale=1.0, yscale=1.0, zscale=1.0, byMat=False, addLegend=False, geoClip=False):
+    def show(self, gun, num: int = 0, mergeMesh=False, xscale=1.0, yscale=1.0, zscale=1.0, byMat=False, addLegend=False, geoClip=False, **kwargs):
         """
         MPI version of display method, only shows on rank 0 process.
-        
+
         Args:
             gun: Particle gun configuration
             num: Number of particles to display
@@ -286,9 +288,12 @@ class PromptMPI(Prompt):
             byMat: color by material
             addLegend: Add legend
             geoClip: Geometry clipping
+            kwargs: forwarded to :class:`Cinema.Prompt.Visualiser.Visualiser`,
+                e.g. web=True, web_mode='client' to serve the window in a browser
+                (rank 0 serves, the other ranks wait at the Barrier until it exits)
         """
         if self.rank == 0:
-            self.l.showWorld(gun, num, mergeMesh, xscale, yscale, zscale, byMat, addLegend=addLegend, geoClip=geoClip)
+            self.l.showWorld(gun, num, mergeMesh, xscale, yscale, zscale, byMat, addLegend=addLegend, geoClip=geoClip, **kwargs)
             self.comm.Barrier()
         else:
             self.comm.Barrier()
