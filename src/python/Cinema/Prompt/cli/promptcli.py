@@ -24,6 +24,13 @@ def str_or_float(value: str):
         except ValueError:
             return value
 
+def _web_kwargs(args):
+    """Map the --web* CLI flags onto Visualiser web kwargs ({} if --web is off)."""
+    if not getattr(args, 'web', False):
+        return {}
+    return dict(web=True, web_mode=args.web_mode, web_port=args.web_port,
+                web_host=args.web_host, web_open_browser=args.web_open_browser)
+
 def load_module_from_file(file_path: str):
     spec = importlib.util.spec_from_file_location("module.name", file_path)
     if spec is None or spec.loader is None:
@@ -166,6 +173,17 @@ class PromptBaseParser(argparse.ArgumentParser):
         g.add_argument('-d', '--dumpmesh', action='store_true', dest='dumpmesh', help='dump mesh into disk')
         g.add_argument('--nSeg', action='store', type=int, default=30,
                             dest='nSegments', help='number of verts a volume')
+        g.add_argument('--web', action='store_true', dest='web',
+                            help='serve the visualisation in a browser (trame) instead of a desktop window')
+        g.add_argument('--web-mode', dest='web_mode', default=None, choices=['client', 'server', 'trame'],
+                            help='browser rendering mode: client renders in the browser via vtk.js and needs no GL on this host (default); '
+                                 'server/trame render on this host and need GL (use xvfb-run on headless hosts)')
+        g.add_argument('--web-port', dest='web_port', type=int, default=0,
+                            help='port to serve the web visualisation on (0 = pick a free port)')
+        g.add_argument('--web-host', dest='web_host', default=None,
+                            help='interface to bind (default 127.0.0.1; 0.0.0.0 to expose)')
+        g.add_argument('--web-no-browser', action='store_false', dest='web_open_browser',
+                            help='do not auto-open the browser, just print the URL')
         self.viz_args_group = g
 
     def set_general_arguments(self):
@@ -207,7 +225,7 @@ class PromptGdmlParser(PromptBaseParser):
             myLcher.loadGeometry(inputfile)
 
         if args.visualize is True:
-            v = Visualiser(args.blacklist, printWorld=False, nSegments=args.nSegments, mergeMesh=args.mergemesh, dumpMesh=args.dumpmesh)
+            v = Visualiser(args.blacklist, printWorld=False, nSegments=args.nSegments, mergeMesh=args.mergemesh, doDumpMesh=args.dumpmesh, **_web_kwargs(args))
             for i in range(int(args.neutronNum)):
                 myLcher.go(1, recordTrj=True, timer=False, save2Dis=False)
                 trj = myLcher.getTrajectory()
@@ -333,7 +351,7 @@ class PromptPyScriptParser(PromptBaseParser):
             raise ValueError("World not made.")
         
         if args.visualize:
-            sim.show(gun, int(args.neutronNum), zscale=args.zscale)
+            sim.show(gun, int(args.neutronNum), zscale=args.zscale, **_web_kwargs(args))
         else:
             sim.simulate(gun, int(args.neutronNum))
             sim.save_all_scorers()
