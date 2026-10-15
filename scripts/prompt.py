@@ -139,7 +139,7 @@ else:  # run in a single thread
 
     if args.visualize is True:
         import matplotlib.pyplot as plt
-        v = Visualiser(args.blacklist, printWorld=False, nSegments=args.nSegments, dumpMesh=args.dumpmesh)
+        v = Visualiser(args.blacklist, printWorld=False, nSegments=args.nSegments, doDumpMesh=args.dumpmesh)
         for i in range(int(args.neutronNum)):
             myLcher.go(1, recordTrj=True, timer=False)
             trj = myLcher.getTrajectory()

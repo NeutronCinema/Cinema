@@ -20,7 +20,11 @@
 ##                                                                            ##
 ################################################################################
 
+import asyncio
+import os
 import sys
+import threading
+import time
 from ..Interface import *
 
 import random
@@ -68,10 +72,121 @@ def is_jupyterlab_session() -> bool:
 
     return False
 
+
+def launch_web_service(plotter, mode='client', port=0, host=None,
+                       open_browser=True, block=True, ready_timeout=30.0,
+                       timeout=0):
+    """Serve any pyvista Plotter in a web browser via pyvista's trame backend.
+
+    The browser gets the standard pyvista trame UI (camera presets, screenshot
+    download, client/server rendering switch).  The desktop-only interactions
+    of :class:`Visualiser` (mesh picking, the s/m/u/r keys and the geoClip
+    plane widget) are not available in the browser.
+
+    Args:
+        mode: 'client' renders in the browser via vtk.js and needs no GL
+            context on this host (useful on headless login nodes); 'server'
+            renders on this host and streams images (needs GL); 'trame' adds
+            a UI switch between the two.
+        port: port to serve on, 0 picks a free port.
+        host: interface to bind, default 127.0.0.1 (or $TRAME_DEFAULT_HOST).
+        open_browser: try to open the URL in a browser once the server is up.
+        block: True serve until Ctrl+C/SIGTERM and return None; False serve
+            from a background thread and return the trame server (stop it
+            with :func:`stop_web_service`).
+        ready_timeout: seconds to wait for the port to be bound (block=False).
+        timeout: idle auto-exit in seconds (wslink reaping): the server stops
+            itself when no browser client has been connected for this long
+            (this also fires if no client ever connects).  0 (default)
+            serves until Ctrl+C/SIGTERM.  A grace period (e.g. 300) absorbs
+            page refreshes and reconnect blips.
+    """
+    try:
+        from pyvista.trame.jupyter import initialize, build_url
+        from pyvista.trame.views import get_server
+        from trame.widgets import html as html_widgets, vtk as vtk_widgets
+        from trame.widgets import vuetify2, vuetify3
+    except ImportError as exc:
+        raise ImportError(
+            "browser visualisation needs the trame stack, install it with "
+            "pip install '.[viz-web]' (i.e. pyvista[jupyter])") from exc
+    if mode not in ('client', 'server', 'trame'):
+        raise ValueError(f"web mode must be one of client/server/trame, got {mode!r}")
+
+    bind_host = host or os.environ.get('TRAME_DEFAULT_HOST', '127.0.0.1')
+    server = get_server('prompt-visualiser')
+    # widget-module init, mirroring pyvista.trame.jupyter.launch_server().
+    # The UI is built on the unstarted server (supported by pyvista.trame);
+    # unlike pyvista's launch_server we then use exec_mode='main' below,
+    # which is the canonical blocking serve-until-interrupt pattern.
+    html_widgets.initialize(server)
+    vtk_widgets.initialize(server)
+    (vuetify2 if server.client_type == 'vue2' else vuetify3).initialize(server)
+    initialize(server, plotter, mode=mode)
+
+    url_host = 'localhost' if bind_host in ('', '0.0.0.0', '::') else bind_host
+    def _on_ready(**_):
+        server._prompt_viz_loop = asyncio.get_event_loop()   # for stop_web_service
+        url = build_url(server, ui=plotter._id_name, host=url_host)
+        print(f'\nCinema Visualiser served at: {url}', flush=True)
+        print('  press Ctrl+C to stop', flush=True)
+        if open_browser:
+            try:
+                import webbrowser
+                webbrowser.open(url)
+            except Exception:
+                pass
+    server.controller.on_server_ready.add(_on_ready)
+
+    start = dict(host=bind_host, port=int(port), open_browser=False,
+                 show_connection_info=False, disable_logging=True,
+                 timeout=int(timeout), backend='aiohttp')
+    if block:
+        # blocks this thread; wslink catches SIGINT/SIGTERM and exits cleanly
+        server.start(exec_mode='main', **start)
+        return None
+
+    # non-blocking (tests/embedders): exec_mode='main' always blocks its
+    # calling thread (wslink runs the serve loop with run_until_complete),
+    # so run it in a daemon thread that owns its own event loop.
+    threading.Thread(target=_run_web_service_thread, args=(server, start),
+                     daemon=True, name='prompt-viz-web').start()
+    t0 = time.monotonic()
+    while server.port == 0 and time.monotonic() - t0 < ready_timeout:
+        time.sleep(0.05)
+    if server.port == 0:
+        raise TimeoutError(f'trame server not ready after {ready_timeout:.0f}s')
+    return server
+
+
+def _run_web_service_thread(server, start):
+    """Serve on a fresh event loop in this (daemon) thread until stopped."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    server._prompt_viz_loop = loop   # captured for stop_web_service()
+    try:
+        # thread=True only disables the signal handlers (which must not be
+        # installed off the main thread); main_exec still blocks this thread
+        server.start(exec_mode='main', thread=True, **start)
+    except SystemExit:
+        pass    # raised by wslink when the server exits
+
+
+def stop_web_service(server, timeout=5.0):
+    """Best-effort graceful stop of a :func:`launch_web_service` server.
+
+    Only meaningful for servers launched with ``block=False``; blocking
+    servers are stopped with Ctrl+C/SIGTERM.
+    """
+    loop = getattr(server, '_prompt_viz_loop', None)
+    if loop is not None:
+        asyncio.run_coroutine_threadsafe(server.stop(), loop).result(timeout)
+
+
 class Visualiser():
-    def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, doDumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=True, geoClip=False):
+    def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, doDumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=True, geoClip=False, web=False, web_mode=None, web_port=0, web_host=None, web_open_browser=True, web_timeout=3):
         if is_jupyterlab_session():
-            pv.set_jupyter_backend('trame')  
+            pv.set_jupyter_backend('trame')
         # self.color =  list(mcolors.CSS4_COLORS.keys())
         self.color = high_contrast_colors
         self.worldMesh = Mesh()
@@ -85,6 +200,15 @@ class Visualiser():
         self._byMat = byMat
         self._geoClip = geoClip
         self._addLegend = addLegend
+        self._web = bool(web)
+        self._web_mode = web_mode or 'client'
+        self._web_port = web_port
+        self._web_host = web_host
+        self._web_open_browser = web_open_browser
+        self._web_timeout = web_timeout
+        if self._web and self._geoClip:
+            print('WARNING: the geoClip plane widget is desktop-only; '
+                  'in web mode the clip plane stays static.')
         self._selected_mesh = None
         self._selected_actor = None
         self._trj=pv.MultiBlock()
@@ -113,9 +237,13 @@ class Visualiser():
         self.plotter.add_key_event('r', self._refresh_plotter)
 
     def _load_plotter(self):
-        self.plotter = PtPlotter(window_size=self._window_size)
-        self.plotter.enable_depth_peeling()
-        self._config_key_events()
+        self.plotter = PtPlotter(window_size=self._window_size, off_screen=self._web)
+        if not self._web:
+            # depth peeling probes GL with an off-screen render, which aborts on a
+            # headless host; in web client mode the browser renders via vtk.js
+            self.plotter.enable_depth_peeling()
+            # mesh picking and the s/m/u/r keys act on the desktop interactor
+            self._config_key_events()
 
     def _clear_plotter(self):
         self.plotter.clear_actors()
@@ -325,11 +453,28 @@ class Visualiser():
         self._plot_geo_and_trj()
         if not ensureDisplayUsable():
             self.plotter.off_screen = True # no usable X server, render off-screen
-        self.plotter.show(title='Cinema Visualiser')
+        if self._web:
+            self.show_web(mode=self._web_mode, port=self._web_port,
+                          host=self._web_host, open_browser=self._web_open_browser,
+                          timeout=self._web_timeout)
+        else:
+            self.plotter.show(title='Cinema Visualiser')
+
+    def show_web(self, mode='client', port=0, host=None, open_browser=True, timeout=0):
+        """Plot the geometry and trajectories, then serve the window in a browser.
+
+        Blocks until Ctrl+C/SIGTERM, or until the idle ``timeout`` (if > 0)
+        fires after the last browser client disconnects.  ``mode`` is one of
+        client/server/trame, see :func:`launch_web_service`.  On this path
+        ``plotter.show()`` is never called: it would auto-close the render
+        window and trame would reject the plotter afterwards.
+        """
+        launch_web_service(self.plotter, mode=mode, port=port, host=host,
+                           open_browser=open_browser, block=True, timeout=timeout)
 
 class PtPlotter(pv.Plotter):
-    def __init__(self, window_size=None):
-        super().__init__(window_size=window_size)
+    def __init__(self, window_size=None, off_screen=False):
+        super().__init__(window_size=window_size, off_screen=off_screen)
         self.clippers = []
         self.clipFunction = None
 
