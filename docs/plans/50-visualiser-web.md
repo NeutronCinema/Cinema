@@ -36,8 +36,19 @@ choke points of `Visualiser` (plotter creation and `show()`).
   take `**kwargs` forwarded to `Visualiser` (MPI: rank 0 serves, the other
   ranks wait at the existing `Barrier`).
 * **CLI**: `prompt -v --web [--web-mode client|server|trame] [--web-port N]
-  [--web-host H] [--web-no-browser]` via a `_web_kwargs()` helper wired into
-  both the GDML and the python-script visualisation paths.
+  [--web-host H] [--web-no-browser] [--web-timeout S]` via a `_web_kwargs()`
+  helper wired into both the GDML and the python-script visualisation paths.
+* **One-shot service lifecycle** (`--web-timeout S`, default 0 = off): passes
+  wslink's idle reaping on — the server stops itself `S` seconds after the
+  last browser client disconnects (or if no client ever connects), so each
+  run is an ephemeral service: close the browser tab, the port frees up;
+  re-run with new parameters and it is a fresh instance. Plain HTTP requests
+  do not count as clients; only websocket connections cancel the reaper, and
+  the grace period absorbs page refreshes.
+* **Remote access**: on a login node run with `--web-port N --web-no-browser`,
+  then from the laptop `ssh -L N:localhost:N user@node` and open
+  `http://localhost:N`. `--web-host 0.0.0.0` exposes the port directly
+  (campus network/VPN only — the server has no authentication).
 * **Rendering modes** (default `client`):
 
 | mode    | GL on this host                | rendering                    | notes                                  |
@@ -72,6 +83,7 @@ pip install '.[viz-web]'                     # plus wslink>=2.6.0 if a conda env
 prompt -g <sim.py> --gun MyGun -n 10 -v      # desktop regression (unchanged)
 prompt -g <sim.py> --gun MyGun -n 10 -v --web        # browser, Ctrl+C stops
 DISPLAY= prompt -g <sim.py> --gun MyGun -n 5 -v --web --web-no-browser  # headless
+prompt -g <sim.py> --gun MyGun -n 10 -v --web --web-port 8787 --web-no-browser --web-timeout 300  # one-shot service
 
 cd cinemabin && python -m pytest ../src/pythontests/test_visualiser_web.py -v
 ```

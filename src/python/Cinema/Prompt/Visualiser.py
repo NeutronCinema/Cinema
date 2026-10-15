@@ -72,7 +72,8 @@ def is_jupyterlab_session() -> bool:
 
 
 def launch_web_service(plotter, mode='client', port=0, host=None,
-                       open_browser=True, block=True, ready_timeout=30.0):
+                       open_browser=True, block=True, ready_timeout=30.0,
+                       timeout=0):
     """Serve any pyvista Plotter in a web browser via pyvista's trame backend.
 
     The browser gets the standard pyvista trame UI (camera presets, screenshot
@@ -92,6 +93,11 @@ def launch_web_service(plotter, mode='client', port=0, host=None,
             from a background thread and return the trame server (stop it
             with :func:`stop_web_service`).
         ready_timeout: seconds to wait for the port to be bound (block=False).
+        timeout: idle auto-exit in seconds (wslink reaping): the server stops
+            itself when no browser client has been connected for this long
+            (this also fires if no client ever connects).  0 (default)
+            serves until Ctrl+C/SIGTERM.  A grace period (e.g. 300) absorbs
+            page refreshes and reconnect blips.
     """
     try:
         from pyvista.trame.jupyter import initialize, build_url
@@ -132,7 +138,7 @@ def launch_web_service(plotter, mode='client', port=0, host=None,
 
     start = dict(host=bind_host, port=int(port), open_browser=False,
                  show_connection_info=False, disable_logging=True,
-                 timeout=0, backend='aiohttp')
+                 timeout=int(timeout), backend='aiohttp')
     if block:
         # blocks this thread; wslink catches SIGINT/SIGTERM and exits cleanly
         server.start(exec_mode='main', **start)
@@ -176,7 +182,7 @@ def stop_web_service(server, timeout=5.0):
 
 
 class Visualiser():
-    def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, doDumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=True, geoClip=False, web=False, web_mode=None, web_port=0, web_host=None, web_open_browser=True):
+    def __init__(self, blacklist, printWorld=False, nSegments=30, mergeMesh=False, doDumpMesh=False, window_size=[1920, 1080], byMat=False, addLegend=True, geoClip=False, web=False, web_mode=None, web_port=0, web_host=None, web_open_browser=True, web_timeout=3):
         if is_jupyterlab_session():
             pv.set_jupyter_backend('trame')
         # self.color =  list(mcolors.CSS4_COLORS.keys())
@@ -197,6 +203,7 @@ class Visualiser():
         self._web_port = web_port
         self._web_host = web_host
         self._web_open_browser = web_open_browser
+        self._web_timeout = web_timeout
         if self._web and self._geoClip:
             print('WARNING: the geoClip plane widget is desktop-only; '
                   'in web mode the clip plane stays static.')
@@ -444,20 +451,22 @@ class Visualiser():
         self._plot_geo_and_trj()
         if self._web:
             self.show_web(mode=self._web_mode, port=self._web_port,
-                          host=self._web_host, open_browser=self._web_open_browser)
+                          host=self._web_host, open_browser=self._web_open_browser,
+                          timeout=self._web_timeout)
         else:
             self.plotter.show(title='Cinema Visualiser')
 
-    def show_web(self, mode='client', port=0, host=None, open_browser=True):
+    def show_web(self, mode='client', port=0, host=None, open_browser=True, timeout=0):
         """Plot the geometry and trajectories, then serve the window in a browser.
 
-        Blocks until Ctrl+C/SIGTERM.  ``mode`` is one of client/server/trame,
-        see :func:`launch_web_service`.  On this path ``plotter.show()`` is
-        never called: it would auto-close the render window and trame would
-        reject the plotter afterwards.
+        Blocks until Ctrl+C/SIGTERM, or until the idle ``timeout`` (if > 0)
+        fires after the last browser client disconnects.  ``mode`` is one of
+        client/server/trame, see :func:`launch_web_service`.  On this path
+        ``plotter.show()`` is never called: it would auto-close the render
+        window and trame would reject the plotter afterwards.
         """
         launch_web_service(self.plotter, mode=mode, port=port, host=host,
-                           open_browser=open_browser, block=True)
+                           open_browser=open_browser, block=True, timeout=timeout)
 
 class PtPlotter(pv.Plotter):
     def __init__(self, window_size=None, off_screen=False):

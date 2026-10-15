@@ -29,7 +29,8 @@ def _web_kwargs(args):
     if not getattr(args, 'web', False):
         return {}
     return dict(web=True, web_mode=args.web_mode, web_port=args.web_port,
-                web_host=args.web_host, web_open_browser=args.web_open_browser)
+                web_host=args.web_host, web_open_browser=args.web_open_browser,
+                web_timeout=args.web_timeout)
 
 def load_module_from_file(file_path: str):
     spec = importlib.util.spec_from_file_location("module.name", file_path)
@@ -184,6 +185,9 @@ class PromptBaseParser(argparse.ArgumentParser):
                             help='interface to bind (default 127.0.0.1; 0.0.0.0 to expose)')
         g.add_argument('--web-no-browser', action='store_false', dest='web_open_browser',
                             help='do not auto-open the browser, just print the URL')
+        g.add_argument('--web-timeout', dest='web_timeout', type=int, default=3,
+                            help='auto-exit N seconds after the last browser client disconnects (0 = serve until Ctrl+C); '
+                                 'useful when the visualisation is a one-shot service')
         self.viz_args_group = g
 
     def set_general_arguments(self):

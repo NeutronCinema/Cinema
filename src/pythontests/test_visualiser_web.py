@@ -8,6 +8,7 @@ browser), the Visualiser/Prompt web dispatch, and the `prompt -v --web` CLI.
 import os
 import subprocess
 import sys
+import time
 import urllib.request
 
 import pytest
@@ -76,6 +77,28 @@ def test_launch_web_service_serves_http():
             assert resp.read()
     finally:
         stop_web_service(server)
+
+
+@pytest.mark.forked
+def test_launch_web_service_idle_timeout():
+    """timeout>0: with no browser client ever connecting, the server stops itself."""
+    pl = pyvista.Plotter(off_screen=True)
+    pl.add_mesh(pyvista.Sphere())
+    server = launch_web_service(pl, mode='client', port=0, open_browser=False,
+                                block=False, timeout=2)
+    port = server.port
+    assert port > 0
+    # HTTP responses alone do not count as a client; the wslink reaper fires
+    with urllib.request.urlopen(f'http://127.0.0.1:{port}/index.html', timeout=10) as resp:
+        assert resp.status == 200
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        try:
+            urllib.request.urlopen(f'http://127.0.0.1:{port}/index.html', timeout=2)
+        except OSError:
+            return  # port refused: the idle reaper stopped the server
+        time.sleep(0.2)
+    raise AssertionError('idle timeout did not stop the server')
 
 
 @pytest.mark.forked
