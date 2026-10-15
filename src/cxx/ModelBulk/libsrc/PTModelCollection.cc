@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -144,8 +144,21 @@ Prompt::SampledResult& Prompt::ModelCollection::pickAndSample(double ekin, const
     if(p > r1)
       break;
   }
+  if(i >= m_models.size()) //guard: the draw rounded past the summed probability
+    i = m_models.size()-1;
 
-  m_res = m_models[i]->sampleReaction(ekin, dir);
+  //oriented models sample in the local (crystal) frame: convert the incident
+  //direction like totalCrossSection does, the sampled outgoing direction is
+  //mapped back to the global frame below
+  const Vector *sampledir = &dir;
+  if(m_models[i]->isOriented())
+  {
+    auto &activeVolume = Singleton<ActiveVolume>::getInstance();
+    m_localdir =  activeVolume.getGeoTranslator().global2Local_direction(dir);
+    sampledir = &m_localdir;
+  }
+
+  m_res = m_models[i]->sampleReaction(ekin, *sampledir);
 
   if(m_models[i]->isOriented())
   {

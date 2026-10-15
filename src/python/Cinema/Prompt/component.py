@@ -1,8 +1,8 @@
 ################################################################################
 ##                                                                            ##
-##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
+##  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    ##
 ##                                                                            ##
-##  Copyright 2021-2024 Prompt developers                                     ##
+##  Copyright 2021-2026 Cinema developers                                     ##
 ##                                                                            ##
 ##  Licensed under the Apache License, Version 2.0 (the "License");           ##
 ##  you may not use this file except in compliance with the License.          ##
@@ -18,6 +18,8 @@
 ##                                                                            ##
 ################################################################################
 
+import warnings
+
 import numpy as np
 
 from Cinema.Prompt.geo import Transformation3D
@@ -25,17 +27,19 @@ from .solid import Trapezoid, Tube, Box
 from .geo import Volume, Transformation3D
 from copy import deepcopy
 from scipy.spatial.transform import Rotation as scipyRot
-from .configstr import ConfigString
+from .physics import DiskChopper as _DiskChopper
 
-class DiskChopper(ConfigString):
+class DiskChopper(_DiskChopper):
+    """Deprecated alias of :class:`Cinema.Prompt.physics.DiskChopper`.
+
+    Kept as a working alias: it produces byte-identical configuration
+    strings and shares the same C++ physics.
+    """
     def __init__(self) -> None:
-        super().__init__({})
-        self.cfg_physics = 'DiskChopper'
-        self.cfg_rotFreq = 25
-        self.cfg_r = 100
-        self.cfg_theta0 = 20
-        self.cfg_n = 1
-        self.cfg_phase = 0
+        warnings.warn("Cinema.Prompt.component.DiskChopper is deprecated, "
+                      "use Cinema.Prompt.physics.DiskChopper instead.",
+                      DeprecationWarning, stacklevel=2)
+        super().__init__()
 
 
 class Anchor:
@@ -58,19 +62,26 @@ class Anchor:
     def getRelTransf(self, other):
         """Return the relative transformation from 'self' to 'other'.
 
+        The returned Anchor's reference frame maps points from 'other's
+        frame into 'self's frame: p_self = R_rel p + t_rel with
+        R_rel = R_self^-1 R_other and t_rel = R_self^-1 (t_other - t_self).
+
         Args:
-            other (_type_): _description_
+            other (Anchor): Target anchor
 
         Returns:
-            _type_: _description_
+            Anchor: Anchor holding the relative transformation
         """
+        sR = self.refFrame.getRotMatrix()
+        oR = other.refFrame.getRotMatrix()
+        sT = self.refFrame.getTranslation()
+        oT = other.refFrame.getTranslation()
+        sRinv = np.linalg.inv(sR)
+        relT = sRinv.dot(oT - sT)
+        rel = Transformation3D(relT[0], relT[1], relT[2])
+        rel.applyRotbyMatrix(sRinv.dot(oR))
         transf = Anchor()
-        transl = (other.refFrame.translation - self.refFrame._translation).dot(self.refFrame.sciRotMatrix)
-        transl_ins = Transformation3D(transl[0], transl[1], transl[2])
-        # transl_ins.sciRot =self.refFrame.sciRot.inv() *  other.refFrame.sciRot
-        refMatrix = np.linalg.inv(self.refFrame.sciRotMatrix).dot(other.refFrame.sciRotMatrix)
-        transl_ins.applyTrans(refMatrix)
-        transf.setRefFrame(transl_ins)
+        transf.setRefFrame(rel)
         return transf
     
     # fixme: add inverse of Transformation 
@@ -113,11 +124,16 @@ class EntityArray(Array):
         if not isinstance(self.element, Volume):
             raise TypeError("Object type f{self.element.__class__.__name__} do not match type 'Volume'!")
     
-    def selectByZ(self, zMin, zMax): # fixme: not working
-        for member in self.members:
-            loc = member.translation
+    def selectByZ(self, zMin, zMax):
+        # members are Anchors: read the placement through the frame accessor
+        # (Anchors have no .translation attribute)
+        toRemove = []
+        for i_mem, member in enumerate(self.members):
+            loc = member.refFrame.getTranslation()
             if loc[2] < zMin or loc[2] > zMax:
-                self.members.pop(member)
+                toRemove.append(i_mem)
+        for i_mem in reversed(toRemove):
+            self.members.pop(i_mem)
 
     def setAnchor(self, refFrame : Transformation3D):
         super().setAnchor(refFrame)
@@ -145,33 +161,40 @@ class EntityArray(Array):
         for i_anc in self.members:
             origin_transf = deepcopy(i_anc.refFrame)
             for i_num in np.arange(1, num):
-                gap = gap * i_num
-                new_anc = Transformation3D(direction[0] * gap, direction[1] * gap, direction[2] * gap) * origin_transf 
+                off = gap * i_num
+                new_anc = Transformation3D(direction[0] * off, direction[1] * off, direction[2] * off) * origin_transf
                 new_anchors.append(new_anc)
         for i_new_anc in new_anchors:
             self.create(i_new_anc)
 
     def reflect(self, plane = 'XY', plane_location = 0.):
+        """Add members mirrored through the plane 'XY', 'YZ' or 'XZ'.
+
+        Only the member positions are mirrored. A mirrored ORIENTATION is an
+        improper rotation (det = -1), which Transformation3D (scipy
+        Rotation + VecGeom) cannot represent, so orientations are carried
+        over unchanged and a warning is emitted when a member is rotated:
+        verify that the member solids are symmetric under the mirroring.
+        """
+        if plane not in ('XY', 'YZ', 'XZ'):
+            raise ValueError(f'plane should be XY, YZ or XZ, but got {plane}.')
+        # index of the coordinate normal to the mirroring plane
+        normalAxis = {'XY': 2, 'XZ': 1, 'YZ': 0}[plane]
         new_anchors = []
         for mem in self.members:
             absTrans = self.refFrame * mem.refFrame
-            transl = absTrans.translation
-            if plane == 'YZ':
-                transl[0] = 2 * plane_location - transl[0]
-                # rotvec[0] = - rotvec[0]
-            elif plane == 'XY':
-                transl[2] = 2 * plane_location - transl[2]
-                refMatrix = scipyRot.identity().as_matrix() - 2 * np.outer(np.array([0,0,-1]), np.array([0,0,-1]))
-                # rotvec[2] = - rotvec[2]
-            elif plane == 'XZ':
-                transl[1] = 2 * plane_location - transl[1]
-                # rotvec[1] = - rotvec[1]
-            else:
-                raise ValueError(f'plane should be XY, YZ or XZ, but got {plane}.')
+            transl = absTrans.getTranslation().copy()
+            transl[normalAxis] = 2 * plane_location - transl[normalAxis]
+            rotMat = absTrans.getRotMatrix()
+            if np.abs(rotMat - np.eye(3)).max() > 1e-9:
+                warnings.warn(
+                    f"EntityArray.reflect: member '{mem.marker}' is rotated; "
+                    f"the mirrored placement keeps its orientation because a "
+                    "mirrored orientation is not representable. Check the "
+                    "member solid for symmetry under the mirroring.",
+                    RuntimeWarning, stacklevel=2)
             new_anc = Anchor()
-            new_anc.refFrame._translation = transl
-            new_anc.refFrame.applyTrans(refMatrix.dot(absTrans.sciRotMatrix))
-            # new_anc.setRefFrame(absTrans * new_anc.refFrame)
+            new_anc.refFrame = Transformation3D(transl[0], transl[1], transl[2]).setSciRot(scipyRot.from_matrix(rotMat))
             relAnc = self.getRelTransf(new_anc)
             new_anchors.append(relAnc)
         for i_new_anc in new_anchors:
@@ -183,31 +206,33 @@ class EntityArray(Array):
 
 
     def make_rotate_z(self, angle, num, x= 0, y = 0):
+        """Add num rotated copies of every member around the z axis
+        through (x, y), stepping by `angle` degrees."""
+        new_anchors = []
         for mem in self.members:
-            new_anchors = []
             absTrans = self.refFrame * mem.refFrame
+            absR = absTrans.getRotMatrix()
+            transl = absTrans.getTranslation()
+            u = np.array([0,0,1.])
+            originTrans = np.array([x,y,0])
+            v = transl - originTrans
+            v_para = (v * u) * u
+            vt = v - v_para
             for i_num in np.arange(1, num + 1):
-                temp_anc = Anchor()
-                transl = absTrans.translation
                 angle_in = angle * i_num / 180 * np.pi
-                temp_anc.refFrame = Transformation3D().applyRotZ(angle)
-                u = np.array([0,0,1.])
-                originTrans = np.array([x,y,0])
-                v = transl - originTrans
-                v_para = (v * u) * u
-                vt = v - v_para
-                asin = np.sin(angle_in)
-                acons = np.cos(angle_in)
-                transl = v_para + np.sin(angle_in) * np.cross(u, vt) + np.cos(angle_in) * vt
-                transl = originTrans + transl
+                # Rodrigues rotation of the position about u through (x, y, 0)
+                transl_rot = v_para + np.sin(angle_in) * np.cross(u, vt) + np.cos(angle_in) * vt
+                transl_rot = originTrans + transl_rot
                 skew_u = [[0, - u[2], u[1]],
                           [u[2], 0, - u[0]],
                           [- u[1], u[0], 0]]
                 skew_u = np.array(skew_u)
-                transl_mat = np.cos(angle_in) * scipyRot.identity().as_matrix() + (1-np.cos(angle_in)) * np.outer(u, u) + np.sin(angle_in) * skew_u
+                rot_mat = np.cos(angle_in) * scipyRot.identity().as_matrix() + (1-np.cos(angle_in)) * np.outer(u, u) + np.sin(angle_in) * skew_u
                 absAnc = Anchor()
-                absAnc.refFrame = Transformation3D(transl[0], transl[1], transl[2])
-                absAnc.refFrame.applyTrans(transl_mat.dot(absTrans.sciRotMatrix))
+                # the orientation is rotated by the same proper rotation:
+                # R_new = Rz(angle) . R_abs
+                absAnc.refFrame = (Transformation3D(transl_rot[0], transl_rot[1], transl_rot[2])
+                                   .setSciRot(scipyRot.from_matrix(rot_mat.dot(absR))))
                 relAnc = self.getRelTransf(absAnc)
                 new_anchors.append(relAnc)
         for i_new_anc in new_anchors:
@@ -228,13 +253,18 @@ class FlatAnalyser(EntityArray):
         self.make_plane(cur_h, cur_v, points)
 
     def set_rect_position(self, num_h, num_v):
+        if num_h < 1 or num_v < 1:
+            raise ValueError(f'num_h and num_v should be >= 1, '
+                             f'got num_h={num_h}, num_v={num_v}.')
         xx = np.arange(0, num_h) * self.spacing[0]
         yy = np.arange(0, num_v) * self.spacing[1]
         midx = xx[-1] * 0.5
         midy = yy[-1] * 0.5
         xx = xx - midx
         yy = yy - midy
-        return zip(xx, yy)
+        # num_v rows along y, each holding num_h points along x; a plain list
+        # of lists because make_plane iterates over the points twice
+        return [[[x, y] for x in xx] for y in yy]
 
     def set_trape_position(self, upper_l, lower_l, height): # fixme: need another algorithm 
         positions = []
@@ -288,11 +318,17 @@ class FlatAnalyser(EntityArray):
                     pass
                 elif cur_h == 0:
                     # print('Using vertical single curved surface')
+                    # iy is already centred on 0 by set_rect_position/
+                    # set_trape_position, so use it directly like the
+                    # double-curve branch below
                     tilt_h = 0
-                    tilt_v = - np.arcsin((iy - height * 0.5) / cur_v) * np.rad2deg(1)
+                    tilt_v = - np.arcsin(iy / cur_v) * np.rad2deg(1)
                 elif cur_v == 0:
                     # print('Using horizontal single curved surface')
-                    tilt_h = np.arcsin((ix - length * 0.5) / cur_h) * np.rad2deg(1)
+                    # ix is already centred on 0 by set_rect_position/
+                    # set_trape_position, so use it directly like the
+                    # double-curve branch below
+                    tilt_h = np.arcsin(ix / cur_h) * np.rad2deg(1)
                     tilt_v = 0
                 else:
                     # print('Using double curved surface')
@@ -327,7 +363,8 @@ def makeTrapezoidGuide(length, front_x, front_y, rear_x, rear_y, m,
 def makeDiskChopper(r_outer, r_inner, phase, num_slit, freq, theta):
 
     vol = Volume('chopper', Tube(0., r_outer, 1e-2, 0., 360.))
-    chp = DiskChopper()
+    # the canonical physics.DiskChopper, no deprecation warning here
+    chp = _DiskChopper()
     chp.cfg_rotFreq = freq
     chp.cfg_n = num_slit
     chp.cfg_phase = phase

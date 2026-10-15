@@ -2,9 +2,9 @@
 
 ################################################################################
 ##                                                                            ##
-##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
+##  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    ##
 ##                                                                            ##
-##  Copyright 2021-2024 Prompt developers                                     ##
+##  Copyright 2021-2026 Cinema developers                                     ##
 ##                                                                            ##
 ##  Licensed under the Apache License, Version 2.0 (the "License");           ##
 ##  you may not use this file except in compliance with the License.          ##
@@ -43,7 +43,10 @@ class ErrorPropagator():
             self.error = error
         else:
             uncet = np.sqrt(count/10.)
-            self.error = np.divide(weight, uncet, where=(uncet!=0.))
+            # empty-bin convention: a zero-count bin gets error 0.0; without
+            # out=, the where-masked slots would inherit uninitialised memory
+            self.error = np.divide(weight, uncet, where=(uncet!=0.),
+                                   out=np.zeros(weight.shape, dtype=float))
         if ycentre is not None:
             self.ycentre = np.copy(ycentre)
             
@@ -83,10 +86,14 @@ class ErrorPropagator():
 
     def divide(self, weight, error, xcentre,  ycentre=None):
         self.compatible(xcentre, ycentre)
-        selferr = np.divide(self.error, self.weight, where=(self.weight!=0.))
+        # out= pins zero-count divisor slots to 0.0 instead of heap garbage
+        selferr = np.divide(self.error, self.weight, where=(self.weight!=0.),
+                            out=np.zeros_like(self.weight, dtype=float))
         otherw = weight
-        othererr = np.divide(error, otherw, where=(otherw!=0.))
-        self.weight = np.divide(self.weight, otherw, where=(otherw!=0.))
+        othererr = np.divide(error, otherw, where=(otherw!=0.),
+                             out=np.zeros_like(otherw, dtype=float))
+        self.weight = np.divide(self.weight, otherw, where=(otherw!=0.),
+                                out=np.zeros_like(self.weight, dtype=float))
         self.error = np.sqrt(selferr*selferr + othererr*othererr)*np.abs(self.weight)
 
     def __itruediv__(self, other):

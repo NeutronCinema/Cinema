@@ -1,8 +1,8 @@
 ################################################################################
 ##                                                                            ##
-##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
+##  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    ##
 ##                                                                            ##
-##  Copyright 2021-2024 Prompt developers                                     ##
+##  Copyright 2021-2026 Cinema developers                                     ##
 ##                                                                            ##
 ##  Licensed under the Apache License, Version 2.0 (the "License");           ##
 ##  you may not use this file except in compliance with the License.          ##
@@ -32,6 +32,8 @@ Cinema particle tracing framework. It includes:
 from .configstr import ConfigString
 from .launcher import Launcher
 
+import os
+import warnings
 from enum import Enum, auto
 
 class ParticleTracingState(Enum):
@@ -56,7 +58,6 @@ class ParticleTracingState(Enum):
         from_string: Creates enum instance from string
         to_string: Converts enum instance to string representation
     """
-    """Particle tracing status enumeration"""
     SURFACE = auto()
     ENTRY = auto()
     PROPAGATE_PRE = auto()
@@ -83,18 +84,17 @@ class ParticleTracingState(Enum):
     
     @classmethod
     def from_string(cls, state_str):
-        """Create enum instance from string"""
-        mapping = {
-            'SURFACE': cls.SURFACE,
-            'ENTRY': cls.ENTRY,
-            'PROPAGATE_PRE': cls.PROPAGATE_PRE,
-            'PROPAGATE_POST': cls.PROPAGATE_POST,
-            'EXIT': cls.EXIT,
-            'PEA_PRE': cls.PEA_PRE,
-            'PEA_POST': cls.PEA_POST,
-            'ABSORB': cls.ABSORB
-        }
-        return mapping.get(state_str.upper(), cls.ENTRY)
+        """Create enum instance from string
+
+        Raises:
+            ValueError: if state_str does not name a valid tracing state
+        """
+        try:
+            return cls[state_str.upper()]
+        except KeyError:
+            valid = ', '.join(member.name for member in cls)
+            raise ValueError(f"Unknown particle tracing state '{state_str}'. "
+                             f"Valid states: {valid}") from None
 
     def to_string(self):
         """Convert enum instance to string representation"""
@@ -138,22 +138,29 @@ _pt_addMultiScatter1D = importFunc('pt_addMultiScatter1D', None, [type_voidp, ty
 _pt_addMultiScatter2D = importFunc('pt_addMultiScatter2D', None, [type_voidp, type_voidp, type_int])
 
 _pt_KillerMCPL_new = importFunc('pt_KillerMCPL_new', type_voidp, [type_cstr, type_uint, type_int, type_bool, type_bool])
-class ScorerHelper:
-    def __init__(self, name, min, max, numbin, pdg = 2112, ptstate=None, groupID=0) -> None:
-        self.name = name
-        self.min = min
-        self.max = max
-        self.numbin = numbin
-        self.pdg = pdg
-        if isinstance(ptstate, ParticleTracingState):
-            self.ptstate = ptstate.to_string()
-        elif isinstance(ptstate, str):
-            self.ptstate = ptstate
-        else:
-            raise TypeError(f"ptstate must be a string or ParticleTracingState enum, got {type(ptstate)}")
-        self.groupID = groupID
-        self.linear = True
 
+# Validate the scoring range in Python, before any ctypes call: a range mistake
+# would otherwise only surface as an uncatchable C++ abort (SIGABRT) at make() time.
+def _checkScorerRange(name, minVal, maxVal, logBinning=False, axis=''):
+    lbl = f'{axis}-axis ' if axis else ''
+    if not minVal < maxVal:
+        raise ValueError(f"Scorer {name}: {lbl}range min ({minVal}) must be smaller than max ({maxVal}).")
+    if logBinning and minVal <= 0:
+        raise ValueError(f"Scorer {name}: {lbl}min ({minVal}) must be positive for logarithmic binning.")
+
+# Resolve the binning-shape keyword: `log` is canonical, the polarity-inverted
+# `linear` keyword is still accepted but deprecated.
+def _resolveLogBinning(scorerName, log, linear, defaultLinear):
+    if linear is not None:
+        warnings.warn(f"{scorerName}: the 'linear' keyword is deprecated, use 'log' "
+                      "(log=True is equivalent to linear=False)", DeprecationWarning, stacklevel=3)
+        if log is None:
+            log = not linear
+    if log is None:
+        log = not defaultLinear
+    return log
+
+class ScorerHelper:
     """
     ScorerHelper Class Documentation
     
@@ -229,6 +236,25 @@ class ScorerHelper:
     tracing state they intend to use.
     """
 
+    def __init__(self, name, min, max, numbin, pdg = 2112, ptstate=None, groupID=0) -> None:
+        self.name = name
+        self.min = min
+        self.max = max
+        self.numbin = numbin
+        self.pdg = pdg
+        if isinstance(ptstate, ParticleTracingState):
+            self.ptstate = ptstate.to_string()
+        elif isinstance(ptstate, str):
+            self.ptstate = ptstate
+        else:
+            raise TypeError(f"ptstate must be a string or ParticleTracingState enum, got {type(ptstate)}")
+        self.groupID = groupID
+        self.linear = True
+        # canonical binning flag; `linear` above is kept as the inverted legacy mirror
+        self.log = False
+        # fail fast on an inverted range instead of an uncatchable C++ abort at make()
+        _checkScorerRange(name, min, max)
+
     def __realinit(self):
         self.score.cfg_name = self.name
         self.score.cfg_min = self.min
@@ -242,26 +268,13 @@ class ScorerHelper:
     
     @property
     def ptsNum(self):
-        """Enum of particle tracing state.
+        """Numerical value of the particle tracing state.
         """
-        if self.ptstate=='SURFACE':
-            return 0
-        elif self.ptstate=='ENTRY':
-            return 1
-        elif self.ptstate=='PROPAGATE_PRE':
-            return 2
-        elif self.ptstate=='PROPAGATE_POST':
-            return 3
-        elif self.ptstate=='EXIT':
-            return 4
-        elif self.ptstate=='PEA_PRE':
-            return 5
-        elif self.ptstate=='PEA_POST':
-            return 6
-        elif self.ptstate=='ABSORB':
-            return 7
-        else:
-            raise RuntimeError(f'Scorer type {self.ptstate} is undefined.') 
+        # delegated to the ParticleTracingState table to keep a single mapping
+        try:
+            return ParticleTracingState[self.ptstate].value_num
+        except KeyError:
+            raise RuntimeError(f'Scorer type {self.ptstate} is undefined.')
         
     def make(self, vol):
         vol.addScorer(self.score.cfg)
@@ -272,6 +285,7 @@ class ScorerHelper2D(ScorerHelper):
         self.ymin = ymin
         self.ymax = ymax
         self.ynumbin = ynumbin
+        _checkScorerRange(name, ymin, ymax, axis='y')
 
 class MultiScatMixin1D():
     def __init__(self) -> None:
@@ -399,11 +413,14 @@ class MultiScatCounter(ScorerHelper):
         
 # 1D Scorer
 class ESpectrumHelper(ScorerHelper, MultiScatMixin1D):
-    def __init__(self, name, min=1e-5, max=1, numbin = 100, pdg : int = 2112, 
-                 ptstate: str = 'ENTRY', energyTransfer=False, groupID=0, linear = False) -> None:
+    def __init__(self, name, min=1e-5, max=1, numbin = 100, pdg : int = 2112,
+                 ptstate: str = 'ENTRY', energyTransfer=False, groupID=0, linear = None, log = None) -> None:
         super().__init__(name, min, max, numbin, pdg, ptstate, groupID)
         self.energyTransfer = energyTransfer
-        self.linear = linear
+        # `log` is the canonical binning flag; `linear` stays as a deprecated alias
+        self.log = _resolveLogBinning('ESpectrumHelper', log, linear, defaultLinear=False)
+        self.linear = not self.log
+        _checkScorerRange(name, min, max, logBinning=self.log)
 
     def make(self, vol):
         cobj = _pt_ScorerESpectrum_new(self.name.encode('utf-8'), 
@@ -422,10 +439,13 @@ class ESpectrumHelper(ScorerHelper, MultiScatMixin1D):
      
     
 class WlSpectrumHelper(ScorerHelper, MultiScatMixin1D):
-    def __init__(self, name, min=0.1, max=10, numbin = 100, pdg : int = 2112, 
-                 ptstate : str = 'ENTRY', groupID : int = 0, linear = False) -> None:
+    def __init__(self, name, min=0.1, max=10, numbin = 100, pdg : int = 2112,
+                 ptstate : str = 'ENTRY', groupID : int = 0, linear = None, log = None) -> None:
         super().__init__(name, min, max, numbin, pdg, ptstate, groupID)
-        self.linear = linear
+        # `log` is the canonical binning flag; `linear` stays as a deprecated alias
+        self.log = _resolveLogBinning('WlSpectrumHelper', log, linear, defaultLinear=False)
+        self.linear = not self.log
+        _checkScorerRange(name, min, max, logBinning=self.log)
 
     def make(self, vol):
         cobj = _pt_ScorerWlSpectrum_new(self.name.encode('utf-8'), 
@@ -441,9 +461,12 @@ class WlSpectrumHelper(ScorerHelper, MultiScatMixin1D):
         self.cobj = cobj
 
 class VolFluenceHelper(ScorerHelper, MultiScatMixin1D):
-    def __init__(self, name, min = 1e-6, max = 10, numbin = 100, pdg = 2112, linear : bool = False, groupID : int = 0) -> None:
+    def __init__(self, name, min = 1e-6, max = 10, numbin = 100, pdg = 2112, linear = None, groupID : int = 0, log = None) -> None:
         super().__init__(name, min, max, numbin, pdg, ptstate = 'PEA_PRE', groupID = groupID)
-        self.linear = linear
+        # `log` is the canonical binning flag; `linear` stays as a deprecated alias
+        self.log = _resolveLogBinning('VolFluenceHelper', log, linear, defaultLinear=False)
+        self.linear = not self.log
+        _checkScorerRange(name, min, max, logBinning=self.log)
 
     def make(self, vol):
         volCapacity = vol.getCapacity()
@@ -473,8 +496,9 @@ class DirectSqHelper(ScorerHelper, MultiScatMixin1D):
         ScorerHelper: Base class for particle scoring functionality
         MultiScatMixin1D: Mixin for 1D multiple scattering analysis
     """
-    def __init__(self, name, qmin, qmax, numbin, mod_smp_dist, pdg=2112, 
-                 refDir=[0,0,1], samplePos=[0,0,0], ptstate='ENTRY', method=0, linear=False, groupID=0):
+    def __init__(self, name, qmin, qmax, numbin, mod_smp_dist, pdg=2112,
+                 refDir=(0.,0.,1.), samplePos=(0.,0.,0.), ptstate='ENTRY', method=0,
+                 linear=None, groupID=0, log=None):
         """
         Initialize a DirectSqHelper instance for direct scattering structure factor calculation.
         
@@ -488,14 +512,19 @@ class DirectSqHelper(ScorerHelper, MultiScatMixin1D):
             Maximum momentum transfer Q value (Å⁻¹) for the histogram binning
         numbin : int
             Number of bins for Q-value histogram
-        distanceMS : float
-            Distance from moderator to sample (mm) - critical for flight path calculations
+        mod_smp_dist : float
+            Distance from moderator to sample (mm) - critical for flight path calculations.
+            Stored as the attribute ``distanceMS`` for backward compatibility
+            (DirectSqwHelper names the same quantity ``mod_smp_dist``)
         pdg : int, optional
             Particle Data Group code for particle type (default: 2112 for neutron)
-        refDir : list, optional
-            Reference direction vector [x,y,z] for incident beam direction (default: [0,0,1])
-        samplePos : list, optional
-            Sample position coordinates [x,y,z] in the simulation geometry (default: [0,0,0])
+        refDir : sequence, optional
+            Reference direction vector [x,y,z] of the incident beam, i.e. the mean
+            incident direction (named ``mean_incident_dir`` in DirectSqwHelper)
+            (default: (0,0,1))
+        samplePos : sequence, optional
+            Sample position coordinates [x,y,z] in the simulation geometry
+            (named ``sample_position`` in DirectSqwHelper) (default: (0,0,0))
         ptstate : str, optional
             Particle tracing state when scoring occurs. Options: 'ENTRY', 'EXIT', 'PROPAGATE_POST', etc.
             (default: 'ENTRY')
@@ -518,11 +547,17 @@ class DirectSqHelper(ScorerHelper, MultiScatMixin1D):
         - Distance parameters use millimeters (mm) for consistency with typical neutron scattering setups
         """
         super().__init__(name, qmin, qmax, numbin, pdg, ptstate, groupID)
+        # attribute kept as `distanceMS` for backward compatibility (see docstring)
         self.distanceMS = mod_smp_dist
-        self.refDir = refDir
-        self.samplePos = samplePos
+        # immutable tuple defaults: a mutable class-level list default would share
+        # in-place user mutations across all future instances
+        self.refDir = tuple(refDir)
+        self.samplePos = tuple(samplePos)
         self.method = method
-        self.linear = linear
+        # `log` is the canonical binning flag; `linear` stays as a deprecated alias
+        self.log = _resolveLogBinning('DirectSqHelper', log, linear, defaultLinear=False)
+        self.linear = not self.log
+        _checkScorerRange(name, qmin, qmax, logBinning=self.log)
 
     def make(self, vol):
         cobj = _pt_ScorerDeltaMomentum_new(
@@ -546,9 +581,12 @@ class DirectSqHelper(ScorerHelper, MultiScatMixin1D):
         self.cobj = cobj
 
 class DepositionHelper(ScorerHelper, MultiScatMixin1D):
-    def __init__(self, name : str, min, max, numbin, pdg, ptstate, linear : bool = False, groupID : int = 0) -> None:
+    def __init__(self, name : str, min, max, numbin, pdg, ptstate, linear = None, groupID : int = 0, log = None) -> None:
         super().__init__(name, min, max, numbin, pdg, ptstate, groupID)
-        self.linear = linear
+        # `log` is the canonical binning flag; `linear` stays as a deprecated alias
+        self.log = _resolveLogBinning('DepositionHelper', log, linear, defaultLinear=False)
+        self.linear = not self.log
+        _checkScorerRange(name, min, max, logBinning=self.log)
 
     def make(self, vol):
         # enum class ScorerType {SURFACE, ENTRY, PROPAGATE, EXIT, PEA, ABSORB};
@@ -571,7 +609,7 @@ class DepositionHelper(ScorerHelper, MultiScatMixin1D):
     #   ScorerType stype=Scorer::ScorerType::ENTRY);
 
 
-class TOFHelper(ScorerHelper, MultiScatMixin2D):
+class TOFHelper(ScorerHelper, MultiScatMixin1D):
     def __init__(self, name : str, min : float = 0., max : float = 40e-3, numbin : int = 100, 
                  pdg : int = 2112, ptstate : str = 'ENTRY', groupID : int = 0) -> None:
         super().__init__(name, min, max, numbin, pdg, ptstate, groupID)
@@ -637,10 +675,10 @@ class DirectSqwHelper(ScorerHelper2D, MultiScatMixin2D):
         ScorerHelper2D: Base class for 2D particle scoring functionality
         MultiScatMixin2D: Mixin for 2D multiple scattering analysis
     """
-    def __init__(self, name, mod_smp_dist, mean_ekin, mean_incident_dir=np.array([0,0,1]), sample_position=np.array([0,0,0]),
-                 qmin = 1e-1, qmax = 10, num_qbin = 50, 
+    def __init__(self, name, mod_smp_dist, mean_ekin, mean_incident_dir=(0.,0.,1.), sample_position=(0.,0.,0.),
+                 qmin = 1e-1, qmax = 10, num_qbin = 50,
                  ekinmin=-0.1 , ekinmax=0.1,  num_ebin = 30,
-                 pdg = 2112, groupID  = 0, logx=False, ptstate = 'ENTRY') -> None:
+                 pdg = 2112, groupID  = 0, logx=None, ptstate = 'ENTRY', log = None) -> None:
         """
         Initialize a DirectSqwHelper instance for dynamic scattering structure factor calculation.
         
@@ -673,17 +711,24 @@ class DirectSqwHelper(ScorerHelper2D, MultiScatMixin2D):
         groupID : int, optional
             Group identifier for organizing multiple scorers (default: 0)
         logx : bool, optional
-            If True, use logarithmic binning for Q-axis; if False, use linear binning (default: False)
+            Deprecated alias for `log`. If True, requests logarithmic binning for the
+            Q-axis (default: None)
         ptstate : str, optional
             Particle tracing state when scoring occurs. Options: 'ENTRY', 'EXIT', 'PROPAGATE_POST', etc.
             (default: 'ENTRY')
+        log : bool, optional
+            Canonical binning flag: if True, request logarithmic binning for the Q-axis;
+            if False, use linear binning (default: False).
+            Note: the C++ scorer does not support a binning-shape switch yet, so the
+            Q-axis stays linearly binned for now and a UserWarning is emitted when True
         
         Notes:
         ------
         - The dynamic structure factor S(Q,ω) provides information about both spatial correlations (via Q)
           and temporal correlations (via ω) in the sample material
-        - Energy transfer ω = E_final - E_initial, where positive values indicate energy gain
-          (neutron gains energy from sample) and negative values indicate energy loss
+        - Energy transfer ω = E_initial - E_final: positive values indicate energy loss
+          (neutron loses energy to the sample, downscatter) and negative values indicate
+          energy gain (upscatter)
         - This is particularly useful for studying inelastic scattering processes, phonons,
           and other dynamic phenomena in materials
         - The 2D histogram provides a comprehensive view of scattering dynamics across
@@ -693,13 +738,35 @@ class DirectSqwHelper(ScorerHelper2D, MultiScatMixin2D):
         super().__init__(name, qmin, qmax, num_qbin, ekinmin, ekinmax, num_ebin, pdg, ptstate, groupID)
         self.mod_smp_dist = mod_smp_dist
         self.mean_ekin = mean_ekin
-        self.mean_incident_dir = mean_incident_dir
-        self.sample_position = sample_position
-        self.logx = logx
+        # immutable tuple defaults: a mutable class-level array default would share
+        # in-place user mutations across all future instances
+        self.mean_incident_dir = tuple(mean_incident_dir)
+        self.sample_position = tuple(sample_position)
+        # `log` is the canonical binning flag; `logx` stays as a deprecated alias
+        if logx is not None:
+            warnings.warn("DirectSqwHelper: the 'logx' keyword is deprecated, use 'log'",
+                          DeprecationWarning, stacklevel=2)
+            if log is None:
+                log = logx
+        if log is None:
+            log = False
+        self.log = log
+        self.logx = log  # deprecated alias attribute, kept for backward compatibility
+        # keep the inherited flags consistent; the C++ scorer ignores the binning
+        # shape for now (see the note in make()), so no log-positivity check on the
+        # Q range here yet - add _checkScorerRange(..., logBinning=self.log) to the
+        # Q axis once the C++ side supports logarithmic binning
+        self.linear = not log
+        if log:
+            warnings.warn("DirectSqwHelper: logarithmic Q-axis binning is not supported by the "
+                          "C++ scorer yet, the Q axis stays linearly binned", UserWarning, stacklevel=2)
 
     def make(self, vol):
+        # NOTE: the trailing self.logx flag is currently ignored by the C side
+        # (pt_ScorerDirectSqw_new takes no binning-shape argument), the Q-axis
+        # binning is always linear for now
         cobj = _pt_ScorerDirectSqw_new(
-            self.name.encode('utf-8'), 
+            self.name.encode('utf-8'),
             self.min, self.max, self.numbin,
             self.ymin, self.ymax, self.ynumbin,
             self.pdg, self.groupID,
@@ -712,8 +779,16 @@ class DirectSqwHelper(ScorerHelper2D, MultiScatMixin2D):
         self.cobj = cobj
 
 
-# fixme: what is the function followed used for??? x.
+# Legacy convenience wrapper over the deprecated string-based PSD scorer.
+# Kept for backward compatibility; PSDHelper covers the same need properly.
 def makePSD(name, vol, numbin_dim1=1, numbin_dim2=1, ptstate : str = 'ENTRY', type : str = 'XY'):
+    warnings.warn("makePSD is deprecated and only supports Box solids, use PSDHelper instead",
+                  DeprecationWarning, stacklevel=2)
+    # the implementation below reads the hx/hy/hz half-lengths, which only Box provides
+    solid = vol.solid
+    if not all(hasattr(solid, attr) for attr in ('hx', 'hy', 'hz')):
+        raise TypeError(f"makePSD only supports Box solids (with hx/hy/hz half-lengths), "
+                        f"got {solid.__class__.__name__}; use PSDHelper instead")
     det = PSD()
     det.cfg_name = name
     det.cfg_numbin_x = numbin_dim1 
@@ -765,7 +840,16 @@ class MCPLOutHelper(MultiScatMixin1D):
         self.compress = compress
 
     def make(self, vol):
-        cobj = _pt_KillerMCPL_new(self.name_mpi.encode('utf-8') if self.use_mpi else self.name.encode('utf-8'), 
+        fname = self.name_mpi if self.use_mpi else self.name
+        fdir = os.path.dirname(fname) or os.curdir
+        # pre-check the output location so that a bad path raises a normal Python
+        # exception naming the path, instead of a bare "MCPL ERROR: Unable to
+        # open output file!" from the C side
+        if not os.path.isdir(fdir):
+            raise ValueError(f"MCPL output directory '{fdir}' does not exist (output file '{fname}').")
+        if not os.access(fdir, os.W_OK):
+            raise ValueError(f"MCPL output directory '{fdir}' is not writable (output file '{fname}').")
+        cobj = _pt_KillerMCPL_new(fname.encode('utf-8'),
                                         self.pdg,
                                         self.groupID,
                                         self.kill,
@@ -803,8 +887,15 @@ class PSD(ConfigString):
         cfg_numbin_y (int): Number of bins in Y direction
         cfg_ptstate (str): Particle tracing state ('ENTRY')
         cfg_type (str): Detector orientation type ('XZ')
+
+    Note:
+        This string-based legacy scorer API is deprecated and kept only for backward
+        compatibility; its defaults deliberately differ from PSDHelper
+        (xmin/xmax +-10, 100 bins, psdtype 'XY'). Use PSDHelper instead.
     """
     def __init__(self) -> None:
+        warnings.warn("PSD string-based scorer configuration is deprecated, use PSDHelper instead",
+                      DeprecationWarning, stacklevel=2)
         super().__init__()
         self.cfg_Scorer='PSD'
         self.cfg_name = 'PSD'
@@ -830,8 +921,15 @@ class WlSpectrum(ConfigString):
         cfg_max (float): Maximum wavelength (default: 5.0)
         cfg_numbin (int): Number of wavelength bins (default: 100)
         cfg_ptstate (str): Particle tracing state ('ENTRY')
+
+    Note:
+        This string-based legacy scorer API is deprecated and kept only for backward
+        compatibility; its default range deliberately differs from WlSpectrumHelper
+        (min=0.1, max=10). Use WlSpectrumHelper instead.
     """
     def __init__(self) -> None:
+        warnings.warn("WlSpectrum string-based scorer configuration is deprecated, use WlSpectrumHelper instead",
+                      DeprecationWarning, stacklevel=2)
         super().__init__()
         self.cfg_Scorer='WlSpectrum'
         self.cfg_name = 'WlSpectrum'
@@ -854,8 +952,15 @@ class ESpectrum(ConfigString):
         cfg_max (float): Maximum energy (default: 0.25)
         cfg_numbin (int): Number of energy bins (default: 100)
         cfg_ptstate (str): Particle tracing state ('ENTRY')
+
+    Note:
+        This string-based legacy scorer API is deprecated and kept only for backward
+        compatibility; its default range deliberately differs from ESpectrumHelper
+        (min=1e-5, max=1). Use ESpectrumHelper instead.
     """
     def __init__(self) -> None:
+        warnings.warn("ESpectrum string-based scorer configuration is deprecated, use ESpectrumHelper instead",
+                      DeprecationWarning, stacklevel=2)
         super().__init__()
         self.cfg_Scorer='ESpectrum'
         self.cfg_name = 'ESpectrum'
@@ -878,8 +983,15 @@ class TOF(ConfigString):
         cfg_max (float): Maximum time (default: 0.008)
         cfg_numbin (int): Number of time bins (default: 100)
         cfg_ptstate (str): Particle tracing state ('ENTRY')
+
+    Note:
+        This string-based legacy scorer API is deprecated and kept only for backward
+        compatibility; its default range deliberately differs from TOFHelper
+        (min=0, max=40e-3). Use TOFHelper instead.
     """
     def __init__(self) -> None:
+        warnings.warn("TOF string-based scorer configuration is deprecated, use TOFHelper instead",
+                      DeprecationWarning, stacklevel=2)
         super().__init__()
         self.cfg_Scorer='TOF'
         self.cfg_name = 'TOF'
@@ -902,8 +1014,15 @@ class VolFluence(ConfigString):
         cfg_numbin (int): Number of bins (default: 100)
         cfg_ptstate (str): Particle tracing state ('ENTRY')
         cfg_linear (str): Linear binning flag ('yes'/'no')
+
+    Note:
+        This string-based legacy scorer API is deprecated and kept only for backward
+        compatibility; its defaults deliberately differ from VolFluenceHelper
+        (min=1e-6, max=10, ptstate 'PEA_PRE', linear=no). Use VolFluenceHelper instead.
     """
     def __init__(self) -> None:
+        warnings.warn("VolFluence string-based scorer configuration is deprecated, use VolFluenceHelper instead",
+                      DeprecationWarning, stacklevel=2)
         super().__init__()
         self.cfg_Scorer='VolFluence'
         self.cfg_name = 'VolFluence'
@@ -931,6 +1050,11 @@ class ScorerHelperV1:
     
     Methods:
         make: Adds the scorer to a volume
+
+    Note:
+        Deprecated: prefer the current *Helper classes (e.g. ESpectrumHelper).
+        Constructing a V1 helper (or the legacy string-config scorer classes)
+        emits a DeprecationWarning.
     """
     def __init__(self, name, min, max, numbin, ptstate) -> None:
         self.name = name
@@ -965,6 +1089,11 @@ class ESpectrumHelperV1(ScorerHelperV1):
         numbin (int): Number of bins (default: 100)
         ptstate (str): Particle tracing state (default: 'ENTRY')
         energyTransfer (bool): Enable energy transfer scoring (default: False)
+
+    Note:
+        Deprecated: prefer ESpectrumHelper, which has the same defaults. When the
+        wrapped ESpectrum string class is used directly it keeps its own historical
+        default max=0.25 (see the ESpectrum docstring).
     """
     def __init__(self, name, min=1e-5, max=1, numbin = 100, ptstate: str = 'ENTRY', energyTransfer=False) -> None:
         super().__init__(name, min, max, numbin, ptstate)

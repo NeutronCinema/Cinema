@@ -32,12 +32,29 @@ def takfft(input, dt=1., fftsize=None, conversion=2*np.pi):
 def takifft(input, dt=1., fftsize=None, conversion=2*np.pi):
     return fft.fftshift(fft.ifft((input), n=fftsize))/dt*conversion
 
-def findData(fn, path='/', absPath=False):
-    if not absPath:
-        pxpath = os.getenv('TAKPATH')+ path
+def findDataUnder(fn, path='/', absPath=False):
+    """Walk *path* and return the first full path whose filename matches *fn*.
+
+    *path* is used as-is when absPath=True, otherwise it is prefixed with
+    $TAKPATH. Renamed from ``findData``: Cinema.Interface.Utils.findData is
+    the canonical locator for the repository data/ tree, and the same-name
+    incompatible signature here was a porting trap.
+    """
+    if absPath:
+        pxpath = path
+    else:
+        takpath = os.getenv('TAKPATH')
+        if not takpath:
+            raise RuntimeError('findDataUnder needs the TAKPATH environment '
+                               'variable when absPath=False; pass absPath=True '
+                               'with an explicit path, or use '
+                               'Cinema.Interface.Utils.findData for files under '
+                               'the repository data/ tree.')
+        pxpath = takpath + path
     for root, dirs, files in os.walk(pxpath):
         if fn in files:
             return os.path.join(root, fn)
+    raise FileNotFoundError(f'{fn} not found under {pxpath}')
 
 def smooth(input, x):
     sample_rate = 100
@@ -77,6 +94,9 @@ def smoothVdos(vdos, omega, cut=0.):
     # return filtered[12*N-1:], x[12*N-1:]-delay
 
 
+# Note: Cinema.convertor hosts the canonical (C-backed) copies of
+# eKin2k/angleCosine2Q and the strict _units wrappers; keep the two
+# implementations consistent when editing either.
 def angularFre2eKin(fre):
     return fre*radpsec2eV
 

@@ -29,8 +29,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-viz = [ "pyvista", "matplotlib"]
-viz-web = [ "pyvista[jupyter]" ]
+viz = [ "pyvista", "matplotlib", "tetgen"]
+viz-web = [ "pyvista[jupyter]", "tetgen" ]
 
 # [project.scripts]
 # my_package_cli = 'my_package.console:run'

@@ -68,8 +68,6 @@
     <volume name="Sample">
       <materialref ref="Sans"/>
       <solidref ref="SampleTubeSolid"/>
-      <auxiliary auxtype="Scorer" auxvalue="Scorer=RotatingObj;name=ro1;
-        rotation_axis=0,1,0;point_on_axis=100,0,500;rot_fre=100;type=EXIT"/>
     </volume>
     <!-- PROPAGATE, ENTRY, EXIT -->
 

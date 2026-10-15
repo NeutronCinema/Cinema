@@ -38,7 +38,8 @@ def promptRun(cfg, energy, gidiThreshold = -5, popsPath = None,
     _get_cdata().setGidiThreshold(gidiThreshold)
     _get_cdata().setEnableGidiPowerIteration(False)
     _get_cdata().setGammaTransport(isGammaTransport)
-    if not popsPath:
+    # only override the pops path when the caller provided one
+    if popsPath:
         _get_cdata().setGidiPops(popsPath)
 
     numbin_mu=10
@@ -87,19 +88,22 @@ def promptRun(cfg, energy, gidiThreshold = -5, popsPath = None,
     sim.makeWorld()
 
     class MyGun(PythonGun):
+        # PythonGun overrides write straight into self.pdata (one entry per
+        # particle); returning values has no effect. The uniform(lo,hi,num)
+        # draw consumes the same sequential RNG stream as num single draws,
+        # so per-particle sampling is unchanged versus the old scalar API.
         def __init__(self, pdg, ekin):
             super().__init__(pdg)
             self.ekin = ekin
 
-        def samplePosition(self):
-            return 0,0,-1.e5
-        
-        def sampleEnergy(self):
+        def samplePosition(self, num=None):
+            self.pdata['pos'] = [0., 0., -1.e5]
+
+        def sampleEnergy(self, num):
             if isinstance(self.ekin, list):
-                r=np.random.uniform(self.ekin[0], self.ekin[1], 1)[0]
-                return r
+                self.pdata['ekin'] = np.random.uniform(self.ekin[0], self.ekin[1], num)
             else:
-                return self.ekin
+                self.pdata['ekin'] = self.ekin
 
 
     gun = MyGun(int(2112), energy)

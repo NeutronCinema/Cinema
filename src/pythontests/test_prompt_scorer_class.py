@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Cover also the scorer list
 
+import pytest
 from Cinema.Prompt import Prompt, PromptMPI
 from Cinema.Prompt.geo import Volume, Transformation3D
 from Cinema.Prompt.solid import Box
@@ -10,6 +11,7 @@ import numpy as np
 import pprint
 
 
+@pytest.mark.slow  # >0.7 s body: excluded from the pre-push hook, runs in cimbuild -t
 def test_simulation():
     expected_wl = [0.0000e+00,4.0000e+00,6.4000e+01,4.8500e+02,2.1220e+03,5.8450e+03,
                    1.0758e+04,1.4210e+04,1.3159e+04,9.4790e+03,5.2440e+03,2.2600e+03,

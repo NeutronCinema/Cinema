@@ -2,9 +2,9 @@
 
 ################################################################################
 ##                                                                            ##
-##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
+##  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    ##
 ##                                                                            ##
-##  Copyright 2021-2024 Prompt developers                                     ##
+##  Copyright 2021-2026 Cinema developers                                     ##
 ##                                                                            ##
 ##  Licensed under the Apache License, Version 2.0 (the "License");           ##
 ##  you may not use this file except in compliance with the License.          ##
@@ -43,7 +43,9 @@ _pt_Hist2D_getWeight = importFunc('pt_Hist2D_getWeight', None, [type_voidp, type
 _pt_Hist2D_getHit = importFunc('pt_Hist2D_getHit', None, [type_voidp, type_npdbl2d])
 _pt_Hist2D_getDensity = importFunc('pt_Hist2D_getDensity', None, [type_voidp, type_npdbl2d])
 _pt_Hist2D_fill = importFunc('pt_Hist2D_fill', None, [type_voidp, type_dbl, type_dbl, type_dbl])
-_pt_Hist2D_merge = importFunc('pt_Hist2D_merge', None, [type_voidp, type_voidp])
+# Bridged with an int status (0 ok / nonzero error, message via pt_last_error):
+# Hist2D::merge rejects mismatched binnings and cross-type arguments.
+_pt_Hist2D_merge = importFunc('pt_Hist2D_merge', type_int, [type_voidp, type_voidp])
 _pt_Hist2D_fill_many = importFunc('pt_Hist2D_fillmany', None, [type_voidp, type_sizet, type_npdbl1d, type_npdbl1d, type_npdbl1d])
 _pt_Hist2D_getWeight = importFunc('pt_Hist2D_getWeight', None, [type_voidp, type_npdbl2d])
 _pt_Hist2D_getYMin = importFunc('pt_Hist2D_getYMin', type_dbl, [type_voidp])
@@ -52,7 +54,9 @@ _pt_Hist2D_getNBinX = importFunc('pt_Hist2D_getNBinX', type_uint, [type_voidp])
 _pt_Hist2D_getNBinY = importFunc('pt_Hist2D_getNBinY', type_uint, [type_voidp])
 
 # Prompt::HistBase
-_pt_HistBase_merge = importFunc('pt_HistBase_merge', None, [type_voidp, type_voidp])
+# Bridged with an int status like pt_Hist2D_merge: HistBase::merge rejects
+# mismatched xmin/xmax/nbins.
+_pt_HistBase_merge = importFunc('pt_HistBase_merge', type_int, [type_voidp, type_voidp])
 _pt_HistBase_getXMin = importFunc('pt_HistBase_getXMin', type_dbl, [type_voidp])
 _pt_HistBase_getXMax = importFunc('pt_HistBase_getXMax', type_dbl, [type_voidp])
 _pt_HistBase_getTotalWeight = importFunc('pt_HistBase_getTotalWeight', type_dbl, [type_voidp])
@@ -77,6 +81,14 @@ _pt_HistBase_setWW  = importFunc('pt_HistBase_setWW', None, [type_voidp, type_np
 _pt_HistBase_getNote = importFunc('pt_HistBase_getNote', type_cstr, [type_voidp])
 _pt_HistBase_addNote = importFunc('pt_HistBase_addNote', None, [type_voidp, type_cstr])
 
+# Bound defensively, unlike the imports above: pt_HistBase_clone only exists
+# in libraries rebuilt after its introduction, and a missing symbol here must
+# not break importing this module (clone() raises a clear error instead).
+try:
+    _pt_HistBase_clone = importFunc('pt_HistBase_clone', type_voidp, [type_voidp])
+except AttributeError:
+    _pt_HistBase_clone = None
+
 
 
 class HistBase():
@@ -86,8 +98,8 @@ class HistBase():
     def merge(self, anotherhist):
         if self.getNote() != anotherhist.getNote():
             raise RuntimeError(f'histogram {self.getName()} note {self.getNote()} != {anotherhist.getNote()}')
-        
-        _pt_HistBase_merge(self.cobj, anotherhist.cobj)
+
+        raiseOnBridgeError(_pt_HistBase_merge(self.cobj, anotherhist.cobj))
         
 
     def setWeight(self, w: np.ndarray):
@@ -165,26 +177,50 @@ class HistBase():
 
     def getNote(self):
         return _pt_HistBase_getNote(self.cobj).decode('utf-8')
+
+    def clone(self):
+        """Independent copy of this histogram as a fresh C++ object.
+
+        The returned wrapper owns (and on deletion frees) the copy, unlike
+        histograms obtained through Launcher.getHist, whose cobj is borrowed
+        from the live scorer. PromptMPI.gatherHistData relies on the
+        independence: it writes the reduced content into a clone so that
+        gathers never mutate the scorer histogram itself.
+        """
+        if _pt_HistBase_clone is None:
+            raise RuntimeError('libprompt_core.so lacks pt_HistBase_clone; rebuild Cinema to use clone()')
+        dim = self.dimension()
+        cobj = _pt_HistBase_clone(self.cobj)
+        if not cobj:
+            raise RuntimeError(f'failed to clone the histogram {self.getName()}')
+        if dim == 1:
+            newhist = Hist1D(cobj=cobj)
+        elif dim == 2:
+            newhist = Hist2D(cobj=cobj)
+        else:
+            raise RuntimeError(f'clone not implemented for dimension {dim}')
+        # the clone is fresh heap memory, so the wrapper must free it
+        newhist.managedBySelf = True
+        return newhist
     
 
     
 class Hist1D(HistBase):
     def __init__(self, xmin=None, xmax=None, num=None, linear=True, cobj=None):
+        # initialised to False first so that __del__ is a no-op when __init__ fails below
+        self.managedBySelf = False
         if all(item is not None for item in [xmin, xmax, num]):
-            self.managedBySelf = True
             cobj = _pt_Hist1D_new(xmin, xmax, num, linear)
-        elif cobj is not None:  
-            self.managedBySelf = False 
-
-        if not hasattr(self, 'managedBySelf'):
+            self.managedBySelf = True
+        elif cobj is None:
             raise RuntimeError('Failed to create Hist1D')
 
-        super().__init__(cobj)     
+        super().__init__(cobj)
         self.numbin = _pt_Hist1D_getNumBin(self.cobj)
 
     def __del__(self):
         # the object is not borrowed from C++, so delete it by python
-        if self.managedBySelf: 
+        if getattr(self, 'managedBySelf', False):
             _pt_Hist1D_delete(self.cobj)
 
     def getEdges(self):
@@ -219,57 +255,64 @@ class Hist1D(HistBase):
         _pt_Hist1D_fill_many(self.cobj, x.size, np.ascontiguousarray(x.astype(np.float64)), np.ascontiguousarray(weight.astype(np.float64)) )
 
     def plot(self, show=False, label=None, title=None, log=False, sigma=1, ax=None):
+        """Errorbar plot of the histogram.
+
+        log is a bool or a two-element list [logx, logy]. Returns the created
+        matplotlib Figure when ax is None, the given ax otherwise (None when
+        show=True). Failures are printed and re-raised to the caller.
+        """
         try:
             import matplotlib.pyplot as plt
             from Cinema.Interface import plotStyle
             plotStyle()
-            
-            center = self.getCentre()
-            w = self.getWeight()
-            err = self.getSdev()
-            
-            if ax is None:
-                fig, ax = plt.subplots()
-                created_new_figure = True
-            else:
-                created_new_figure = False
-            
-            ax.errorbar(center, w, yerr=err*sigma, fmt='s-', label=f'Weight {w.sum()}' if label is None else f'{label} {w.sum()}')
-            
-            if isinstance(log, list):
-                if list[0]:
-                    ax.set_xscale('log')
-                if list[1]:
-                    ax.set_yscale('log')
-            elif log:
-                ax.set_yscale('log')
-                ax.set_xscale('log')
-            
-            ax.set_title(_pt_HistBase_getName(self.cobj).decode('utf-8') if title is None else title)
-            ax.legend(loc=0)
-            ax.grid(True, alpha=0.3)
-            
-            if show:                
-                plt.show()
-            else:
-                if created_new_figure:
-                    return fig
-                else:
-                    return ax
-        except Exception as e:
-            print (e)
 
-            if show:                
-                plt.show()
-            else: 
-                return plt
+            return self._errorbarPlot(self.getSdev(), show, label, title, log, sigma, ax)
         except Exception as e:
             print (e)
-    
+            raise
+
+    def _errorbarPlot(self, err, show, label, title, log, sigma, ax):
+        # shared implementation backing Hist1D/Est1D/SpectrumEstimator.plot so
+        # that the three methods keep an identical contract
+        import matplotlib.pyplot as plt
+
+        center = self.getCentre()
+        w = self.getWeight()
+
+        if ax is None:
+            fig, ax = plt.subplots()
+            created_new_figure = True
+        else:
+            created_new_figure = False
+
+        ax.errorbar(center, w, yerr=err*sigma, fmt='s-', label=f'Weight {w.sum()}' if label is None else f'{label} {w.sum()}')
+
+        if isinstance(log, list):
+            if log[0]:
+                ax.set_xscale('log')
+            if log[1]:
+                ax.set_yscale('log')
+        elif log:
+            ax.set_yscale('log')
+            ax.set_xscale('log')
+
+        ax.set_title(_pt_HistBase_getName(self.cobj).decode('utf-8') if title is None else title)
+        ax.legend(loc=0)
+        ax.grid(True, alpha=0.3)
+
+        if show:
+            plt.show()
+        elif created_new_figure:
+            return fig
+        else:
+            return ax
+
     def savefig(self, fname, title="Histogram", log = False):
-        plt = self.plot(False, title=title, log = log)
-        plt.savefig(fname=fname, dpi=300)
-        plt.close()
+        """Save plot() to fname; see plot() for the log parameter."""
+        import matplotlib.pyplot as plt
+        fig = self.plot(False, title=title, log=log)
+        fig.savefig(fname=fname, dpi=300)
+        plt.close(fig)
 
     def save(self, fn):
         import h5py
@@ -289,16 +332,15 @@ class Hist1D(HistBase):
 
 class Hist2D(HistBase):
     def __init__(self, xmin=None, xmax=None, xnum=None, ymin=None, ymax=None, ynum=None, metadata=None, cobj=None):
+        # initialised to False first so that __del__ is a no-op when __init__ fails below
+        self.managedBySelf = False
         if all(item is not None for item in [xmin, xmax, xnum, ymin, ymax, ynum]):
-            self.managedBySelf = True
             cobj = _pt_Hist2D_new(xmin, xmax, xnum, ymin, ymax, ynum)
-        elif cobj is not None:  
-            self.managedBySelf = False 
+            self.managedBySelf = True
+        elif cobj is None:
+            raise RuntimeError('Failed to create Hist2D')
 
-        if not hasattr(self, 'managedBySelf'):
-            raise RuntimeError('Failed to create Hist1D')
-
-        super().__init__(cobj)    
+        super().__init__(cobj)
 
         self.xmin = _pt_HistBase_getXMin(self.cobj)
         self.xmax = _pt_HistBase_getXMax(self.cobj)
@@ -320,7 +362,7 @@ class Hist2D(HistBase):
     
     def __del__(self):
         # the object is not borrowed from C++, so delete it by python
-        if self.managedBySelf: 
+        if getattr(self, 'managedBySelf', False):
             _pt_Hist2D_delete(self.cobj)
 
 
@@ -350,8 +392,9 @@ class Hist2D(HistBase):
         return hit
 
     def getDensity(self):
+        # density is weight/hit; bins without any hit are left at 0
         d = np.zeros([self.xNumBin, self.yNumBin])
-        _pt_Hist2D_getWeight(self.cobj, d)
+        _pt_Hist2D_getDensity(self.cobj, d)
         return d
 
     def fill(self, x, y, weight=None):
@@ -364,38 +407,46 @@ class Hist2D(HistBase):
     def fillmany(self, x, y, weight=None):
         if weight is None:
             weight = np.ones(x.size)
-        if x.size !=weight.size and x.size !=y.size:
+        if x.size !=weight.size or x.size !=y.size:
             raise RuntimeError('fillnamy different size')
         _pt_Hist2D_fill_many(self.cobj, x.size, x, y, weight )
 
     def plot(self, show=False, title=None, log=True, logx=False, dynrange=1e-3, ax=None):
+        """Pcolormesh plot of the 2D histogram.
+
+        Unlike the 1D plots, log defaults to True (LogNorm with a dynrange
+        cut-off below the maximum bin), so an empty histogram raises; pass
+        log=False to plot it on a linear scale. Returns the created matplotlib
+        Figure when ax is None, the given ax otherwise (None when show=True).
+        Failures are printed and re-raised to the caller.
+        """
         try:
             import matplotlib.pyplot as plt
             import matplotlib.colors as colors
             from Cinema.Interface import plotStyle
             plotStyle()
-            
+
             if ax is None:
                 fig = plt.figure()
                 ax = fig.add_subplot(111)
                 created_new_figure = True
             else:
                 created_new_figure = False
-            
+
             H = self.getWeight().T
             X, Y = np.meshgrid(self.xcenter, self.ycenter)
-            
+
             if log:
                 pcm = ax.pcolormesh(X, Y, H, cmap=plt.cm.jet, norm=colors.LogNorm(vmin=H.max()*dynrange, vmax=H.max()), shading='auto')
             else:
                 pcm = ax.pcolormesh(X, Y, H, cmap=plt.cm.jet, shading='auto')
-            
+
             if created_new_figure:
                 fig.colorbar(pcm, ax=ax)
-            
+
             if logx:
                 ax.set_xscale('log')
-            
+
             ax.grid()
             ax.set_title((_pt_HistBase_getName(self.cobj).decode('utf-8') if title is None else title) + f', Weight {H.sum()}')
 
@@ -406,14 +457,17 @@ class Hist2D(HistBase):
                     return fig
                 else:
                     return ax
-                
+
         except Exception as e:
             print(e)
+            raise
 
     def savefig(self, fname, title="Histogram", log=True):
-        plt = self.plot(False, title=title, log=log)
-        plt.savefig(fname=fname, dpi=300)
-        plt.close()
+        """Save plot() to fname; see plot() for the log parameter."""
+        import matplotlib.pyplot as plt
+        fig = self.plot(False, title=title, log=log)
+        fig.savefig(fname=fname, dpi=300)
+        plt.close(fig)
 
 
     def save(self, fn):
@@ -433,7 +487,7 @@ class Hist2D(HistBase):
     def merge(self, hist2):
         if id(self.cobj) == id(hist2.cobj):
             raise RuntimeError('merging a histogram with itself. The histogram can be scaled up by 2 instead')
-        _pt_Hist2D_merge(self.cobj, hist2.cobj)
+        raiseOnBridgeError(_pt_Hist2D_merge(self.cobj, hist2.cobj))
 
 
 _pt_Est1D_new = importFunc('pt_Est1D_new', type_voidp, [type_dbl, type_dbl, type_uint, type_bool])
@@ -442,7 +496,13 @@ _pt_Est1D_fill = importFunc('pt_Est1D_fill', None, [type_voidp, type_dbl, type_d
 
 class Est1D(Hist1D):
     def __init__(self, xmin, xmax, num, linear=True):
-        super().__init__(xmin, xmax, num, linear)
+        # A real pt::Est1D, not the pt::Hist1D that Hist1D.__init__ would
+        # create from the geometry arguments: the error-channel behaviour
+        # (quadrature merge, |f|-linear scale) lives in the derived-class
+        # vtable, and the pt_Est1D_delete in __del__ must pair with
+        # pt_Est1D_new instead of deleting a base-constructed object.
+        super().__init__(cobj=_pt_Est1D_new(xmin, xmax, num, linear))
+        self.managedBySelf = True
 
     def __del__(self):
         _pt_Est1D_delete(self.cobj)
@@ -457,17 +517,18 @@ class Est1D(Hist1D):
     def getError(self):
         return self.getHit() #hit contains error in this class
 
-    def plot(self, show=False, label=None):
+    def plot(self, show=False, label=None, title=None, log=False, sigma=1, ax=None):
+        """Errorbar plot aligned with Hist1D.plot; the error bars come from
+        getError(). See Hist1D.plot for the shared contract."""
         try:
             import matplotlib.pyplot as plt
-            center = self.getCentre()
-            w = self.getWeight()
-            err = self.getError()
-            plt.errorbar(center, w, yerr=err, fmt='o', label=label)
-            if show:
-                plt.show()
+            from Cinema.Interface import plotStyle
+            plotStyle()
+
+            return self._errorbarPlot(self.getError(), show, label, title, log, sigma, ax)
         except Exception as e:
             print (e)
+            raise
 
 class SpectrumEstimator(Hist1D):
     def __init__(self, xmin, xmax, num, linear=True):
@@ -487,17 +548,18 @@ class SpectrumEstimator(Hist1D):
         err = np.divide(self.getWeight(), uncet, where=(uncet!=0.))
         return err
 
-    def plot(self, show=False, label=None):
+    def plot(self, show=False, label=None, title=None, log=False, sigma=1, ax=None):
+        """Errorbar plot aligned with Hist1D.plot; the error bars come from
+        getError(). See Hist1D.plot for the shared contract."""
         try:
             import matplotlib.pyplot as plt
-            center = self.getCentre()
-            w = self.getWeight()
-            err = self.getError()
-            plt.errorbar(center, w, yerr=err, fmt='o', label=label)
-            if show:
-                plt.show()
+            from Cinema.Interface import plotStyle
+            plotStyle()
+
+            return self._errorbarPlot(self.getError(), show, label, title, log, sigma, ax)
         except Exception as e:
             print (e)
+            raise
 
 
 
@@ -538,7 +600,9 @@ class NumpyHist1D():
         return self.xedges
 
     def getYedges(self):
-        return self.yedges
+        # a 1D histogram has no y axis; fail with an explicit message instead
+        # of AttributeError on the non-existing self.yedges attribute
+        raise RuntimeError('NumpyHist1D is one-dimensional and has no y edges')
 
 # Class NumpyHist2D is written to validate the class Hist2D only. It shouldn't be used in practice due to its significantly slower performance.
 class NumpyHist2D():

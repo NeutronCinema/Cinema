@@ -36,7 +36,16 @@ def atomNum_Sphere(d2o_r,  v_r): # mm
     return d2o_atomNum, v_atomNum
 
 def reduction(rundata, moduleName):
-    idf = IDFLoader('/data/caixx/mpi_experiment_2022/idf') # sftp://yangni@10.1.252.112/data/caixx/..
+    # Directory with the MPI2022 IDF pixel-layout files: point
+    # CINEMA_MPI2022_DATA at a site-specific absolute location; the default is
+    # the relative path 'mpi_experiment_2022/idf' (resolved against the
+    # working directory).
+    idf_dir = os.environ.get('CINEMA_MPI2022_DATA')
+    if not idf_dir:
+        print('Warning: CINEMA_MPI2022_DATA is not set - falling back to the '
+              "relative default 'mpi_experiment_2022/idf'")
+        idf_dir = 'mpi_experiment_2022/idf'
+    idf = IDFLoader(idf_dir)
     tree = idf.query(moduleName)
 
     mod2sample = 30000. # length unit: mm

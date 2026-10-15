@@ -4,6 +4,48 @@ Prompt: Probability-Conserved Cross Section Biasing Monte Carlo Particle Transpo
 
 Introduction of system can be found at [Computer Physics Communications](https://doi.org/10.1016/j.cpc.2023.109004).
 
+## Python API quick start
+
+The fastest way to get Prompt is the pre-built conda package:
+
+```
+conda install csns::cinema-prompt
+```
+
+Simulations are defined in Python: subclass `Prompt` (serial) or `PromptMPI` (MPI-parallel), build the geometry in `makeWorld()`, then run it with `simulate()`:
+
+```python
+from Cinema.Prompt import PromptMPI
+from Cinema.Prompt.solid import Box
+from Cinema.Prompt.geo import Volume, Transformation3D
+from Cinema.Prompt.scorer import TOFHelper
+from Cinema.Prompt.gun import UniModeratorGun
+
+class Simulation(PromptMPI):
+    def makeWorld(self):
+        world = Volume("world", Box(50, 50, 210))
+        sample = Volume("sample", Box(10, 10, 1), matCfg='Ge_sg227.ncmat')
+        world.placeChild("sample", sample, transf=Transformation3D(0, 0, 100))
+        tof = TOFHelper("TOF", ptstate='ABSORB')
+        tof.make(sample)
+        self.setWorld(world)
+
+gun = UniModeratorGun()
+gun.setSource([10, 10, -200])
+gun.setSlit([5, 5, -20])
+
+sim = Simulation()
+sim.makeWorld()
+sim.simulate(gun, 1e6)
+
+hist = sim.gatherHistData("TOF")   # fetch the histogram by scorer name
+hist.savefig("tof.png")            # quick matplotlib export
+```
+
+Without the last two lines the run leaves no persistent output: results live in memory only, so gather them (or call `sim.save_all_scorers()`) before the process exits.
+
+A complete, runnable version of this example (a Germanium single-crystal slab with a TOF scorer) is [doc/example_basic.py](https://code.ihep.ac.cn/cinema-developers/cinema/-/blob/master/doc/example_basic.py). The full documentation — your first simulation, geometry, guns, scorers, histogram analysis — lives in the [wiki](https://code.ihep.ac.cn/cinema-developers/cinema/-/wikis/home).
+
 ## Installation 
 ### Install pre-built conda package on linux
 
@@ -44,6 +86,8 @@ Then source `env.sh`
 ```
 
 ## Runing simulations
+
+> **Legacy (v1).** The GDML input workflow below (`prompt -g file.gdml`) and the auto-generated `*_view.py` plotting scripts are legacy v1 functionality, kept so that old workflows keep running. They must not be used for new work — define geometry, guns and scorers with the Python API above, which is the supported path.
 
 ### Input by GDML file
 After installation, GDML formatted simulation input files can be launched by Prompt as   

@@ -13,7 +13,9 @@ def run_command(command):
 
 def main():
     parser = argparse.ArgumentParser(description="Build and test cinema.")
-    parser.add_argument('-t', action='store_const', const='test', dest='testflag', help='Run tests.')
+    parser.add_argument('-t', action='count', default=0, dest='testflag',
+                        help='Run tests, fastest tier only (-t). Repeat for more: '
+                             '-tt adds medium tests, -ttt runs everything incl. slow.')
     build_group = parser.add_mutually_exclusive_group()
     build_group.add_argument('-d', action='store_const', const='Debug', dest='buildtype', help='Build in debug mode.')
     build_group.add_argument('-r', action='store_const', const='Release', dest='buildtype', help='Build in release mode.')
@@ -59,17 +61,26 @@ def main():
 
     run_command('make -j')
 
-    if args.testflag == 'test':
+    if args.testflag >= 1:
         cpu_count = os.cpu_count()
         if cpu_count is None:
             test_cpu_count = 1
         else:
             test_cpu_count = cpu_count // 2
         print(f"Running tests with {test_cpu_count} CPUs")
-        run_command(f'ctest -j{test_cpu_count}')
+        # -E python-tests: that single ctest entry re-runs the full pytest
+        # suite; pytest_tree.py below covers Python with the tier filter.
+        run_command(f'ctest -j{test_cpu_count} -E "^python-tests$"')
 
-        # Python tests tree detail
-        subprocess.run([sys.executable, os.path.join(cinema_path, 'scripts', 'pytest_tree.py')])
+        # Python tests, tiered by the markers registered in
+        # src/pythontests/conftest.py: fast (unmarked) / medium / slow.
+        tier = 'full' if args.testflag >= 3 else ('medium' if args.testflag == 2 else 'fast')
+        print(f"Python tests: {tier} tier")
+        # Python tests tree detail; its exit code gates the build like ctest's
+        ret = subprocess.run([sys.executable, os.path.join(cinema_path, 'scripts', 'pytest_tree.py'),
+                              '--tier', tier])
+        if ret.returncode != 0:
+            exit(ret.returncode)
     else:
         print("Skipped unittest")
 

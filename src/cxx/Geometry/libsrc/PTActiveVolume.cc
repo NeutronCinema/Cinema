@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -102,7 +102,16 @@ void Prompt::ActiveVolume::getNormal(const Vector& pos, Vector &normal) const
 {
   const auto &vegpos = *reinterpret_cast<const vecgeom::Vector3D<vecgeom::Precision>*>(&pos);
   auto &vegnormal = *reinterpret_cast<vecgeom::Vector3D<vecgeom::Precision>*>(&normal);
-   m_currState->Top()->Normal(vegpos, vegnormal);
+  // VPlacedVolume::Normal expects the point in the mother frame and returns the
+  // normal in the mother frame, so calling it directly with a world point only
+  // works for direct children of an identity world. Use the full navigation
+  // chain transformation instead (the same one BVHNavigator uses for its
+  // global-to-local conversion) to get a lab frame normal for any nesting.
+  vecgeom::Transformation3D m;
+  m_currState->TopMatrix(m);
+  vecgeom::Vector3D<vecgeom::Precision> ln;
+  m_currState->Top()->GetUnplacedVolume()->Normal(m.Transform(vegpos), ln);
+  m.InverseTransformDirection(ln, vegnormal);
 }
 
 
@@ -214,14 +223,7 @@ void Prompt::ActiveVolume::scoreExit(Prompt::Particle &particle)
     setCurrentTracingState(Scorer::ScorerType::EXIT);
     for(auto &v:m_matphysscor->exit_scorers)
     {
-      // to act along with the Prompt::ScorerRotatingObj::score method,
-      // disable the effective energy and direction, by setting the direction to null
-      if(particle.hasEffEnergy())
-          particle.setEffDirection(Vector());
-      else
-      {
-        v->score(particle);
-      }
+      v->score(particle);
     }
   }
 }
@@ -347,7 +349,8 @@ bool Prompt::ActiveVolume::proprogateInAVolume(Particle &particle)
   #endif
   
   // Here is the state just before interaction
-  // FIXME: absorption reaction will score twice for PEA_PRE type scorer, affects Volfluence
+  // PEA_PRE scores here once per segment; absorption no longer double-fires it
+  // (the absorb_scorers registration for PEA_PRE was removed in ResourceManager::addScorer)
   if(sameVolume)
     scorePropagatePre(particle);
 

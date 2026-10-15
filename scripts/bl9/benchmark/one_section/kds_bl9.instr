@@ -31,7 +31,7 @@ DEFINE INSTRUMENT bl9_guide (
 * The following line is necessary for mcrun to find all the libraried needed.
 * Must be modified accordingly to path of installation.
 ********************************************************************************/
-DEPENDENCY "-lkdsource -lmcpl -lm -I/home/panzy/project/ml/external/KDSource/install/include -L/home/panzy/project/ml/external/KDSource/install/lib"
+DEPENDENCY "-lkdsource -lmcpl -lm -I<KDSource-install-prefix>/include -L<KDSource-install-prefix>/lib"
 DECLARE 
 %{
 int DistSrcDet = 1;
@@ -52,7 +52,7 @@ AT (0,0,0) ABSOLUTE
 
 // Checked origin as (0,0,0)
 COMPONENT source = KDSource(
- sourcefile = "/home/panzy/project/ml/scripts/bl9/source/source.xml", use_kde = 1,
+ sourcefile = "<bl9-scripts-dir>/source/source.xml", use_kde = 1,
  loop = 1)
 AT (0,0,0) RELATIVE origin
 

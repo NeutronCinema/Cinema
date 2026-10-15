@@ -379,7 +379,25 @@ class CinemaXYZ(Array2DCoordinateMixin, Array2DPlotMixin, CinemaArray):
             xedges=edges[0],  # Use keyword arguments consistently
             yedges=edges[1]
         )
-    
+
+    @classmethod
+    def from_hdf5(cls, fname, **kwargs):
+        """Initialize from a 2D histogram .h5 file written by Hist2D.save.
+
+        The file stores datasets xcenter/ycenter/xedge/yedge/weight/sdev
+        (see Hist2D.save in Cinema/Prompt/histogram/Hist.py).
+        """
+        import h5py
+        with h5py.File(fname, 'r') as f:
+            w = f['weight'][:]
+            sdev = f['sdev'][:]
+            x = f['xcenter'][:]
+            y = f['ycenter'][:]
+            xedges = f['xedge'][:]
+            yedges = f['yedge'][:]
+            return cls.from_sdev(mean=w, sdev=sdev, x=x, y=y,
+                                 xedges=xedges, yedges=yedges, **kwargs)
+
     @classmethod
     def from_function(cls, func, x, y, **kwargs):
         """Create from a function evaluated on a grid"""

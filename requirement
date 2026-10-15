@@ -2,11 +2,18 @@
 # numba==0.55.1
 
 #required packages for Prompt visualisation
-ncrystal
-ncrystal-pypluginmgr
-git+https://code.ihep.ac.cn/cinema-developers/ncplugin-bzscope
-git+https://github.com/highness-eu/ncplugin-SANSND.git
-# mpi4py
+# NOTE: NCrystal and its C++ plugins are unified on the conda environment and
+# must NOT be pip-installed into cinema's python environment (having two
+# NCrystal sources in one process leads to subtle breakage). Install plugins
+# with their standard "pip install ." (into the conda env), e.g.:
+#   ncplugin-sascsns:  pip install ncplugin-sascsns/
+#   ncplugin-bzscope:  pip install git+https://code.ihep.ac.cn/cinema-developers/ncplugin-bzscope
+#   ncplugin-SANSND:   pip install git+https://github.com/highness-eu/ncplugin-SANSND.git
+# ncrystal
+# ncrystal-pypluginmgr
+# git+https://code.ihep.ac.cn/cinema-developers/ncplugin-bzscope
+# git+https://github.com/highness-eu/ncplugin-SANSND.git
+mpi4py
 # pyvista
 # matplotlib
 mcpl
@@ -36,5 +43,9 @@ gvar
 #motor  #asynchronous
 
 # optimization
-# optuna
+optuna
 # mysqlclient
+
+#testing (gates cimbuild -t and the pre-push hook via scripts/pytest_tree.py)
+pytest
+pytest-forked

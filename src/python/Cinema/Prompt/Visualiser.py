@@ -2,9 +2,9 @@
 
 ################################################################################
 ##                                                                            ##
-##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
+##  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    ##
 ##                                                                            ##
-##  Copyright 2021-2024 Prompt developers                                     ##
+##  Copyright 2021-2026 Cinema developers                                     ##
 ##                                                                            ##
 ##  Licensed under the Apache License, Version 2.0 (the "License");           ##
 ##  you may not use this file except in compliance with the License.          ##
@@ -29,13 +29,15 @@ from ..Interface import *
 
 import random
 import matplotlib.colors as mcolors
+from .launcher import ensureDisplayUsable
 from .Mesh import Mesh, generateVolumetricMesh
 
 try:
     import pyvista as pv
-except Exception as e:
-    print(e)
-    sys.exit(1)
+except Exception:
+    # raise (matching Mesh.py), not sys.exit: importing this module from a
+    # library must fail with a normal catchable exception
+    raise ImportError("pyvista is required to visualize.")
 
 high_contrast_colors = ["#FF0000","#FF4500","#FF8C00","#FFD700","#FFFF00","#FF6347","#CD5C5C",
     "#0000FF","#1E90FF","#00BFFF","#00FFFF","#00FF00","#32CD32","#2E8B57","#20B2AA",
@@ -449,6 +451,8 @@ class Visualiser():
 
     def show(self):
         self._plot_geo_and_trj()
+        if not ensureDisplayUsable():
+            self.plotter.off_screen = True # no usable X server, render off-screen
         if self._web:
             self.show_web(mode=self._web_mode, port=self._web_port,
                           host=self._web_host, open_browser=self._web_open_browser,

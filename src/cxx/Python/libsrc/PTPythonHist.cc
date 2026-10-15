@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -24,8 +24,16 @@
 #include "PTHist2D.hh"
 #include "PTEst1D.hh"
 
+#include <exception>
+
 
 namespace pt = Prompt;
+
+// Shared error protocol of the extern "C" bridges (defined in
+// PTPythonResource.cc): a nonzero status (1 = Prompt::Error, 2 = other) plus
+// the message in the thread-local buffer read back via pt_last_error(),
+// instead of an exception crossing the ctypes boundary and aborting the host.
+extern "C" int pt_bridge_record_error();
 
 
 unsigned pt_HistBase_dimension(void* obj)
@@ -33,10 +41,19 @@ unsigned pt_HistBase_dimension(void* obj)
   return static_cast<pt::HistBase *>(obj)->dimension();
 }
 
-void pt_HistBase_merge(void* obj, void* obj2)
+// Bridged: HistBase::merge throws CalcError on mismatched xmin/xmax/nbins;
+// report the rejection through the status-plus-pt_last_error() protocol
+// instead of letting the exception abort the host process.
+int pt_HistBase_merge(void* obj, void* obj2)
 {
-  auto hist1 = static_cast<pt::HistBase*>(obj);
-  hist1->merge(*static_cast<pt::HistBase*>(obj2));
+  try {
+    auto hist1 = static_cast<pt::HistBase*>(obj);
+    hist1->merge(*static_cast<pt::HistBase*>(obj2));
+    return 0;
+  }
+  catch (...) {
+    return pt_bridge_record_error();
+  }
 }
 
 void pt_HistBase_setWeight(void *obj, double *data, size_t n)
@@ -142,12 +159,19 @@ void pt_HistBase_getHit(void* obj, double* data)
 
 const char* pt_HistBase_getName(void* obj)
 {
-  return static_cast<pt::Hist1D *>(obj)->getName().c_str();
+  // getName() returns a temporary std::string; keep a copy alive so the
+  // c_str() handed to ctypes outlives the call (ctypes reads it afterwards).
+  static thread_local std::string buf;
+  buf = static_cast<pt::Hist1D *>(obj)->getName();
+  return buf.c_str();
 }
 
 const char* pt_HistBase_getNote(void* obj)
 {
-  return static_cast<pt::HistBase *>(obj)->getNote().c_str();
+  // same lifetime consideration as pt_HistBase_getName
+  static thread_local std::string buf;
+  buf = static_cast<pt::HistBase *>(obj)->getNote();
+  return buf.c_str();
 }
 
 void pt_HistBase_addNote(void* obj, const char* note)
@@ -235,10 +259,19 @@ void pt_Hist2D_getWeight(void* obj, double* w)
   }
 }
 
-void pt_Hist2D_merge(void* obj, void* obj2)
+// Bridged: same protocol as pt_HistBase_merge - Hist2D::merge adds binning
+// checks plus a reference dynamic_cast that throws std::bad_cast on a
+// cross-type argument.
+int pt_Hist2D_merge(void* obj, void* obj2)
 {
-  auto hist1 = static_cast<pt::Hist2D*>(obj);
-  hist1->merge(*static_cast<pt::HistBase*>(obj2));
+  try {
+    auto hist1 = static_cast<pt::Hist2D*>(obj);
+    hist1->merge(*static_cast<pt::HistBase*>(obj2));
+    return 0;
+  }
+  catch (...) {
+    return pt_bridge_record_error();
+  }
 }
 
 double pt_Hist2D_getYMin(void* obj)

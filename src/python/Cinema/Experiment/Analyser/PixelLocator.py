@@ -2,9 +2,9 @@
 
 ################################################################################
 ##                                                                            ##
-##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
+##  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    ##
 ##                                                                            ##
-##  Copyright 2021-2024 Prompt developers                                     ##
+##  Copyright 2021-2026 Cinema developers                                     ##
 ##                                                                            ##
 ##  Licensed under the Apache License, Version 2.0 (the "License");           ##
 ##  you may not use this file except in compliance with the License.          ##
@@ -152,7 +152,8 @@ class PixelLocator(KDTree):
         qtsq = hist1d2.getWeight()
         hist1d.plot()
         hist1d2.plot(True)
-        return hist1d.getCentre(), np.divide(qtsq, qesq, where=(qesq!=0))
+        return hist1d.getCentre(), np.divide(qtsq, qesq, where=(qesq!=0),
+                                             out=np.zeros_like(qtsq, dtype=float))
 
 class IDFLoader():
     def __init__(self, dir):

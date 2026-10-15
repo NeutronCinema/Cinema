@@ -411,3 +411,27 @@ export NCRYSTAL_DATA_PATH="$CINEMAPATH/ncmat"
 export PATH="$CINEMAPATH/src/python/ptgeo/examples:$PATH"
 export PYTHONPATH="$CINEMAPATH:$PYTHONPATH"
 echo "Added the ptgeo example directory into environment"
+
+# NCrystal C++ plugins installed as pip packages (e.g. ncrystal-plugin-SasCSNS)
+# are discovered by the NCrystal library via the "ncrystal-pluginmanager"
+# command of the python environment they were installed into (e.g. a conda env).
+# Cinema's python environment deliberately does not contain NCrystal anymore
+# (NCrystal is unified on the conda environment), so if that command is not on
+# PATH, resolve the plugin list here and hand it over explicitly. Note that a
+# non-empty NCRYSTAL_PLUGIN_LIST replaces (not extends) automatic discovery, so
+# it must contain ALL plugin libraries (colon-separated):
+if ! command -v ncrystal-pluginmanager > /dev/null 2>&1 ; then
+  # not on PATH: fall back to the bin/ of the NCrystal install prefix
+  # (NCRYSTAL_LIB points at <prefix>/lib/libNCrystal.so, e.g. of a conda env)
+  NCRYSTAL_PLUGINMANAGER="$(dirname "$(dirname "${NCRYSTAL_LIB:-}")")/bin/ncrystal-pluginmanager"
+  if [ ! -x "$NCRYSTAL_PLUGINMANAGER" ]; then
+    NCRYSTAL_PLUGINMANAGER=
+  fi
+else
+  NCRYSTAL_PLUGINMANAGER=ncrystal-pluginmanager
+fi
+if [ -n "${NCRYSTAL_PLUGINMANAGER:-}" ] && [ -z "${NCRYSTAL_PLUGIN_LIST:-}" ]; then
+  # strip trailing ';' the pluginmanager appends to each path: a trailing ';'
+  # in NCRYSTAL_PLUGIN_LIST makes NCrystal abort on the first plugin load
+  export NCRYSTAL_PLUGIN_LIST="$($NCRYSTAL_PLUGINMANAGER 2>/dev/null | grep -v ':DATA:' | sed 's/;[[:space:]]*$//' | paste -sd ':' -)"
+fi

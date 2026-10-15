@@ -15,7 +15,7 @@ meV = 1e-3*eV
 
 s = 1.
 ps = s*1e-12
-fs = s*1e15
+fs = s*1e-15
 THz=1e12/s
 
 c = 299792458*m/s

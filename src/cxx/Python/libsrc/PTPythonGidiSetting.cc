@@ -30,7 +30,13 @@ void pt_GidiSetting_setGidiThreshold(void* obj, double t)
 
 const char * pt_GidiSetting_getGidiPops(void* obj)
 {
-    return static_cast<pt::GidiSetting *>(obj)->getGidiPops().c_str();
+    // getGidiPops() returns a temporary std::string; returning c_str() of it
+    // directly hands ctypes a dangling pointer (observed as UnicodeDecodeError
+    // on the python side). Keep the composed string alive until the next call
+    // on this thread so the returned const char* stays valid for the read.
+    static thread_local std::string buf;
+    buf = static_cast<pt::GidiSetting *>(obj)->getGidiPops();
+    return buf.c_str();
 }
 
 void pt_GidiSetting_setGidiPops(void* obj, const char *s)
@@ -40,7 +46,10 @@ void pt_GidiSetting_setGidiPops(void* obj, const char *s)
 
 const char * pt_GidiSetting_getGidiMap(void* obj)
 {
-    return static_cast<pt::GidiSetting *>(obj)->getGidiMap().c_str();
+    // Same lifetime consideration as pt_GidiSetting_getGidiPops above.
+    static thread_local std::string buf;
+    buf = static_cast<pt::GidiSetting *>(obj)->getGidiMap();
+    return buf.c_str();
 }
 
 void pt_GidiSetting_setGidiMap(void* obj, const char *s)

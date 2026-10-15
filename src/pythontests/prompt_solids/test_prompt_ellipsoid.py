@@ -2,6 +2,7 @@
 
 from Cinema.Prompt import Prompt, PromptMPI
 from Cinema.Prompt.geo import Volume, Transformation3D
+import pytest
 from Cinema.Prompt.solid import Box,Tube, Ellipsoid
 from Cinema.Prompt.scorer import makePSD, ESpectrumHelper, WlSpectrumHelper, TOFHelper
 from Cinema.Prompt.gun import PythonGun
@@ -13,6 +14,7 @@ from Cinema.Prompt.gun import UniModeratorGun
 import numpy as np
 
 
+@pytest.mark.medium  # ~0.29 s body: medium tier (cimbuild -tt/-ttt), skipped by the pre-push hook
 def test_simulation():
     para_half_length = 1000
     para_source_location = -2000
@@ -76,5 +78,12 @@ def test_simulation():
     else:
         sim.simulate(gun, 1e5)
         print(list(psd2.getWeight().sum(0)), sep=',')
-        expected_value = [0.0, 0.0, 19.0, 99.0, 138.0, 192.0, 207.0, 206.0, 217.0, 231.0, 234.0, 191.0, 224.0, 181.0, 200.0, 158.0, 92.0, 11.0, 0.0, 0.0]
+        # Reference re-calibrated 2026-10-11 (one sim per process, seed=1010) after the
+        # PEA_PRE absorb double-count fix + the Mirror loss-branch kill: every neutron
+        # entering the ellipsoid bore crosses a flat truncation face at near-normal
+        # incidence (Q ~ 3.5-3.9 A^-1 >> m*Qc with m=10), so the Mirror roulette now
+        # absorbs all 23724 bore entrants and det2 counts nothing.  The previous
+        # reference (sum 2600) counted roulette losers that were transmitted through
+        # the wall with weight 1 before the fix.
+        expected_value = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         np.testing.assert_allclose(psd2.getWeight().sum(0), expected_value)

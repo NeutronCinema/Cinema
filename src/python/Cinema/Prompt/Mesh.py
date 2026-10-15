@@ -1,8 +1,8 @@
 ################################################################################
 ##                                                                            ##
-##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
+##  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    ##
 ##                                                                            ##
-##  Copyright 2021-2024 Prompt developers                                     ##
+##  Copyright 2021-2026 Cinema developers                                     ##
 ##                                                                            ##
 ##  Licensed under the Apache License, Version 2.0 (the "License");           ##
 ##  you may not use this file except in compliance with the License.          ##
@@ -20,7 +20,6 @@
 
 from ..Interface import *
 from enum import Enum
-import sys
 
 try:
     import pyvista as pv
@@ -37,10 +36,11 @@ _pt_Transformation3D_print = importFunc('pt_Transformation3D_print', ctypes.c_ch
 def generateVolumetricMesh(mesh : pv.PolyData) -> pv.PolyData:
     try:
         from tetgen import TetGen
-    except Exception as e:
-        print(e)
-        print("tetgen is required. Use 'pip install tetgen' to install. ")
-        sys.exit(1)
+    except Exception:
+        # raise, not sys.exit: library users (Visualiser.loadMesh has a
+        # documented fall-back-without-geoClip path) must survive a missing
+        # optional dependency
+        raise ModuleNotFoundError("tetgen is required. Use 'pip install tetgen' to install.")
 
     mesh.triangulate(inplace=True)
     tet = TetGen(mesh)

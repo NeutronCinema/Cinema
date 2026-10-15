@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -126,6 +126,10 @@ void Prompt::Hist1D::fill(double val, double w)
   }
 
   unsigned i = m_linear ? floor((val-m_xmin)*m_binfactor) : floor((log10(val)-m_logxmin)*m_binfactor) ;
+  //val==xmax computes the one-past-the-last bin index (floor(nbins)); clamp it
+  //into the last bin, as the [xmin, xmax] range is right-closed here
+  if(i>=m_nbins)
+    i=m_nbins-1;
   m_data[i] += w;
   m_hit[i] += 1;
   m_ww[i] += w*w;

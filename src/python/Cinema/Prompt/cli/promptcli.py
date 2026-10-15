@@ -4,14 +4,21 @@ from Cinema.Prompt import Prompt, PromptMPI, Visualiser
 from Cinema.Prompt.launcher import Launcher
 from Cinema.Prompt.gun import Gun
 import argparse
+import ast
 import inspect
 import importlib.util
+import types
 from Cinema.Interface.Utils import findData
 import os
 import sys
-from typing import Dict, Any, Type, Optional, List, Set, get_type_hints, Union, TypeVar
+from typing import Dict, Any, Type, Optional, List, Set, get_type_hints, get_origin, get_args, Union, TypeVar
 
 T = TypeVar('T')
+
+# get_origin markers of both union spellings: `typing.Union[...]` and PEP 604 `X | None`
+_UNION_ORIGINS = {Union}
+if hasattr(types, 'UnionType'):
+    _UNION_ORIGINS.add(types.UnionType)
 
 def str_or_float(value: str):
     import re
@@ -23,6 +30,19 @@ def str_or_float(value: str):
             return float(value)
         except ValueError:
             return value
+
+def parse_literal(value: str):
+    """Parse a python literal (the parser attached to list/dict options)
+
+    Raises
+    ------
+    ValueError
+        If `value` is not a valid python literal.
+    """
+    try:
+        return ast.literal_eval(value)
+    except (ValueError, TypeError, SyntaxError) as e:
+        raise ValueError(f"invalid literal: {value!r}") from e
 
 def _web_kwargs(args):
     """Map the --web* CLI flags onto Visualiser web kwargs ({} if --web is off)."""
@@ -96,8 +116,32 @@ def analyze_class_constructor(cls):
         }
         
         params_info[param_name] = param_info
-        
+
     return params_info
+
+def resolve_hint_kind(hint, default=inspect.Parameter.empty):
+    """Degrade a constructor type hint to the plain builtin kind the CLI parses
+
+    `Optional[X]` drops its NoneType member and degrades to `X`, list/dict
+    generics (e.g. `List[float]`) degrade to `list`/`dict`, and an `Any` or
+    missing hint borrows the kind of the default value. Returns None when no
+    builtin kind applies (the option then stays a plain string, coerced later
+    by `str_or_float`).
+    """
+    if hint is Any or hint is inspect.Parameter.empty:
+        if default is not inspect.Parameter.empty and \
+                type(default) in (list, dict, int, float, str, bool):
+            return type(default)
+        return None
+    if get_origin(hint) in _UNION_ORIGINS:
+        members = [a for a in get_args(hint) if a is not type(None)]
+        if len(members) != 1:
+            return None
+        hint = members[0]
+    origin = get_origin(hint)
+    if origin in (list, dict):
+        return origin
+    return hint if hint in (list, dict, int, float, str, bool) else None
 
 def build_argument_help(info: Dict[str, Any]) -> str:
     help_parts = []
@@ -125,11 +169,21 @@ def parser_factory():
     args, unknown = parser.parse_known_args()
 
     if len(sys.argv) <= 1:
-        raise ValueError("Not enough arguments!")
+        parser = PromptBaseParser(parents=[parser])
+        parser.print_help()
+        sys.exit(1)
     elif args.geo == '':
-        parser = PromptBaseParser()
+        parser = PromptBaseParser(parents=[parser])
         raise ValueError("Prompt simulation can not run without a geometry file!")
     elif args.geo.endswith('.py'):
+        if any(a in ('-h', '--help') for a in sys.argv):
+            # loading the script is unavoidable here: the per-class command line
+            # options are parsed from the classes it defines, so -h is not
+            # import-safe. Warn before the side effect instead of hiding it.
+            print("NOTE: with a `.py` geometry file, -h/--help first executes the "
+                  "script's module level (per-class options are parsed from the "
+                  "loaded classes). Keep makeWorld in the simulation constructor, "
+                  "not at module level, if the script is imported elsewhere.")
         parser = PromptPyScriptParser(add_help = False, parents = [parser])
     elif args.geo.endswith('.gdml'):
         parser = PromptGdmlParser(add_help = False, parents = [parser])
@@ -163,6 +217,7 @@ class PromptBaseParser(argparse.ArgumentParser):
         """ + des
         super().__init__(*args, **kwargs, description=description, formatter_class=RawNoMetavarFormatter)
         self.general_arguments = self.set_general_arguments()
+        self.debug = getattr(self.general_arguments, 'debug', False)
 
     def set_visualize_arguments(self):
         g = self.add_argument_group('Visualization Arguments')
@@ -231,7 +286,7 @@ class PromptGdmlParser(PromptBaseParser):
         if args.visualize is True:
             v = Visualiser(args.blacklist, printWorld=False, nSegments=args.nSegments, mergeMesh=args.mergemesh, doDumpMesh=args.dumpmesh, **_web_kwargs(args))
             for i in range(int(args.neutronNum)):
-                myLcher.go(1, recordTrj=True, timer=False, save2Dis=False)
+                myLcher.go(1, recordTrj=True, timer=False, save2Disk=False)
                 trj = myLcher.getTrajectory()
                 try:
                     v.addTrj(trj)
@@ -287,21 +342,21 @@ class PromptPyScriptParser(PromptBaseParser):
                 'dest': param_name,
                 'help': build_argument_help(info)
             }
-            if info['type'] in (int, float, str, bool):
-                arg_kwargs['type'] = info['type']
-            elif info['type'] is list:
-                arg_kwargs['type'] = lambda x: eval(x)
-                arg_kwargs['help'] += " (eg.: '[1, 2, 3]')"
-            elif info['type'] is dict:
-                arg_kwargs['type'] = lambda x: eval(x)
-                arg_kwargs['help'] += " (eg.: '{'key': 'value'}')"
-            
+            kind = resolve_hint_kind(info['type'], info['default'])
+            if kind in (int, float, str, bool):
+                arg_kwargs['type'] = kind
+            elif kind in (list, dict):
+                arg_kwargs['type'] = parse_literal
+                arg_kwargs['help'] += " (eg.: '[1, 2, 3]')" if kind is list else " (eg.: '{'key': 'value'}')"
+
             if info['default'] is not inspect.Parameter.empty:
                 arg_kwargs['default'] = info['default']
             else:
                 arg_kwargs['required'] = True
-            
-            if info['type'] is bool:
+
+            if kind is bool:
+                # store_true/store_false actions do not accept the `type` kwarg
+                arg_kwargs.pop('type', None)
                 if info['default'] is True:
                     group.add_argument(f"--no-{param_name}", action='store_false', **arg_kwargs)
                 else:
@@ -325,17 +380,27 @@ class PromptPyScriptParser(PromptBaseParser):
         init_params = {}
         
         sig = inspect.signature(targetChildClass.__init__)
+        params_info = analyze_class_constructor(targetChildClass)
         for param_name in sig.parameters:
             if param_name == 'self':
                 continue
-            
+
+            info = params_info[param_name]
+
             if hasattr(parsed_args, param_name):
                 parsedvalue = getattr(parsed_args, param_name)
-                if isinstance(parsedvalue, str):
-                    parsedvalue_typeconversed = str_or_float(parsedvalue)
-                else:
-                    parsedvalue_typeconversed = parsedvalue
-                init_params[param_name] = parsedvalue_typeconversed
+                kind = resolve_hint_kind(info['type'], info['default'])
+                if kind in (list, dict) and isinstance(parsedvalue, str):
+                    # belt and braces: a raw string here reaches the C++ gun
+                    # and aborts without any traceback, so coerce it (or fail
+                    # naming the option) even if the argparse parser was bypassed
+                    try:
+                        parsedvalue = parse_literal(parsedvalue)
+                    except ValueError:
+                        raise ValueError(f"--{param_name} expects a {kind.__name__}, got '{parsedvalue}'")
+                elif isinstance(parsedvalue, str):
+                    parsedvalue = str_or_float(parsedvalue)
+                init_params[param_name] = parsedvalue
             else:
                 param = sig.parameters[param_name]
                 if param.default is not inspect.Parameter.empty:
@@ -361,17 +426,21 @@ class PromptPyScriptParser(PromptBaseParser):
             sim.save_all_scorers()
     
 def main():
-    parser = parser_factory()
+    parser = None
     try:
+        parser = parser_factory()
         parser.simulate()
     except Exception as e:
-        parser.print_help()
-        print()
         print(f'PromptCLI Error: {e}')
-        if hasattr(parser, 'debug') and parser.debug:
+        # `parser` is None when parser_factory() itself failed (e.g. the user
+        # script raised at module level); fall back to the raw flag in argv.
+        if getattr(parser, 'debug', False) or (parser is None and '--debug' in sys.argv):
             import traceback
             traceback.print_exc()
-            exit(1)
+        if parser is not None:
+            print()
+            parser.print_help()
+        sys.exit(1)
 
 if __name__ == '__main__':
 

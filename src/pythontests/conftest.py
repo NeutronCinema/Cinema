@@ -4,7 +4,7 @@ Excludes files with pre-existing issues:
 - Missing dependencies (numba, makeChopper)
 - Broken API (ParticleParameter.get_conversion_factor)
 - Tests requiring external data files (gdml, mcpl)
-- Pre-existing expected value mismatches (solids tests)
+- Expected value mismatches (mirror, pythongun, scorerCfg)
 """
 
 import os
@@ -43,23 +43,39 @@ particle_path = os.path.join(os.path.dirname(__file__), "post_analysis", "test_P
 if os.path.exists(particle_path):
     collect_ignore.append("post_analysis/test_ParticleParameter.py")
 
-# Tests with expected value mismatch (pre-existing environmental issue)
+# Tests with expected value mismatch (pre-existing environmental issue).
+# 2026-10-09: the geometry entries (Arb8, GenTrap, Hype, Orb, Paraboloid,
+# PolyCone, Tet, ellipsoid, setaxis, groupid) were re-checked and now PASS.
+# They were blacklisted 2026-08-21 (def5fbb9) with the reason recorded only as
+# "expected value mismatch". Chronology: the VecGeom v2.0.0-rc2 upgrade
+# (d738880a 2024-08-15) predates this list and the shape transport kernels are
+# essentially unchanged since v1.2.0; the reference data was last calibrated
+# 2024-05-15 (a1bf511c) under VecGeom 1.2 + NCrystal 3.8, so NCrystal drift
+# (conda unification 9537002f 2026-10-08) is the likeliest cause of both the
+# original mismatch and the recovery. Until references are re-derived, treat
+# these tests as weak regression anchors; transport and drawing were
+# independently re-verified 2026-10-09 (neutron tomography + mesh audit).
 expected_mismatch = [
     "test_prompt_mirror.py",
     "test_prompt_pythongun.py",
-    "test_prompt_setaxis.py",
     "test_prompt_scorerCfg.py",
-    "prompt_scorers/test_prompt_groupid.py",
-    "prompt_solids/test_prompt_Arb8.py",
-    "prompt_solids/test_prompt_GenTrap.py",
-    "prompt_solids/test_prompt_Hype.py",
-    "prompt_solids/test_prompt_Orb.py",
-    "prompt_solids/test_prompt_Paraboloid.py",
-    "prompt_solids/test_prompt_PolyCone.py",
-    "prompt_solids/test_prompt_Tet.py",
-    "prompt_solids/test_prompt_ellipsoid.py",
 ]
 for fname in expected_mismatch:
     fpath = os.path.join(os.path.dirname(__file__), fname)
     if os.path.exists(fpath):
         collect_ignore.append(fname)
+
+
+def pytest_configure(config):
+    # Three test tiers, selected by test-body duration:
+    #   fast   (no marker)  < ~50 ms  - pre-push hook and `cimbuild -t`
+    #   medium 50 ms - 0.7 s         - `cimbuild -tt` and `-ttt`
+    #   slow   > 0.7 s                - `cimbuild -ttt` only
+    config.addinivalue_line(
+        "markers",
+        "medium: medium test (roughly 50 ms - 0.7 s body); runs in cimbuild -tt/-ttt, "
+        "skipped by the pre-push hook and cimbuild -t")
+    config.addinivalue_line(
+        "markers",
+        "slow: slow test (>0.7 s body: real simulations, plotting, CLI round-trips); "
+        "runs only in cimbuild -ttt")

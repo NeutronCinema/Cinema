@@ -14,6 +14,7 @@ from Cinema.Prompt.gun import IsotropicGun, PythonGun
 from Cinema.Prompt.component import makeDiskChopper
 
 import numpy as np
+import os
 
 do_optimization = True
 para_lsp = 10000
@@ -179,7 +180,7 @@ sim = MySim(-mod_smp_dist, 0.025100171020, seed=1010)
 #     plt.savefig(f'{fn}.pdf')
 
 if do_optimization:
-    from Cinema.Prompt import Optimiser
+    from Cinema.Prompt.parameterOptimizer import Optimiser
     import subprocess
     class SampleOpt(Optimiser):
         def __init__(self, sim):
@@ -202,7 +203,7 @@ if do_optimization:
             return self.get_std()
     
     opt = SampleOpt(sim)
-    opt.optimize(name='sampleRadius_test', n_trials=10, localhost=False)
+    opt.optimize(name='sampleRadius_test', n_trials=10, storage='sqlite:///optuna_study.db')
     print(opt.study.best_params, opt.study.best_value)
     opt.analysis()
 else:
@@ -269,7 +270,14 @@ else:
 
         from pt_h5Tool import read_hdf5, plot_sw
         from pt_dataFitting import HistPost
-        file = '/home/panzy/project/ml/ncmat/c1_vol_77K.h5'
+        # S(Q,w) table from a phonon calculation: point CINEMA_SQW_FILE at it;
+        # when unset, fall back to a file of that name in the working
+        # directory, with a warning.
+        file = os.environ.get('CINEMA_SQW_FILE')
+        if not file:
+            print('Warning: CINEMA_SQW_FILE is not set - falling back to the '
+                  "relative default 'c1_vol_77K.h5'")
+            file = 'c1_vol_77K.h5'
         w, q, s = read_hdf5(file)
         plt.figure(3001)
         plot_bar(hw, tofDet.getWeight())

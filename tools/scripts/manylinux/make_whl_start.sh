@@ -9,14 +9,14 @@ while getopts "hab:" option
      in
       h) echo "-a               gitee"
          echo "-b               customized git repo"
-         echo "-c               xxc"
          echo "other argument   gitlab"
          echo "no input         default (gitlab)"
          return 0;;
-      a) PREFIX="https://ziyipan:cinema2022@gitee.com/ziyipan";;
+      # no embedded credentials here: private repos need a git credential
+      # helper or an interactive prompt instead
+      a) PREFIX="https://gitee.com/ziyipan";;
       b) echo "Using repository from: "$1
          PREFIX=$1;;
-      c) PREFIX="https://gitlab.com/xxcai1";;
       *) PREFIX="https://gitlab.com/cinema-developers";
     esac 
 done

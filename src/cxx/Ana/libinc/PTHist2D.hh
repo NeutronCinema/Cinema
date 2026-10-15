@@ -3,9 +3,9 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -32,6 +32,13 @@ namespace Prompt {
     explicit Hist2D(const std::string &name, double xmin, double xmax, unsigned nxbins,
                  double ymin, double ymax, unsigned nybins);
     virtual ~Hist2D();
+
+    //Independent copy: rebuilds the geometry through the normal constructor,
+    //then takes over the scored state (the base forbids its own copy)
+    Hist2D(const Hist2D& other)
+    :Hist2D(other.m_name, other.m_xmin, other.m_xmax, other.m_xnbins,
+            other.m_ymin, other.m_ymax, other.m_ynbins)
+    {copyTrivialFrom(other);}
 
     void operator+=(const Hist2D& hist);
     unsigned dimension() const override { return 2; }  

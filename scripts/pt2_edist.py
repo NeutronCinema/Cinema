@@ -13,9 +13,11 @@ from Cinema.Interface import plotStyle
 import numpy as np
 import openmc
 import os
-os.environ['OPENMC_CROSS_SECTIONS']='/home/xxcai1/git/openmc/data/endfb-viii.0-hdf5/cross_sections.xml'
+# openmc reads its cross-section XML (e.g. endfb-viii.0-hdf5/cross_sections.xml)
+# from OPENMC_CROSS_SECTIONS; take it from the environment, no default here.
+os.environ['OPENMC_CROSS_SECTIONS'] = os.environ.get('OPENMC_CROSS_SECTIONS', '')
 
-# export PATH="/home/caixx/git/openmc/build/bin/:$PATH" 
+# export PATH="<openmc-build-dir>/bin:$PATH"
 
 plotStyle()
 
@@ -132,8 +134,8 @@ from openmc.data import K_BOLTZMANN, NEUTRON_MASS
 import numpy as np
 import matplotlib.pyplot as plt
 
-# export PATH="/home/caixx/git/openmc/build/bin:$PATH"
-# (cinemavirenv) caixx@x:~/git/cinema/rundir/del$ export OPENMC_CROSS_SECTIONS=~/git/openmc/build/data/endfb-viii.0-hdf5/cross_sections.xml
+# export PATH="<openmc-build-dir>/bin:$PATH"
+# $ export OPENMC_CROSS_SECTIONS=<openmc-build-dir>/data/endfb-viii.0-hdf5/cross_sections.xml
 
 
 def run(energy, numPart):

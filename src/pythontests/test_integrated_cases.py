@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 
+import os
+
+import pytest
+
 from Cinema.Prompt import PromptMPI
 from Cinema.Prompt.physics import Material
 from Cinema.Prompt.solid import Tube,Box
@@ -10,12 +14,20 @@ from Cinema.Prompt.GidiSetting import GidiSetting
 
 
 def test_integrated_cases():
+    # gidi input data is expected under $CINEMAPATH/external/ptdata;
+    # skip cleanly when the data root is not present in this checkout
+    ptdata = os.path.join(os.environ.get('CINEMAPATH', '.'), 'external', 'ptdata')
+    pops = os.path.join(ptdata, 'pops.xml')
+    gmap = os.path.join(ptdata, 'all.map')
+    if not (os.path.isfile(pops) and os.path.isfile(gmap)):
+        pytest.skip(f"gidi data not available: missing {pops} or {gmap}")
+
     cdata=GidiSetting()
     cdata.setGidiThreshold(5)
     cdata.setEnableGidi(True)
     cdata.setGammaTransport(False)
-    cdata.setGidiPops("/home/zypan/XS/ptdata/pops.xml")
-    cdata.setGidiMap("/home/zypan/XS/ptdata/all.map")
+    cdata.setGidiPops(pops)
+    cdata.setGidiMap(gmap)
 
     class Simulation(PromptMPI):
         def __init__(self, seed=4096) -> None:

@@ -1,8 +1,8 @@
 ################################################################################
 ##                                                                            ##
-##  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        ##
+##  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    ##
 ##                                                                            ##
-##  Copyright 2021-2024 Prompt developers                                     ##
+##  Copyright 2021-2026 Cinema developers                                     ##
 ##                                                                            ##
 ##  Licensed under the Apache License, Version 2.0 (the "License");           ##
 ##  you may not use this file except in compliance with the License.          ##
@@ -31,8 +31,14 @@ class ConfigString(dict):
         >>> print(config.cfg_name)  # Output: 'quantity'
     """
     
-    # Enable attribute-style access to dictionary items
-    __getattr__ = dict.__getitem__
+    # Enable attribute-style access to dictionary items. A missing item must
+    # raise AttributeError instead of KeyError so that hasattr()/3-arg getattr()
+    # and the copy/pickle protocols keep working for all ConfigString subclasses.
+    def __getattr__(self, name):
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(f'{type(self).__name__!r} object has no attribute {name!r}') from None
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
 

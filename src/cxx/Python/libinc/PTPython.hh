@@ -3,9 +3,9 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  This file is part of Prompt (see https://gitlab.com/xxcai1/Prompt)        //
+//  This file is part of Cinema (code.ihep.ac.cn/cinema-developers/cinema)    //
 //                                                                            //
-//  Copyright 2021-2024 Prompt developers                                     //
+//  Copyright 2021-2026 Cinema developers                                     //
 //                                                                            //
 //  Licensed under the Apache License, Version 2.0 (the "License");           //
 //  you may not use this file except in compliance with the License.          //
@@ -43,16 +43,20 @@ double pt_rand_generate();
 // Prompt::Launcher
 void* pt_Launcher_getInstance();
 void pt_Launcher_setSeed(void* obj, uint64_t seed);
-void pt_Launcher_loadGeometry(void* obj, const char* fileName);
+// loadGeometry/go/setGun bridge C++ rejections to python: return 0 on success,
+// nonzero after recording the message retrievable via pt_last_error().
+int pt_Launcher_loadGeometry(void* obj, const char* fileName);
 size_t pt_Launcher_getTrajSize(void* obj);
 void pt_Launcher_getTrajectory(void* obj, double *trj);
-void pt_Launcher_go(void* obj, uint64_t numParticle, double printPrecent, bool recordTrj, bool timer, bool save2Disk);
-void pt_Launcher_setGun(void *obj, const char* cfg);
+int pt_Launcher_go(void* obj, uint64_t numParticle, double printPrecent, bool recordTrj, bool timer, bool save2Disk);
+int pt_Launcher_setGun(void *obj, const char* cfg);
 void pt_Launcher_simOneEvent(void *obj, bool recordTrj);
 size_t pt_Launcher_goWithSecondStack(void *obj, uint64_t numParticle);
 
 // Prompt::HistBase
-void pt_HistBase_merge(void* obj, void* obj2);
+// merge bridges return an int status (0 ok / nonzero error, message via
+// pt_last_error()) so a rejected merge raises in python instead of aborting.
+int pt_HistBase_merge(void* obj, void* obj2);
 void pt_HistBase_setWeight(void *obj, double *data, size_t n);
 void pt_HistBase_setHit(void *obj, double *data, size_t n);
 void pt_HistBase_setWW(void *obj, double *data, size_t n);
@@ -102,7 +106,7 @@ void pt_Hist2D_getDensity(void* obj, double* d);
 void pt_Hist2D_getHit(void* obj, double* h);
 void pt_Hist2D_fill(void* obj, double xval, double yval, double weight);
 void pt_Hist2D_fillmany(void* obj, size_t n, double* xval, double* yval, double* weight);
-void pt_Hist2D_merge(void* obj, void* obj2);
+int pt_Hist2D_merge(void* obj, void* obj2);
 double pt_Hist2D_getYMin(void* obj);
 double pt_Hist2D_getYMax(void* obj);
 unsigned  pt_Hist2D_getNBinX(void* obj);
@@ -119,14 +123,14 @@ void pt_PointwiseDist_percentile_many(void* obj, double* in, double* out, size_t
 void* pt_MCPLBinaryWrite_new(const char *fn, bool enable_double=false, bool enable_extra3double=false, 
                 bool enable_extraUnsigned=false);
 void pt_MCPLBinaryWrite_delete(void* obj);
-void pt_MCPLBinaryWrite_write(void* obj, mcpl_particle_t par);
+void pt_MCPLBinaryWrite_write(void* obj, const mcpl_particle_t* par);
 void pt_MCPLBinaryWrite_close(void* obj);
 
 // XS python interface
 void* pt_makeModelCollection(const char * cfg);
 void pt_deleteModelCollection(void* obj);
 double pt_ModelCollection_getxs(void* obj, int pdg, double ekin);
-double pt_ModelCollection_generate(void* obj, double ekin);
+double pt_ModelCollection_generate(void* obj, double ekin, double dx, double dy, double dz);
 
 // Prompt::GidiSetting
 void* pt_GidiSetting_getInstance();
