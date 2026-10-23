@@ -209,14 +209,18 @@ void Hdf5Trj::readDataset(const std::string &name, Data<T> &vec, bool loadData) 
 
     // Resize the dimension container of 'vec' based on the rank
     vec.dim.resize(rank);
-    // Get the dimensions of the dataspace and store them in 'vec.dim'
-    // Here, make sure the type of vec.dim elements is compatible with hsize_t
-    // If there's a type mismatch error like before, check the type of vec.dim
-    if (H5Sget_simple_extent_dims(memspace_id, vec.dim.data(), NULL) < 0) {
+    // Get the dimensions of the dataspace and store them in 'vec.dim'.
+    // Data.hh types vec.dim as vector<unsigned long long>, but hdf5 >=1.14
+    // defines hsize_t as unsigned long on LP64 (1.12 used unsigned long
+    // long). Marshal through an hsize_t buffer so this compiles against
+    // both ABIs.
+    std::vector<hsize_t> hdims(rank);
+    if (H5Sget_simple_extent_dims(memspace_id, hdims.data(), NULL) < 0) {
         H5Dclose(dataset_id);
         H5Sclose(memspace_id);
         throw std::runtime_error("Failed to get dimensions for dataset: " + name);
     }
+    vec.dim.assign(hdims.begin(), hdims.end());
 
     // Calculate the total number of elements in the dataset (number of points)
     hsize_t numPoints = H5Sget_simple_extent_npoints(memspace_id);
