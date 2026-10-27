@@ -2,20 +2,23 @@
 # numba==0.55.1
 
 #required packages for Prompt visualisation
-# NOTE: NCrystal and its C++ plugins are unified on the conda environment and
-# must NOT be pip-installed into cinema's python environment (having two
-# NCrystal sources in one process leads to subtle breakage). Install plugins
-# with their standard "pip install ." (into the conda env), e.g.:
+# NOTE: NCrystal's C++ plugins must land in the python environment that OWNS
+# NCrystal - a conda env, this venv, or a system (apt) python; they are
+# plugins and do not carry NCrystal itself. install.sh installs
+# ncrystal-pypluginmgr + the bzscope/SANSND plugins there automatically
+# (resolved from ncrystal-config; same set as the feedstock post-link).
+# Still manual:
 #   ncplugin-sascsns:  pip install ncplugin-sascsns/
-#   ncplugin-bzscope:  pip install git+https://code.ihep.ac.cn/cinema-developers/ncplugin-bzscope
-#   ncplugin-SANSND:   pip install git+https://github.com/highness-eu/ncplugin-SANSND.git
-# ncrystal
-# ncrystal-pypluginmgr
 # git+https://code.ihep.ac.cn/cinema-developers/ncplugin-bzscope
 # git+https://github.com/highness-eu/ncplugin-SANSND.git
 mpi4py
-# pyvista
-# matplotlib
+# mpich: MPI runtime for the mpi4py wheel, which dlopens libmpi at import.
+# Keep in step with the dependency list in pyproject.toml.
+mpich
+# matplotlib is a hard import of Cinema.array (via Cinema/__init__.py);
+# pyvista backs the mesh/visualiser modules. Both match pyproject.toml.
+pyvista
+matplotlib
 mcpl
 scipy
 h5py

@@ -322,7 +322,13 @@ if [ ! -f $CINEMAPATH/external/gidiplus/lib/libgidiplus.a ]; then
 fi
 
 if [ -f $CINEMAPATH/src/python/Cinema/__init__.py ]; then
-  export PYTHONPATH="$CINEMAPATH/src/python:$CINEMAPATH/src/python/ptgeo/python:$PYTHONPATH"
+  # idempotent: sourcing env.sh repeatedly must not stack duplicates (a
+  # foreign site-packages already on PYTHONPATH then shadows the venv's
+  # packages and the pip-installed Cinema - the source tree wins forever)
+  case ":${PYTHONPATH:-}:" in
+    *":$CINEMAPATH/src/python:"*) ;;
+    *) export PYTHONPATH="$CINEMAPATH/src/python:$CINEMAPATH/src/python/ptgeo/python:${PYTHONPATH:-}" ;;
+  esac
   echo "Added Cinema python module into path"
 else
   echo "Can not find Cinema python module"
@@ -409,8 +415,61 @@ fi
 
 export NCRYSTAL_DATA_PATH="$CINEMAPATH/ncmat"
 export PATH="$CINEMAPATH/src/python/ptgeo/examples:$PATH"
-export PYTHONPATH="$CINEMAPATH:$PYTHONPATH"
+case ":${PYTHONPATH:-}:" in
+  *":$CINEMAPATH:"*) ;;
+  *) export PYTHONPATH="$CINEMAPATH:${PYTHONPATH:-}" ;;
+esac
 echo "Added the ptgeo example directory into environment"
+
+# NCrystal plugin set: ncrystal-pypluginmgr + the bzscope/SANSND plugins -
+# the same set cinema-prompt-post-link.sh installs for the conda channel, so
+# every install channel (conda / pip / env.sh) converges. These are plugins:
+# they do not carry NCrystal itself (installed --no-deps), so there is no
+# double-NCrystal risk - they must simply land in the python environment
+# that OWNS NCrystal (a conda env, the dev venv, or a plain system python on
+# an apt box), which ncrystal-config identifies. Skip when already
+# installed (. env.sh runs often); degrade to a warning when a C++ source
+# build is impossible (no toolchain), like the conda post-link does.
+_ncpython=
+if command -v ncrystal-config > /dev/null 2>&1; then
+  _ncbin="$(dirname "$(command -v ncrystal-config)")"
+  for _c in "$_ncbin/python3" "$_ncbin/python"; do
+    [ -x "$_c" ] && _ncpython="$_c" && break
+  done
+fi
+# ncrystal-config absent (or no python next to it): do NOT blindly take the
+# first python3 on PATH - on a multi-env machine that regularly belongs to a
+# foreign env (conda stable, another project). Accept an interpreter only if
+# it actually carries the NCrystal python package.
+if [ -z "$_ncpython" ]; then
+  for _c in python3 python; do
+    command -v "$_c" > /dev/null 2>&1 || continue
+    if "$_c" -c 'import NCrystal' > /dev/null 2>&1; then
+      _ncpython="$(command -v "$_c")"
+      break
+    fi
+  done
+fi
+if [ -n "$_ncpython" ]; then
+  echo "NCrystal plugin target python: $_ncpython"
+  if ! "$_ncpython" -m pip show ncrystal-pypluginmgr > /dev/null 2>&1; then
+    "$_ncpython" -m pip install --no-deps ncrystal-pypluginmgr \
+      || echo "WARNING: failed to install ncrystal-pypluginmgr into $_ncpython"
+  fi
+  if ! "$_ncpython" -m pip show ncrystal-plugin-bzscope > /dev/null 2>&1; then
+    "$_ncpython" -m pip install --no-deps \
+        "git+https://code.ihep.ac.cn/cinema-developers/ncplugin-bzscope" \
+      || echo "WARNING: could not build ncrystal-plugin-bzscope (no C++ toolchain?); install later with: pip install git+https://code.ihep.ac.cn/cinema-developers/ncplugin-bzscope"
+  fi
+  if ! "$_ncpython" -m pip show ncrystal-plugin-SANSND > /dev/null 2>&1; then
+    "$_ncpython" -m pip install --no-deps \
+        "git+https://github.com/highness-eu/ncplugin-SANSND.git" \
+      || echo "WARNING: could not build ncrystal-plugin-SANSND (no C++ toolchain?); install later with: pip install git+https://github.com/highness-eu/ncplugin-SANSND.git"
+  fi
+else
+  echo "NOTE: no NCrystal-owning python found (ncrystal-config absent and no interpreter imports NCrystal); skipping plugin install"
+fi
+unset _ncpython _ncbin _c
 
 # NCrystal C++ plugins installed as pip packages (e.g. ncrystal-plugin-SasCSNS)
 # are discovered by the NCrystal library via the "ncrystal-pluginmanager"
