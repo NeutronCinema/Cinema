@@ -1,1 +1,7 @@
-v2.0.1
+DEPRECATED — do not read or update this file.
+
+The single source of the Cinema version is __version__ in
+src/python/Cinema/__init__.py (read by pyproject/hatchling and, since the
+install-channel unification, by the conda feedstock). This file is retained
+one release for reference only and will be deleted afterwards.
+Last value before deprecation: v2.0.1

@@ -28,39 +28,92 @@ TIERS = {
 }
 
 def run_pytest(tier):
-    cmd = [VENV_PYTHON, '-m', 'pytest', TEST_DIR, '-v', '--forked', '--tb=line', '-q']
+    # --color=no: pytest 9 colorizes each per-file progress character even
+    # when piped; the parser below expects bare status chars.
+    cmd = [VENV_PYTHON, '-m', 'pytest', TEST_DIR, '-v', '--forked',
+           '--tb=line', '-q', '--color=no']
     marker = TIERS[tier]
     if marker:
         cmd += ['-m', marker]
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=BUILD_DIR)
+    # Rebuild PYTHONPATH from CINEMAPATH instead of trusting the ambient
+    # value: install.sh APPENDS to it, so leftovers from the shell (foreign
+    # site-packages of another conda env, empty entries -> cwd) ride along
+    # and sit AHEAD of the venv's site-packages - a py3.10 numpy from
+    # another env then shadows the venv's and breaks every import Cinema
+    # test at collection ("no tests collected").
+    env = dict(os.environ)
+    env['PYTHONPATH'] = os.pathsep.join([
+        os.path.join(CINEMA_PATH, 'src', 'python'),
+        os.path.join(CINEMA_PATH, 'src', 'python', 'ptgeo', 'python'),
+    ])
+    result = subprocess.run(cmd, capture_output=True, text=True,
+                            cwd=BUILD_DIR, env=env)
     return result.stdout + result.stderr, result.returncode
 
 def parse_results(output):
     stat_map = {'.': 'PASSED', 's': 'SKIPPED', 'F': 'FAILED', 'E': 'ERROR'}
-    tree = {}
+    # Priority when one file mixes outcomes: any failing test must mark the
+    # file red, not just its first test.
+    prio = {'PASSED': 0, 'SKIPPED': 1, 'FAILED': 2, 'ERROR': 3}
     passed = failed = skipped = error = 0
-    pattern = re.compile(r'\.\./src/pythontests/(.+?\.py)\s+([.sFE])')
-    
+    # Strip ANSI escapes first (pytest 9 emits them even when piped), and
+    # accept both cwd-relative (../src/...) and rootdir-relative (src/...)
+    # path spellings across pytest versions.
+    output = re.sub(r'\x1b\[[0-9;]*m', '', output)
+    # A per-file progress line carries one character PER TEST ('.F..' = a
+    # pass then a fail), so capture the whole run - stopping at the first
+    # char would report that file green and let a failure hide behind an
+    # earlier passing test in the same file.
+    pattern = re.compile(r'(?:\.\./)?src/pythontests/(.+?\.py)\s+([.sFE]+)')
+
+    file_status = {}
     for line in output.split('\n'):
         m = pattern.search(line)
-        if m:
-            relpath = m.group(1)
-            status_char = m.group(2)
-            status = stat_map.get(status_char, '?')
-            
+        if not m:
+            continue
+        relpath, chars = m.group(1), m.group(2)
+        for c in chars:
+            status = stat_map[c]
             if status == 'PASSED':    passed += 1
             elif status == 'FAILED':  failed += 1
             elif status == 'SKIPPED': skipped += 1
-            elif status == 'ERROR':   error += 1
-            
-            parts = relpath.split('/')
-            current = tree
-            for p in parts[:-1]:
-                if p not in current:
-                    current[p] = {}
-                current = current[p]
-            current[parts[-1]] = status
-    
+            else:                     error += 1
+        worst = max((stat_map[c] for c in chars), key=prio.get)
+        prev = file_status.get(relpath)
+        if prev is None or prio[worst] > prio[prev]:
+            file_status[relpath] = worst
+
+    # The short summary is authoritative for WHICH files failed: a file with
+    # many tests wraps its progress chars onto continuation lines that carry
+    # no filename, so a wrapped F/E never matches the pattern above.
+    summary_pat = re.compile(
+        r'^(FAILED|ERROR) (?:\.\./)?src/pythontests/(.+?\.py)\b', re.MULTILINE)
+    for m in summary_pat.finditer(output):
+        relpath = m.group(2)
+        worst = 'FAILED' if m.group(1) == 'FAILED' else 'ERROR'
+        prev = file_status.get(relpath)
+        if prev is None or prio[worst] > prio[prev]:
+            file_status[relpath] = worst
+
+    # Totals likewise from pytest's own final line, which counts the wrapped
+    # tests the char scan cannot see.
+    m = re.search(r'^=+ (.*?) in [\d.]+s =+\s*$', output, re.MULTILINE)
+    if m:
+        counts = {label: int(n) for n, label in re.findall(
+            r'(\d+) (passed|failed|skipped|errors?)', m.group(1))}
+        passed = int(counts.get('passed', passed))
+        failed = int(counts.get('failed', failed))
+        skipped = int(counts.get('skipped', skipped))
+        error = int(counts.get('errors', counts.get('error', error)))
+
+    tree = {}
+    for relpath, status in file_status.items():
+        parts = relpath.split('/')
+        current = tree
+        for p in parts[:-1]:
+            current = current.setdefault(p, {})
+        current[parts[-1]] = status
+
     return tree, passed, failed, skipped, error
 
 def _has_failure(d):

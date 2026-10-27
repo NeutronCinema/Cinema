@@ -65,6 +65,23 @@ for fname in expected_mismatch:
     if os.path.exists(fpath):
         collect_ignore.append(fname)
 
+# Files importing the long-gone `testsuite` helper module - no such module
+# exists anywhere in the tree, so they error at collection in every pytest
+# run (6 of the 80 errors seen 2026-10-27 were these, the rest were the
+# polluted-PYTHONPATH numpy clash fixed in scripts/pytest_tree.py).
+missing_testsuite = [
+    "test_pompt_sphereflux.py",
+    "prompt_solids/test_prompt_CutTube.py",
+    "prompt_solids/test_prompt_Intersect.py",
+    "prompt_solids/test_prompt_geoBooleanOperation.py",
+    "prompt_physics/gidi/test_prompt_gidi_H.py",
+    "prompt_physics/gidi/test_prompt_gidi_U.py",
+]
+for rel in missing_testsuite:
+    fpath = os.path.join(os.path.dirname(__file__), rel)
+    if os.path.exists(fpath):
+        collect_ignore.append(rel)
+
 
 def pytest_configure(config):
     # Three test tiers, selected by test-body duration:
