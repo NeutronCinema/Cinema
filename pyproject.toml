@@ -25,11 +25,26 @@ dependencies = [
     "ncrystal",
     "ncrystal-pypluginmgr",
     "ncrystal-plugin-bzscope @ git+https://code.ihep.ac.cn/cinema-developers/ncplugin-bzscope",
-    "scipy", "h5py", "mpi4py", "psutil", "tqdm", "gvar", "mcpl-core"
+    "ncrystal-plugin-SANSND @ git+https://github.com/highness-eu/ncplugin-SANSND.git",
+    # mpich: MPI runtime for the mpi4py MPI-ABI wheel, which dlopens
+    # libmpi.so.12 at import; the mpich wheel drops it into <prefix>/lib,
+    # the first place mpi4py searches. C++ never links MPI (OpenMP only),
+    # so the mpich/openmpi flavor choice carries no compatibility weight.
+    "scipy", "h5py", "mpi4py", "mpich", "psutil", "tqdm", "gvar",
+    # two separate PyPI dists that do not pull each other in: mcpl-core is
+    # the C core (_mcpl_core + mcpl-config, whose libdir the wheel RPATH
+    # points at), mcpl is the `import mcpl` Python package that
+    # Prompt/PromptFileReader.py imports.
+    "mcpl-core", "mcpl",
+    # imported unconditionally: Cinema/array.py (matplotlib.pyplot) and
+    # Prompt/Visualiser.py (pyvista, via promptcli's `from Cinema.Prompt
+    # import ... Visualiser`) - they are hard deps of a bare `import Cinema`
+    # and of the prompt CLI, not optional viz niceties
+    "matplotlib", "pyvista"
 ]
 
 [project.optional-dependencies]
-viz = [ "pyvista", "matplotlib", "tetgen"]
+viz = [ "tetgen" ]
 viz-web = [ "pyvista[jupyter]", "tetgen" ]
 
 # [project.scripts]
@@ -41,38 +56,51 @@ repository = "https://code.ihep.ac.cn/cinema-developers/cinema"
 "Paper" = "https://doi.org/10.1016/j.cpc.2023.109004"
 
 [build-system]
+# scikit-build-core drives CMake directly: CMakeLists.txt builds prompt_core
+# and (under SKBUILD) installs it into the Cinema package — replacing the
+# hatch build-scripts hook that ran tools/scripts/build_tool/install_cdeps.py.
+# ncrystal-core/mcpl-core must be importable at build time because CMake
+# invokes ncrystal-config/mcpl-config during configure; pip satisfies this
+# via build isolation, conda-build via host deps + --no-build-isolation.
 requires = [
-    "hatchling", 
-    "hatch-build-scripts", 
-    "requests",
+    "scikit-build-core>=1.0",
     "ncrystal-core",
-    "mcpl-core"
+    "mcpl-core",
 ]
-build-backend = "hatchling.build"
+build-backend = "scikit_build_core.build"
 
 [project.scripts]
 prompt = "Cinema.Prompt.cli.promptcli:main"
 ptplot = "Cinema.Prompt.cli.ptplotcli:main"
 
-[tool.hatch.metadata]
-allow-direct-references = true # To make git + magic happen
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+# CMake >= 3.28 for FetchContent EXCLUDE_FROM_ALL (fetched forks must keep
+# their install() rules out of the wheel install step)
+cmake.version = ">=3.28"
 
-[tool.hatch.version]
-path = "src/python/Cinema/__init__.py"
+[tool.scikit-build.build]
+# Wheel scope = the prompt_core extension only — same scope as the conda
+# feedstock build. cxxtests/bin need dev-tree context (cxxtests fails to
+# link against the csns mcpl build) and are gated by SKBUILD in
+# CMakeLists.txt as well.
+targets = ["prompt_core"]
 
-[[tool.hatch.build.hooks.build-scripts.scripts]]
-out_dir = "build"
-commands = [
-    "python tools/scripts/build_tool/install_cdeps.py",
-]
-artifacts = []
+# version single-sourced from __version__ (the provider's default regex
+# matches `__version__ = "..."` out of the box)
+[[tool.dynamic-metadata]]
+field = "version"
+provider = "scikit_build_core.metadata.regex"
+input = "src/python/Cinema/__init__.py"
 
-[tool.hatch.build.targets.wheel]
+[tool.scikit-build.wheel]
 packages = ["src/python/Cinema"]
-exclude = ["src/python/Cinema/PiXiu", "src/python/Cinema/Tak"]
-artifacts = [
-    "src/python/Cinema/*.so"
+# PiXiu/Tak: never shipped (same as the old hatch exclude). The top-level
+# lib/include/bin/share patterns prune the install rules that the
+# FetchContent-built forks (vecgeom/kdsource) attach to the project —
+# the wheel bundles the libs it needs under Cinema/ instead.
+exclude = [
+    "Cinema/PiXiu", "Cinema/Tak",
+    "lib/**", "include/**", "bin/**", "share/**",
 ]
-
-[tool.hatch.build.targets.wheel.force-include]
-"scripts/guide.py" = "Cinema/examples/guide.py"
+force-include = { "scripts/guide.py" = "Cinema/examples/guide.py" }

@@ -53,6 +53,14 @@ type_npint641d=np.ctypeslib.ndpointer(dtype=np.int64,ndim=1,flags='C_CONTIGUOUS'
 
 
 def _getPromptLib():
+    # Installed layout first: the extension lives inside the package
+    # (the wheel installs it to Cinema/, the conda package copies it there)
+    # — no environment variable needed. Only fall back to the dev tree
+    # (CINEMAPATH = source root, freshly built .so in the cmake build dir)
+    # when the package does not bundle one.
+    _pkgdir = os.path.dirname(os.path.abspath(__file__))
+    if os.path.exists(_pkgdir + os.sep + 'libprompt_core.so'):
+        return ctypes.CDLL(_pkgdir + os.sep + 'libprompt_core.so'), _pkgdir
     _ptpath = os.getenv('CINEMAPATH')
     try:
         libfile = glob.glob(_ptpath +'/cinemabin/src/cxx/libprompt_core.so')[0]
@@ -60,7 +68,9 @@ def _getPromptLib():
         try:
             libfile = glob.glob(_ptpath + os.sep + 'libprompt_core.so')[0]
         except:
-            raise IOError('CINEMAPATH enviroment need to be configured')
+            raise IOError('libprompt_core.so not found: install the package '
+                          '(it bundles the extension) or set CINEMAPATH to '
+                          'a configured cinema source tree')
     return ctypes.CDLL(libfile), _ptpath
 
 _taklib, _ptpath = _getPromptLib()

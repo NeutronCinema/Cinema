@@ -80,7 +80,7 @@ FIND_LIBRARY(kdsource kdsource ${KDS_LIB})
 # FIND_LIBRARY(gidiplus gidiplus ${GIDIPLUS_LIB})
 
 
-target_link_libraries(${PROJECT_NAME} PUBLIC ${GIDIPLUS_LIB}/libgidiplus.a NCrystal::NCrystal VecGeom::vecgeom VecGeom::vgdml fftw3 ${HDF5_LIBRARIES} OpenMP::OpenMP_CXX  ${mcpl} ${kdsource})
+target_link_libraries(${PROJECT_NAME} PUBLIC gidiplus NCrystal::NCrystal VecGeom::vecgeom VecGeom::vgdml fftw3 ${HDF5_LIBRARIES} OpenMP::OpenMP_CXX  ${mcpl} ${kdsource})
 
 #fixme remove openmp
 target_include_directories( ${PROJECT_NAME}
