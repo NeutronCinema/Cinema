@@ -59,8 +59,11 @@ def _getPromptLib():
     # (CINEMAPATH = source root, freshly built .so in the cmake build dir)
     # when the package does not bundle one.
     _pkgdir = os.path.dirname(os.path.abspath(__file__))
-    if os.path.exists(_pkgdir + os.sep + 'libprompt_core.so'):
-        return ctypes.CDLL(_pkgdir + os.sep + 'libprompt_core.so'), _pkgdir
+    # __file__ is Cinema/Interface/__init__.py but the wheel installs the
+    # extension one level up, directly in Cinema/ — check both.
+    for _libdir in (os.path.dirname(_pkgdir), _pkgdir):
+        if os.path.exists(_libdir + os.sep + 'libprompt_core.so'):
+            return ctypes.CDLL(_libdir + os.sep + 'libprompt_core.so'), _libdir
     _ptpath = os.getenv('CINEMAPATH')
     try:
         libfile = glob.glob(_ptpath +'/cinemabin/src/cxx/libprompt_core.so')[0]
