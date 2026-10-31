@@ -10,6 +10,14 @@ Excludes files with pre-existing issues:
 import os
 import sys
 
+# Self-heal CINEMAPATH: the Interface ctypes bridge needs the repo root to
+# locate cinemabin/src/cxx/libprompt_core.so. env.sh normally exports it,
+# but a shell that sourced env.sh without export (or any direct pytest run)
+# would leave every test collection dead with a confusing glob IndexError.
+os.environ.setdefault(
+    "CINEMAPATH",
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 collect_ignore = []
 
 # Files that need numba (not installed)
