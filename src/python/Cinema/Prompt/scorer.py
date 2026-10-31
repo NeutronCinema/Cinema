@@ -608,6 +608,25 @@ class DirectSqHelper(ScorerHelper, MultiScatMixin1D):
         self.cobj = cobj
 
 class DepositionHelper(ScorerHelper, MultiScatMixin1D):
+    """Energy-deposition spectrum: what is scored is the energy deposited at
+    each event, binned by deposited energy (event-weighted, so the deposited
+    total is the centre-weighted integral, NOT getTotalWeight).
+
+    ptstate semantics (what fires when, for bulk transport):
+      - ``PROPAGATE_POST``: every surviving collision, scoring that
+        collision's deposited energy (Compton transfer etc.). This is the
+        local-heating scorer and the OpenMC-'heating'-equivalent total;
+        boundary-exiting tracks do not fire it.
+      - ``ABSORB``: only real absorption events, scoring the full remaining
+        energy at the absorption (photoelectric: the whole photon energy
+        until atomic relaxation lands).
+      - ``PEA_POST``: the union of the two above plus the exit leg, i.e. the
+        total deposited energy of every history; use it for the integral
+        deposited-energy total (identity: PROPAGATE_POST + ABSORB sums to
+        PEA_POST, and PEA_POST + escaped kinetic energy = source energy up
+        to binning and sub-threshold escapees).
+      - ``PROPAGATE_PRE``: pre-collision hook (no deposition yet: scores 0).
+    """
     def __init__(self, name : str, min, max, numbin, pdg, ptstate, linear = None, groupID : int = 0, log = None) -> None:
         super().__init__(name, min, max, numbin, pdg, ptstate, groupID)
         # `log` is the canonical binning flag; `linear` stays as a deprecated alias

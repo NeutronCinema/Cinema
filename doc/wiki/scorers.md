@@ -106,6 +106,26 @@ volume regardless of whether it scattered, exited or was absorbed — use them f
 quantities. `ABSORB` fires only on genuine absorption, which is what makes the
 `TOFHelper(..., ptstate='ABSORB')` absorber-channel TOF of `doc/example_basic.py` work.
 
+### Deposition scoring (DepositionHelper)
+
+`DepositionHelper` bins the energy deposited *per event* (event-weighted: the deposited
+total is the centre-weighted integral, not `getTotalWeight`). Which events fire, per
+`ptstate`:
+
+- `PROPAGATE_POST` — every surviving collision scores that collision's deposited energy
+  (the Compton transfer, recoil energy, …). This is the **local heating** quantity and the
+  OpenMC-`heating`-equivalent total; boundary exits do not fire it.
+- `ABSORB` — only genuine absorptions, scoring the full remaining energy at the absorption
+  point.
+- `PEA_POST` — the union of both plus the exit leg: the **integral deposited-energy**
+  scorer. Identity to check your setup against:
+  `PEA_POST + escaped kinetic energy = source energy` (up to binning and sub-threshold
+  escapees), and `PROPAGATE_POST + ABSORB = PEA_POST`.
+
+Scattered photons continue the *same* track (a single outgoing photon replaces the
+incident state, as a neutron elastic scatter does) — so a photon's collision history is
+one particle, not a kill/rebirth chain.
+
 ### Which state for which quantity?
 
 Pick the row that matches what you want to measure — no need to reason about the transport

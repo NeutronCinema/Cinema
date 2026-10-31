@@ -259,6 +259,20 @@ const Prompt::SampledResult& Prompt::GIDIModel::sampleReaction(double ekin, cons
     m_res.final_ekin = secondaries[0].getEKin();
     m_res.final_dir = secondaries[0].getDirection();
   }
+  else if(secondaries.size()==1 && secondaries[0].getPDG()==22 && m_modelvalid.rightParticleType(22))
+  {
+    // Photon projectile with a single outgoing photon (coherent and
+    // incoherent scattering): treat the outgoing photon as the incident
+    // state changing, exactly like the single-neutron channel above, instead
+    // of the previous kill-and-rebirth flow (dispeared + secondary stack).
+    // The old flow made the PROPAGATE_POST scorer dead for photons (a
+    // killed particle never reports scattered=true), left ABSORB firing at
+    // every collision (the kill/rebirth churn), and paid a stack round-trip
+    // per photon collision. Pair production and photoelectric absorption
+    // (no photon product) still take the dispeared branches below.
+    m_res.final_ekin = secondaries[0].getEKin();
+    m_res.final_dir = secondaries[0].getDirection();
+  }
   else
   {
     // essentially killing the current active particle in the launcher
