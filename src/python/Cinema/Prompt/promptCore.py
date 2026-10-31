@@ -21,6 +21,8 @@
 ################################################################################
 
 import functools
+import os
+import sys
 
 import numpy as np
 from .launcher import Launcher, _WORLD_EXIST_MSG
@@ -422,7 +424,7 @@ class PromptMPI(Prompt):
         size (int): Total number of MPI processes
     """
 
-    def __init__(self, seed=4096, bank_exchange='nearest') -> None:
+    def __init__(self, seed=4096, bank_exchange='nearest', quiet=None) -> None:
         """
         Initialize MPI version of Prompt instance.
 
@@ -433,6 +435,12 @@ class PromptMPI(Prompt):
                 this value.
             bank_exchange: 'nearest' (default) or 'pooled', see the class
                 docstring
+            quiet: silence non-zero ranks (default True). The C++ transport
+                prints its progress on every rank; without the gate an MPI
+                run interleaves size copies of the same lines into one log.
+                Implemented by redirecting the C-level stdout of non-zero
+                ranks to /dev/null, so it also silences the native prints
+                that have no rank awareness. rank 0 keeps everything.
 
         Raises:
             ImportError: If mpi4py is not available in this environment
@@ -453,6 +461,15 @@ class PromptMPI(Prompt):
         self._comm = MPI.COMM_WORLD
         self._rank = self._comm.Get_rank()
         self._size = self._comm.Get_size()
+        if quiet is None:
+            quiet = self._size > 1
+        if quiet and self._rank != 0:
+            # redirect the C-level stdout (fd 1): every native transport print
+            # goes through it, and non-zero ranks have nothing unique to say
+            sys.stdout.flush()
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull, 1)
+            os.close(devnull)
         super().__init__(seed + self._rank)
 
     @property
