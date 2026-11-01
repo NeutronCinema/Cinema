@@ -32,6 +32,13 @@ namespace Prompt {
     void go(uint64_t numParticle, double printPrecent, bool recordTrj=false, bool timer=true, bool save2Disk=true);
     size_t goWithSecondStack(uint64_t numParticle);
 
+    // K-cycle batched power iteration: K transport cycles with only the
+    // rank-local population control between them; the cross-rank bank
+    // exchange happens once per block on the python side. This reduces
+    // the per-cycle collective cost by K for large-rank-count MPI runs.
+    // K=1 is semantically identical to per-cycle exchange.
+    std::size_t goKWithSecondStacks(unsigned a_k, uint64_t numParticle);
+
     // fission-bank exchange for the parallel power iteration: the python
     // side (PromptMPI + mpi4py) allgathers the blobs across ranks between
     // cycles and hands them back; normaliseTo mirrors the per-rank share

@@ -204,6 +204,23 @@ void Prompt::Launcher::simOneEvent(bool recordTrj)
     }
 }
 
+std::size_t Prompt::Launcher::goKWithSecondStacks(unsigned a_k, uint64_t numParticle)
+{
+  // K transport cycles with only the rank-local population control between
+  // them. The caller performs the cross-rank bank exchange once per block.
+  // K=1 is identical to the per-cycle exchange path.
+  std::size_t total = 0;
+  for (unsigned i = 0; i < a_k; ++i) {
+    if (m_stackManager.getNumParticleInSecondStack() == 0)
+      break;  // local population extinct: rank sits out the rest of the block
+    m_stackManager.normaliseSecondStack(numParticle);
+    m_stackManager.swapStack();
+    simOneEvent(false);
+    total += m_stackManager.getNumParticleInSecondStack();
+  }
+  return total;
+}
+
 size_t Prompt::Launcher::goWithSecondStack(uint64_t numParticle)
 {
   m_stackManager.normaliseSecondStack(numParticle);
