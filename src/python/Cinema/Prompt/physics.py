@@ -199,6 +199,20 @@ def _validateNccfgContent(cfg):
     """
     if not isinstance(cfg, str) or not cfg:
         return
+    # composite configs ('cfg1|<w>*cfg2|...') are decomposed by the C++ side;
+    # validate each component separately since NCrystal itself would only
+    # reject the '|' separator
+    if '|' in cfg:
+        for part in cfg.split('|'):
+            if '*' in part:
+                head, _, tail = part.partition('*')
+                try:
+                    float(head)
+                    part = tail
+                except ValueError:
+                    pass
+            _validateNccfgContent(part)
+        return
     api = _getNcrystalCApi()
     if api is None:
         return

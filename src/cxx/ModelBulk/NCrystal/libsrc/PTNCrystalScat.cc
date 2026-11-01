@@ -88,3 +88,82 @@ const Prompt::SampledResult& Prompt::NCrystalScat::sampleReaction(double ekin, c
   m_res.deposition = ekin - m_res.final_ekin;
   return m_res;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// NCrystalScatComposite
+////////////////////////////////////////////////////////////////////////////////
+
+#include <stdexcept>
+
+Prompt::NCrystalScatComposite::NCrystalScatComposite(const std::string &cfgstring, double bias,
+    double lowerlimt, double upperlimt)
+:Prompt::DiscreteModel(cfgstring+"_scat", const_neutron_pgd,
+                      lowerlimt, upperlimt, bias)
+{
+  if(Unit::eV != 1.)
+    PROMPT_THROW(CalcError, "The default unit of NCrystal is eV");
+  // split on '|' at the top level; each part is "[<weight>*]<ncrystal cfg>"
+  size_t pos = 0;
+  while(true) {
+    size_t sep = cfgstring.find('|', pos);
+    std::string part = cfgstring.substr(pos, sep == std::string::npos ? std::string::npos : sep - pos);
+    double weight = 1.;
+    if(!part.empty()) {
+      size_t star = part.find('*');
+      if(star != std::string::npos) {
+        try {
+          weight = std::stod(part.substr(0, star));
+          part = part.substr(star + 1);
+        } catch (const std::invalid_argument &) { /* no weight prefix */ }
+      }
+      if(weight <= 0.)
+        PROMPT_THROW2(BadInput, "non-positive component weight in composite NCrystal config: " << cfgstring);
+      std::cerr << "[composite] constructing child weight=" << weight << " cfg=" << part << std::endl;
+      m_children.push_back(std::make_unique<NCrystalScat>(part, bias, lowerlimt, upperlimt));
+      std::cerr << "[composite] child OK" << std::endl;
+      m_weights.push_back(weight);
+    }
+    if(sep == std::string::npos)
+      break;
+    pos = sep + 1;
+  }
+  if(m_children.empty())
+    PROMPT_THROW2(BadInput, "empty composite NCrystal config: " << cfgstring);
+}
+
+Prompt::NCrystalScatComposite::~NCrystalScatComposite()
+{
+  std::cout<<"Destructing NCrystal composite scattering physics " << m_modelName << ", energy between [" << m_modelvalid.minEkin << ", " << m_modelvalid.maxEkin << "]" << std::endl;
+}
+
+double Prompt::NCrystalScatComposite::getCrossSection(double ekin) const
+{
+  double total = 0.;
+  for(size_t i = 0; i < m_children.size(); ++i)
+    total += m_weights[i] * m_children[i]->getCrossSection(ekin);
+  return total;
+}
+
+double Prompt::NCrystalScatComposite::getCrossSection(double ekin, const Vector &dir) const
+{
+  double total = 0.;
+  for(size_t i = 0; i < m_children.size(); ++i)
+    total += m_weights[i] * m_children[i]->getCrossSection(ekin, dir);
+  return total;
+}
+
+const Prompt::SampledResult& Prompt::NCrystalScatComposite::sampleReaction(double ekin, const Vector &dir) const
+{
+  if(dir.isStrictNullVector())
+    PROMPT_THROW(BadInput, "null incident direction, NCrystal direction sampling would loop forever");
+  // component selection by cross-section share on the transport RNG stream;
+  // the selected child then samples on its own NCrystal stream
+  double total = getCrossSection(ekin);
+  double u = m_rng.generate() * total;
+  for(size_t i = 0; i < m_children.size(); ++i) {
+    u -= m_weights[i] * m_children[i]->getCrossSection(ekin);
+    if(u < 0. || i + 1 == m_children.size())
+      return m_children[i]->sampleReaction(ekin, dir);
+  }
+  PROMPT_THROW(CalcError, "composite component selection fell through");
+}

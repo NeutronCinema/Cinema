@@ -22,6 +22,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include <string>
+#include <vector>
 
 #include "PromptCore.hh"
 #include "PTDiscreteModel.hh"
@@ -46,6 +47,28 @@ namespace Prompt {
   private:
     mutable  NCrystal::Scatter m_scat;
     static bool m_ncrystal_initialised;
+  };
+
+  // Weighted fusion of several NCrystal configs (OpenMC-style per-material
+  // TSL composition): macroscopic cross sections add up, each collision is
+  // delegated to one component chosen by its cross-section share. Syntax:
+  //   <cfg1>|<weight>*<cfg2>|...
+  // e.g. a solution whose H thermal scattering lives in a shared TSL file:
+  //   ncmat=solution.ncmat;temp=293.6K|0.0993*ncmat=tsl/h_in_h2o.ncmat;temp=293.6K
+  // Weights default to 1 and scale the component densities, so a component's
+  // weight is the ratio of its wanted atom density to the density in its file.
+  class NCrystalScatComposite : public DiscreteModel {
+  public:
+    NCrystalScatComposite(const std::string &cfgstring, double bias=1.0, double lowerlimt = 0., double upperlimt = std::numeric_limits<double>::max());
+    virtual ~NCrystalScatComposite();
+
+    virtual double getCrossSection(double ekin) const override;
+    virtual double getCrossSection(double ekin, const Vector &dir) const override;
+    virtual const SampledResult& sampleReaction(double ekin, const Vector &dir) const override;
+
+  private:
+    std::vector<std::unique_ptr<NCrystalScat>> m_children;
+    std::vector<double> m_weights;
   };
 
 }

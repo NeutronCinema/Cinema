@@ -161,6 +161,31 @@ double Prompt::ParticleProcess::sampleStepLength(const Prompt::Particle &particl
   }
 }
 
+namespace {
+// inner nccfg of a Material-style string; raw strings pass through unchanged
+std::string innerNccfg(const std::string &cfgstr)
+{
+  if (cfgstr.find("nccfg=") == std::string::npos)
+    return cfgstr;
+  try {
+    auto cfg = Prompt::Singleton<Prompt::CfgParser>::getInstance().parse(cfgstr);
+    std::string v;
+    if (cfg.getStringIfExist("nccfg", v))
+      return v;
+  } catch (const Prompt::Error::BadInput &) {}
+  return cfgstr;
+}
+
+// first component of a composite inner cfg ('cfg1|<w>*cfg2'); plain strings
+// pass through unchanged
+std::string compositeMain(const std::string &inner)
+{
+  size_t pipe = inner.find('|');
+  return pipe == std::string::npos ? inner : inner.substr(0, pipe);
+}
+}
+
+
 void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
 {
   std::cout << "Configuring physics model: " << cfgstr << std::endl;
@@ -172,7 +197,7 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
   if (type != PhysicsFactory::PhysicsType::NC_RAW)
   {
     // Parse the config string to check for absorp_in_weight parameter
-    auto &ps = Singleton<CfgParser>::getInstance();
+    auto &ps = Prompt::Singleton<Prompt::CfgParser>::getInstance();
     auto cfg = ps.parse(cfgstr);
     
     // Check for absorp_in_weight parameter and set it accordingly
@@ -196,7 +221,12 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
   // The factory ships in the core library until M5 repackages it.
   if (type == PhysicsFactory::PhysicsType::NC_RAW)
   {
-    m_numdensity = pfact.nccalNumDensity(cfgstr);
+    // composite configs ('cfg1|<w>*cfg2|...'): gidi + number density consume
+    // the first (main) component; the weighted scatter sum lives in
+    // NCrystalScatComposite
+    const std::string inner = innerNccfg(cfgstr);
+    const std::string main_cfg = compositeMain(inner);
+    m_numdensity = pfact.nccalNumDensity("physics=ncrystal;nccfg='" + main_cfg + "'");
 
     #ifdef ENABLE_GIDI
     if(enablegidi)
@@ -207,14 +237,19 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
       << ", the swithching energy from ncrystal to digi is at " << gidithreshold << "eV.\n";
       // NCrystal models
       if(gidithreshold>0)
-         m_discretModels->addPhysicsModel(std::make_shared<NCrystalScat>(cfgstr, 1.0, 0, gidithreshold));
+      {
+        if( inner.find('|') != std::string::npos )
+          m_discretModels->addPhysicsModel(std::make_shared<NCrystalScatComposite>(inner, 1.0, 0, gidithreshold));
+        else
+          m_discretModels->addPhysicsModel(std::make_shared<NCrystalScat>(inner, 1.0, 0, gidithreshold));
+      }
 
       // GIDI models: decompose now (cheap, front-loads config errors) but
       // defer the GNDS parsing to the first transport event (P2.1); the
       // settings below are frozen here (P2.2)
       auto &nm = Prompt::Singleton<Prompt::MaterialDecomposer>::getInstance();
       double temperature(0.);
-      auto isotopes = nm.decompose(cfgstr, temperature);
+      auto isotopes = nm.decompose(main_cfg, temperature);
       for(const auto &v: isotopes)
         std::cout << v << std::endl;
 
@@ -234,7 +269,7 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
   }
   else if (type == PhysicsFactory::PhysicsType::NC_SCATTER)
   {
-    CfgParser::StringCfg cfg = Singleton<CfgParser>::getInstance().parse(cfgstr);
+    CfgParser::StringCfg cfg = Prompt::Singleton<Prompt::CfgParser>::getInstance().parse(cfgstr);
     double scatter_bias = 1.0;
     cfg.getDoubleIfExist("scatter_bias", scatter_bias);
 
@@ -243,7 +278,9 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
 
     std::string nccfg;
     cfg.getStringIfExist("nccfg", nccfg);
-    m_numdensity = pfact.nccalNumDensity(nccfg);
+    // composite configs: number density + gidi consume the main component
+    const std::string main_cfg = compositeMain(nccfg);
+    m_numdensity = pfact.nccalNumDensity("physics=ncrystal;nccfg='" + main_cfg + "'");
 
     #ifdef ENABLE_GIDI
     //fixme: todo: how to disable absorption when abs_bias is zero?
@@ -257,7 +294,7 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
       // settings below are frozen here (P2.2)
       auto &nm = Prompt::Singleton<Prompt::MaterialDecomposer>::getInstance();
       double temperature (0);
-      auto isotopes = nm.decompose(nccfg, temperature);
+      auto isotopes = nm.decompose(main_cfg, temperature);
       for(const auto &v: isotopes)
         std::cout << v << std::endl;
 
@@ -266,10 +303,15 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
                                            cd.getGidiSampleNTP());
 
       // NCrystal models: held back so that the deferred gidi models land
-      // before them, matching the eager model order
+      // before them, matching the eager model order. A nccfg containing '|'
+      // is a weighted composite of several configs (OpenMC-style per-material
+      // TSL composition) and goes to the composite model.
       if(gidithreshold>0.)
       {
-        m_discretModels->registerDeferredModel(std::make_shared<NCrystalScat>(nccfg, scatter_bias, 0, gidithreshold));
+        if( nccfg.find('|') != std::string::npos )
+          m_discretModels->registerDeferredModel(std::make_shared<NCrystalScatComposite>(nccfg, scatter_bias, 0, gidithreshold));
+        else
+          m_discretModels->registerDeferredModel(std::make_shared<NCrystalScat>(nccfg, scatter_bias, 0, gidithreshold));
       }
       else
         std::cout << "!The ncrystal elastic scatter is not created!\n";
@@ -288,7 +330,7 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
     // The host consumes only the reserved keys (absorp_in_weight above, the
     // biases below); every other key belongs to the factory, which validates
     // its own key set. Replaces the former hardwired idealElaScat branch.
-    CfgParser::StringCfg cfg = Singleton<CfgParser>::getInstance().parse(cfgstr);
+    CfgParser::StringCfg cfg = Prompt::Singleton<Prompt::CfgParser>::getInstance().parse(cfgstr);
 
     std::string ns;
     if(!cfg.getStringIfExist("physics", ns))
