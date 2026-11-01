@@ -60,6 +60,13 @@ int pt_Launcher_loadSecondStack(void *obj, const char *data, size_t len, uint64_
 int pt_Launcher_extractSecondStack(void *obj, const char *data, size_t len,
                                    const char *idxData, size_t nIdx,
                                    char *buf, size_t cap, size_t *written);
+// K-cycle batched power iteration + generation-skew instrument (plan
+// appendix 13); declared here like the rest — PTPythonLauncher.cc does not
+// include PTPython.hh, so a definition outside this block would get C++
+// linkage and the ctypes lookup would fail
+int pt_Launcher_goKWithSecondStacks(void *obj, unsigned k, uint64_t numParticle,
+                                    unsigned genMax, size_t *outBirths, unsigned *outCycles);
+void pt_Launcher_secondStackGenRange(void *obj, unsigned *lo, unsigned *hi);
 
 const char* pt_last_error();
 int pt_bridge_record_error();
@@ -149,6 +156,30 @@ int pt_Launcher_goWithSecondStack(void *obj, uint64_t numParticle, size_t *out)
   catch (...) {
     return pt_bridge_record_error();
   }
+}
+
+// Bridged: same protocol as pt_Launcher_goWithSecondStack — the K-cycle
+// block runs entirely rank-local, any error (e.g. the empty-bank CalcError
+// of the first normalise) surfaces through pt_last_error().
+int pt_Launcher_goKWithSecondStacks(void *obj, unsigned k, uint64_t numParticle,
+                                    unsigned genMax, size_t *outBirths, unsigned *outCycles)
+{
+  try {
+    *outBirths = static_cast<pt::Launcher *>(obj)->goKWithSecondStacks(k, numParticle,
+                                                                       genMax, *outCycles);
+    return 0;
+  }
+  catch (...) {
+    return pt_bridge_record_error();
+  }
+}
+
+void pt_Launcher_secondStackGenRange(void *obj, unsigned *lo, unsigned *hi)
+{
+  uint32_t glo, ghi;
+  static_cast<pt::Launcher *>(obj)->secondStackGenerationRange(glo, ghi);
+  *lo = glo;
+  *hi = ghi;
 }
 
 // Bridged: the fission-bank exchange for the parallel power iteration.

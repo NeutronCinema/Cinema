@@ -45,6 +45,11 @@ _pt_Launcher_setGun = importFunc('pt_Launcher_setGun', type_int, [type_voidp, ty
 # rewrite the first event builds the pending gidi models, and a data problem
 # (DataLoadError) must raise a catchable RuntimeError, not abort the process
 _pt_Launcher_goWithSecondStack = importFunc('pt_Launcher_goWithSecondStack', type_int, [type_voidp, type_sizet, type_sizetp])
+# K-cycle batched power iteration: births via out-pointer, cycles actually
+# run via the second out-pointer (bridged like goWithSecondStack)
+_pt_Launcher_goKWithSecondStacks = importFunc('pt_Launcher_goKWithSecondStacks', type_int, [type_voidp, type_uint, type_sizet, type_uint, type_sizetp, type_uintp])
+# generation-skew instrument (min/max fission generation in the bank)
+_pt_Launcher_secondStackGenRange = importFunc('pt_Launcher_secondStackGenRange', None, [type_voidp, type_uintp, type_uintp])
 
 # Fission-bank exchange for the parallel power iteration (PromptMPI allgathers
 # the blobs between ranks). loadSecondStack is bridged: a corrupted or foreign
@@ -216,6 +221,29 @@ class Launcher():
         num = type_sizet()
         raiseOnBridgeError(_pt_Launcher_goWithSecondStack(self.cobj, int(numPrimary), ctypes.pointer(num)))
         return num.value
+
+    def goKWithSecondStacks(self, k, numPrimary, genMax=0):
+        """K transport cycles per bank exchange (K-cycle power iteration).
+
+        Runs K rank-local cycles (normalise -> swap -> transport each) and
+        returns (births, cyclesRun): births is the summed secondary count
+        over the cycles, cyclesRun the number actually run (a rank whose
+        bank goes extinct mid-block — or whose generation spread exceeds
+        genMax when genMax>0 — runs fewer and sits out the rest of the
+        block). The caller performs the cross-rank bank exchange once per
+        block. k=1 is identical to goWithSecondStack."""
+        births = type_sizet()
+        cycles = type_uint()
+        raiseOnBridgeError(_pt_Launcher_goKWithSecondStacks(
+            self.cobj, int(k), int(numPrimary), int(genMax),
+            ctypes.pointer(births), ctypes.pointer(cycles)))
+        return births.value, cycles.value
+
+    def secondStackGenRange(self):
+        """(min, max) fission generation in the bank; (0, 0) when empty."""
+        lo, hi = type_uint(), type_uint()
+        _pt_Launcher_secondStackGenRange(self.cobj, ctypes.pointer(lo), ctypes.pointer(hi))
+        return lo.value, hi.value
 
     def secondStackSize(self):
         """The byte size the next exportSecondStack blob would have.

@@ -64,6 +64,10 @@ namespace Prompt {
     size_t getNumParticleInStack() const { return m_stack.size(); }
     size_t getNumParticleInSecondStack() const { return m_stack_second.size(); }
 
+    // generation spread of the second bank: (0, 0) when empty. Used by the
+    // K-cycle block loop (goKWithSecondStacks) to enforce the skew limit.
+    void generationRangeSecondStack(uint32_t &lo, uint32_t &hi) const;
+
     friend std::ostream& operator << (std::ostream &, const StackManager&);
 
   private:

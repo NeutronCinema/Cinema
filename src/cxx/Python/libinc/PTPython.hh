@@ -56,6 +56,13 @@ int pt_Launcher_setGun(void *obj, const char* cfg);
 // through the out-pointer.
 int pt_Launcher_simOneEvent(void *obj, bool recordTrj);
 int pt_Launcher_goWithSecondStack(void *obj, uint64_t numParticle, size_t *out);
+// K-cycle batched power iteration (plan appendix 13): K transport cycles
+// per call, generation-skew bound, cycles actually run through the
+// out-pointer, births as the return value via out Births.
+int pt_Launcher_goKWithSecondStacks(void *obj, unsigned k, uint64_t numParticle,
+                                    unsigned genMax, size_t *outBirths, unsigned *outCycles);
+// generation-skew instrument: min/max fission generation in the second bank
+void pt_Launcher_secondStackGenRange(void *obj, unsigned *lo, unsigned *hi);
 
 // Prompt::HistBase
 // merge bridges return an int status (0 ok / nonzero error, message via

@@ -36,8 +36,17 @@ namespace Prompt {
     // rank-local population control between them; the cross-rank bank
     // exchange happens once per block on the python side. This reduces
     // the per-cycle collective cost by K for large-rank-count MPI runs.
-    // K=1 is semantically identical to per-cycle exchange.
-    std::size_t goKWithSecondStacks(unsigned a_k, uint64_t numParticle);
+    // a_genMax>0 ends the block early on generation-skew overrun; the
+    // number of cycles actually run comes back in a_cyclesRun (a rank
+    // whose bank goes extinct mid-block sits out the rest). K=1 is
+    // semantically identical to per-cycle exchange.
+    std::size_t goKWithSecondStacks(unsigned a_k, uint64_t numParticle,
+                                    unsigned a_genMax, unsigned &a_cyclesRun);
+
+    // generation spread of the second bank (0,0) when empty; the python
+    // side logs it per block as the generation-skew instrument
+    void secondStackGenerationRange(uint32_t &lo, uint32_t &hi) const
+    { m_stackManager.generationRangeSecondStack(lo, hi); }
 
     // fission-bank exchange for the parallel power iteration: the python
     // side (PromptMPI + mpi4py) allgathers the blobs across ranks between

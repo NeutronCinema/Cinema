@@ -80,6 +80,28 @@ def _nn_windows(num, size):
     return out
 
 
+def keff_from_block(births, cycles, num):
+    """k_eff of a K-cycle block, from the summed fission births.
+
+    Every cycle — including every cycle inside a block — starts by
+    resampling its source back to ``num`` sites (normaliseSecondStack), so
+    the births do NOT compound across the block: births = num * k * cycles,
+    and the estimate is the plain ratio births / (num * cycles), identical
+    in form to the per-cycle births/num of simulateSecondStack. (The
+    compounding polynomial k + k^2 + ... would apply only to an un-normalised
+    chain; the bank normalisation removes exactly that effect, which the
+    K=1 bit-identity anchor confirms.)
+
+    Assumes every cycle of the block ran everywhere (no mid-block rank
+    extinction); simulateKStacks returns the allreduced max cycle count,
+    which matches that assumption while the chain is near critical.
+    """
+    cycles = int(cycles)
+    if cycles < 1:
+        raise ValueError(f'cycles must be >= 1, got {cycles}')
+    return float(births) / (float(num) * float(cycles))
+
+
 def _nn_send_indices(sample, counts, num, size, rank):
     """Pure assignment half of the nearest-neighbour bank exchange.
 
@@ -453,7 +475,8 @@ class PromptMPI(Prompt):
         self._bank_exchange = bank_exchange
         self._base_seed = int(seed)
         self._keff_cycle = 0
-        self._prof_acc = {'transport': 0.0, 'reduce': 0.0, 'exchange': 0.0, 'wall': 0.0, 'cycles': 0}
+        self._prof_acc = {'transport': 0.0, 'reduce': 0.0, 'exchange': 0.0, 'wall': 0.0, 'cycles': 0,
+                          'blocks': 0}
         if MPI is None:
             raise ImportError(
                 'PromptMPI requires the mpi4py package, which is not installed '
@@ -543,6 +566,7 @@ class PromptMPI(Prompt):
             # identity path: bit-identical to the serial Prompt, no
             # collective calls, no extra RNG consumption
             return super().simulateSecondStack(num)
+
         num = int(num)
         if num < self._size:
             raise ValueError(f'parallel power iteration needs num >= size '
@@ -593,6 +617,108 @@ class PromptMPI(Prompt):
         self._keff_cycle += 1
         return total
 
+    def simulateKStacks(self, num, k, genMax=0):
+        """K-cycle batched power iteration (plan appendix 13).
+
+        Like simulateSecondStack, but the ranks run ``k`` transport cycles
+        rank-locally between cross-rank fission-bank exchanges — one
+        collective round per block instead of one per cycle. This is the
+        same delayed-synchronisation structure OpenMC's batches have, and
+        it targets the large-rank-count regime where the per-cycle
+        collective dominates the wall clock. The exchange itself keeps the
+        nearest-neighbour semantics (bank_exchange == 'pooled' is not
+        offered here: the pooled allgather is exactly the cost this entry
+        exists to avoid).
+
+        Each bank neutron carries its fission-chain generation (daughters
+        inherit parent+1; the bank blob format PKB2 persists it across the
+        exchange), and ``genMax > 0`` ends a block early when a rank's
+        in-bank generation spread exceeds it.
+
+        ``k=1`` is semantically identical to simulateSecondStack — use the
+        latter directly as the regression anchor.
+
+        Args:
+            num: total source size per cycle (as in simulateSecondStack;
+                identical on every rank).
+            k: block length in cycles (>= 1).
+            genMax: generation-skew bound; 0 disables the early break.
+
+        Returns:
+            (births, cycles): the pooled fission-birth count summed over
+            the block and the block length in cycles (allreduced max; a
+            rank whose bank goes extinct mid-block runs fewer). Estimate
+            k_eff with keff_from_block(births, cycles, num) — the plain
+            births/(num*cycles) ratio, same form as the per-cycle
+            births/num of simulateSecondStack (each cycle renormalises its
+            source to num, so nothing compounds across the block).
+
+        Raises:
+            RuntimeError: collectively, same wording and conditions as
+                simulateSecondStack (empty entry bank / all-dead block).
+        """
+        k = int(k)
+        genMax = int(genMax)
+        if k < 1:
+            raise ValueError(f'k must be >= 1, got {k}')
+        if self._size == 1:
+            # serial: no exchange at all, the block is k plain cycles
+            return self.l.goKWithSecondStacks(k, int(num), genMax)
+        num = int(num)
+        if num < self._size:
+            raise ValueError(f'parallel power iteration needs num >= size '
+                             f'(got num={num}, size={self._size}); a pooled source '
+                             'smaller than the rank count has no well-defined '
+                             'chain semantics')
+        # same entry guard as simulateSecondStack: a rank with an empty bank
+        # would die rank-locally inside the C++ entry and hang the others
+        empty = 1 if self.l.secondStackSize() <= 12 else 0  # 12 bytes: header-only blob
+        if self.comm.allreduce(empty, op=MPI.SUM):
+            raise RuntimeError('a rank enters the power iteration with an empty '
+                               'fission bank; run more events in simulate() first '
+                               'so every rank banks fissions')
+        lo, hi = _nn_windows(num, self._size)[self._rank]
+        local = hi - lo
+        _t_prof = os.environ.get('PROMPT_MPI_PROFILE')
+        _t_a = time.perf_counter() if _t_prof else 0.0
+        births, cycles = self.l.goKWithSecondStacks(k, local, genMax)
+        _t_b = time.perf_counter() if _t_prof else 0.0
+        total = self.comm.allreduce(births, op=MPI.SUM)
+        block_cycles = self.comm.allreduce(cycles, op=MPI.MAX)
+        _t_c = time.perf_counter() if _t_prof else 0.0
+        if block_cycles == 0:
+            # the serial clean stop, raised in lockstep on every rank
+            raise RuntimeError('secondary stack is empty')
+        if _t_prof:
+            glo, ghi = self.l.secondStackGenRange()
+            gmin = self.comm.allreduce(glo if births else 1 << 30, op=MPI.MIN)
+            gmax = self.comm.allreduce(ghi, op=MPI.MAX)
+            genspan = (gmax - gmin) if gmax else 0
+            st = self._prof_acc
+            st['transport'] += _t_b - _t_a
+            st['reduce'] += _t_c - _t_b
+            st['blocks'] += 1
+            if st['blocks'] % 10 == 0:
+                import sys as _s
+                print(f'PROF-K rank={self.comm.Get_rank()} blocks={st["blocks"]} '
+                      f'cycles={block_cycles} births={total} genspan={genspan} '
+                      f'transport={st["transport"]:.1f}', file=_s.stderr, flush=True)
+        if block_cycles and total == 0:
+            # defensive: the all-dead case is caught above via cycles; this
+            # guards a future estimator change against a silent 0-divide
+            raise RuntimeError('secondary stack is empty')
+        _t_d = time.perf_counter() if _t_prof else 0.0
+        self._exchangeBankNearestNeighbour(num, local)
+        _t_e = time.perf_counter() if _t_prof else 0.0
+        if _t_prof:
+            st = self._prof_acc
+            st['exchange'] += _t_e - _t_d
+            st['wall'] += _t_e - _t_a
+        # drives the shared sampling of the nearest-neighbour exchange;
+        # identical across ranks because every rank calls in lockstep
+        self._keff_cycle += 1
+        return total, block_cycles
+
     def _exchangeBankPooled(self, local):
         """Allgather the raw banks; resample the local share from the pool.
 
@@ -625,16 +751,16 @@ class PromptMPI(Prompt):
         allgather of the bank sizes plus one alltoall of the site blobs.
         """
         blob = self.l.exportSecondStack() if local else b''
-        # (len - 12) // 84 unpacks the record count of a PKB1 blob; the
+        # (len - 12) // 88 unpacks the record count of a PKB2 blob; the
         # layout is fixed by BankRecord in PTStackManager.cc
-        counts = self.comm.allgather(max(len(blob) - 12, 0) // 84)
+        counts = self.comm.allgather(max(len(blob) - 12, 0) // 88)
         total_bank = sum(counts)
         if total_bank == 0:
-            # all-dead safety net: simulateSecondStack already stops the
-            # loop collectively before we get here. Keep the bank empty;
-            # the literal is the 12-byte empty PKB1 blob (magic + count 0).
+            # all-dead safety net: simulateSecondStack/simulateKStacks already
+            # stop the loop collectively before we get here. Keep the bank
+            # empty; the literal is the 12-byte empty PKB2 blob (magic + count 0).
             if local:
-                self.l.importSecondStack(b'PKB1' + b'\x00' * 8, 0)
+                self.l.importSecondStack(b'PKB2' + b'\x00' * 8, 0)
             return
         # the shared sample: identical on every rank; sorted, it is the next
         # source in bank order. Sampling with replacement, like OpenMC.

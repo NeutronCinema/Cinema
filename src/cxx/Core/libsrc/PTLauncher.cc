@@ -204,19 +204,31 @@ void Prompt::Launcher::simOneEvent(bool recordTrj)
     }
 }
 
-std::size_t Prompt::Launcher::goKWithSecondStacks(unsigned a_k, uint64_t numParticle)
+std::size_t Prompt::Launcher::goKWithSecondStacks(unsigned a_k, uint64_t numParticle,
+                                                  unsigned a_genMax, unsigned &a_cyclesRun)
 {
   // K transport cycles with only the rank-local population control between
   // them. The caller performs the cross-rank bank exchange once per block.
-  // K=1 is identical to the per-cycle exchange path.
+  // K=1 with an unlimited skew bound is identical to the per-cycle exchange
+  // path (same RNG stream; the generation-range scan reads but never draws).
+  // a_genMax > 0 ends the block early when the bank's generation spread
+  // exceeds it (plan appendix 13: 超限强制交换).
   std::size_t total = 0;
+  a_cyclesRun = 0;
   for (unsigned i = 0; i < a_k; ++i) {
     if (m_stackManager.getNumParticleInSecondStack() == 0)
       break;  // local population extinct: rank sits out the rest of the block
+    if (a_genMax) {
+      uint32_t glo, ghi;
+      m_stackManager.generationRangeSecondStack(glo, ghi);
+      if (ghi - glo + 1 > a_genMax)
+        break;
+    }
     m_stackManager.normaliseSecondStack(numParticle);
     m_stackManager.swapStack();
     simOneEvent(false);
     total += m_stackManager.getNumParticleInSecondStack();
+    ++a_cyclesRun;
   }
   return total;
 }

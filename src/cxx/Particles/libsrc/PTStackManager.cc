@@ -45,11 +45,12 @@ namespace {
     double weight;
     double surviveP;
     int32_t pdg;
+    uint32_t gen;  // fission-chain generation (PKB2; PKB1 blobs are rejected)
   };
 #pragma pack(pop)
-  static_assert(sizeof(BankRecord) == 10 * 8 + 4, "unexpected padding in BankRecord");
+  static_assert(sizeof(BankRecord) == 10 * 8 + 8, "unexpected padding in BankRecord");
 
-  const char BANK_MAGIC[4] = {'P', 'K', 'B', '1'};
+  const char BANK_MAGIC[4] = {'P', 'K', 'B', '2'};
   constexpr size_t BANK_HEADER = sizeof(BANK_MAGIC) + sizeof(uint64_t);
 }
 
@@ -139,6 +140,20 @@ void Prompt::StackManager::swapStack()
   m_stack.swap(m_stack_second);
 }
 
+void Prompt::StackManager::generationRangeSecondStack(uint32_t &lo, uint32_t &hi) const
+{
+  lo = hi = 0;
+  if(m_stack_second.empty())
+    return;
+  lo = hi = m_stack_second.front()->getGeneration();
+  for(const auto &p : m_stack_second)
+  {
+    const uint32_t g = p->getGeneration();
+    if(g < lo) lo = g;
+    if(g > hi) hi = g;
+  }
+}
+
 std::vector<char> Prompt::StackManager::dumpSecondStack() const
 {
   std::vector<char> blob(BANK_HEADER + m_stack_second.size() * sizeof(BankRecord));
@@ -161,6 +176,7 @@ std::vector<char> Prompt::StackManager::dumpSecondStack() const
     rec->weight = p->getWeight();
     rec->surviveP = p->getSurviveP();
     rec->pdg = p->getPDG();
+    rec->gen = p->getGeneration();
     ++rec;
   }
   return blob;
@@ -185,7 +201,7 @@ void Prompt::StackManager::importSecondStack(const std::vector<char> &blob, long
     if(blob.size() - off < BANK_HEADER)
       PROMPT_THROW(DataLoadError, "trailing bytes where a second-stack blob header should be");
     if(memcmp(blob.data() + off, BANK_MAGIC, sizeof(BANK_MAGIC)))
-      PROMPT_THROW(DataLoadError, "second-stack blob has a wrong magic (expected PKB1)");
+      PROMPT_THROW(DataLoadError, "second-stack blob has a wrong magic (expected PKB2)");
     uint64_t count = 0;
     memcpy(&count, blob.data() + off + sizeof(BANK_MAGIC), sizeof(count));
     // the division doubles as the overflow guard: it caps count at what the
@@ -221,6 +237,7 @@ void Prompt::StackManager::importSecondStack(const std::vector<char> &blob, long
       p->setDirection(Vector(rec->dir[0], rec->dir[1], rec->dir[2]));
       p->setTime(rec->time);
       p->setWeight(rec->weight);
+      p->setGeneration(rec->gen);
       p->scaleSurviveP(rec->surviveP); // a fresh particle starts at 1.0, so this restores the value
       fresh.emplace_back(std::move(p));
     }
@@ -253,7 +270,7 @@ std::vector<char> Prompt::StackManager::extractSecondStack(const std::vector<cha
   if(blob.size() < BANK_HEADER)
     PROMPT_THROW(DataLoadError, "second-stack blob is shorter than its header");
   if(memcmp(blob.data(), BANK_MAGIC, sizeof(BANK_MAGIC)))
-    PROMPT_THROW(DataLoadError, "second-stack blob has a wrong magic (expected PKB1)");
+    PROMPT_THROW(DataLoadError, "second-stack blob has a wrong magic (expected PKB2)");
   uint64_t count = 0;
   memcpy(&count, blob.data() + sizeof(BANK_MAGIC), sizeof(count));
   // the division doubles as the overflow guard, as in importSecondStack

@@ -24,6 +24,7 @@
 #include "PTVector.hh"
 #include "PTMath.hh"
 #include "PTUnitSystem.hh"
+#include <cstdint>  // uint32_t (generation); gcc 16: no transitive include
 #include <ostream>
 
 //! Particle pgd code is zero by default.  neutron(2112). Proton (2212) is also supported.
@@ -81,6 +82,12 @@ namespace Prompt {
     double getSurviveP() const { return m_surviveP; }
     void scaleSurviveP(double scale) { m_surviveP*= scale;}
 
+    // fission-chain generation (0 = source particle); daughters inherit
+    // parent+1 at birth, transport preserves it. Used by the K-cycle batched
+    // power iteration to tag bank neutrons and measure the generation skew.
+    uint32_t getGeneration() const { return m_generation; }
+    void setGeneration(uint32_t gen) { m_generation = gen; }
+
     friend std::ostream& operator << (std::ostream &, const Particle&);
 
   protected:
@@ -89,6 +96,7 @@ namespace Prompt {
     double m_weight, m_surviveP;
     double m_rest_mass;
     unsigned long long m_eventid, m_id, m_parentid;
+    uint32_t m_generation;
     int m_pdg;
     KillType m_killtype;
     bool m_alive;
@@ -104,6 +112,7 @@ namespace Prompt {
 inline Prompt::Particle::Particle(int pdg)
   :m_ekin0(0.), m_ekin(0.), m_time(0.), m_dir(), m_pos(), m_pdg(pdg),
   m_weight(1.), m_surviveP(1.), m_rest_mass(0.), m_alive(true), m_eventid(0), m_id(0), m_parentid(0),
+  m_generation(0),
   m_step(0.), m_deltaEn(0.), m_deposition(0.)
 {
   if(m_pdg == const_neutron_pgd)
@@ -113,6 +122,7 @@ inline Prompt::Particle::Particle(int pdg)
 inline Prompt::Particle::Particle(double ekin, const Vector& dir, const Vector& pos, int pdg)
   :m_ekin0(ekin), m_ekin(ekin), m_time(0.), m_dir(dir), m_pos(pos), m_pdg(pdg),
   m_weight(1.), m_surviveP(1.), m_rest_mass(0), m_alive(true), m_eventid(0), m_id(0), m_parentid(0),
+  m_generation(0),
   m_step(0.), m_deltaEn(0.), m_deposition(0.)
 {
   if(m_pdg == const_neutron_pgd)

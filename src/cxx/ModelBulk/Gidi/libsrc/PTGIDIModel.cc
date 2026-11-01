@@ -228,6 +228,7 @@ const Prompt::SampledResult& Prompt::GIDIModel::sampleReaction(double ekin, cons
         #endif
         Neutron sec(gidi_ekin_ev, gidi_dir, primary.getPosition());
         sec.setTime(primary.getTime() + aproduct.m_birthTimeSec);
+        sec.setGeneration(primary.getGeneration() + 1);
         secondaries.push_back(sec);
       }
       else if(aproduct.m_userProductIndex==const_photon_pgd)
@@ -237,6 +238,7 @@ const Prompt::SampledResult& Prompt::GIDIModel::sampleReaction(double ekin, cons
         #endif
         Photon sec(gidi_ekin_ev, gidi_dir, primary.getPosition());
         sec.setTime(primary.getTime() + aproduct.m_birthTimeSec);
+        sec.setGeneration(primary.getGeneration() + 1);
         if(m_factory.getGidiSetting().getGammaTransport() )
         {
           secondaries.push_back(sec);
