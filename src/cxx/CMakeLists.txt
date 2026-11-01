@@ -23,6 +23,12 @@ project(prompt_core)
 find_package(HDF5 REQUIRED COMPONENTS C)
 message(STATUS "FOUND HDF5:  ${HDF5_INCLUDE_DIR}")
 
+# imported targets used below (NCrystal::NCrystal, VecGeom::vecgeom/vgdml,
+# NCrystal_INCDIR, VECGEOM_INCLUDE_DIRS); without these find_package calls a
+# fresh configure only warns and the link step fails
+find_package(NCrystal REQUIRED)
+find_package(VecGeom REQUIRED)
+
 # Add an option to enable/disable GIDI
 option(ENABLE_GIDI "Enable the GIDI module" ON)
 

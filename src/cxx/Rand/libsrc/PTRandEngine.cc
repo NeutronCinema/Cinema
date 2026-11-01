@@ -20,6 +20,8 @@
 
 #include "PTRandEngine.hh"
 
+#include <cstdint>
+
 Prompt::RandEngine::RandEngine(uint64_t theseed)
 {
   seed(theseed);

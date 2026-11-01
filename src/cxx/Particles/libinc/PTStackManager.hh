@@ -25,6 +25,7 @@
 #include "PromptCore.hh"
 #include "PTParticle.hh"
 #include <ostream>
+#include <cstdint>  // fixed-width ints (gcc 16: no transitive include)
 
 namespace Prompt {
 

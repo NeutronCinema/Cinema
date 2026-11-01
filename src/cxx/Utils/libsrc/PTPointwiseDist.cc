@@ -1,4 +1,5 @@
 #include "PTPointwiseDist.hh"
+#include <algorithm>
 #include <iterator>
 #include "PTMath.hh"
 

@@ -22,6 +22,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "PromptCore.hh"
+#include <cstdint>  // fixed-width ints (gcc 16: no transitive include)
 
 namespace Prompt {
   //This is the RandXRSR class of NCrystal to be removed

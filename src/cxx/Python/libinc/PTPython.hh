@@ -22,6 +22,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "PromptCore.hh"
+#include <cstdint>  // fixed-width ints (gcc 16: no transitive include)
 
 #ifdef __cplusplus
 extern "C" {
