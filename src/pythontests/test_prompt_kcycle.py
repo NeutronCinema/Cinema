@@ -128,6 +128,7 @@ def test_simulateKStacks_rejects_zero_k():
         sim.simulateKStacks(100, 0)
 
 
+@pytest.mark.slow  # real gidi simulation in subprocesses (>30 s)
 def test_k1_bit_identity_serial(_gidi_ready):
     """K=1 births match goWithSecondStack exactly, cycle for cycle."""
     py = sys.executable
@@ -142,6 +143,7 @@ def test_k1_bit_identity_serial(_gidi_ready):
     assert outs['plain'] == outs['k1']
 
 
+@pytest.mark.slow  # real gidi simulation in subprocesses (>30 s)
 def test_k5_births_match_plain_stream(_gidi_ready):
     """The serial K=5 block must reproduce the same chain as plain: the
     per-cycle renormalise/swap sequence is unchanged, so the summed births

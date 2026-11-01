@@ -39,7 +39,7 @@ pt::StackManager &g_stack = pt::Singleton<pt::StackManager>::getInstance();
 std::vector<char> emptyBankBlob()
 {
   std::vector<char> b(12, 0); // magic + uint64 count
-  memcpy(b.data(), "PKB1", 4);
+  memcpy(b.data(), "PKB2", 4);
   return b;
 }
 
@@ -61,6 +61,11 @@ void fillBank()
   g.setTime(7.0e-6);
   g.setWeight(2.0);
   g.scaleSurviveP(0.25);
+  // PKB2 carries the fission generation: non-trivial distinct values so the
+  // roundtrip check covers the gen field end to end
+  p1.setGeneration(3);
+  p2.setGeneration(7);
+  g.setGeneration(11);
   g_stack.addSecondary(p1, true);
   g_stack.addSecondary(p2, true);
   g_stack.addSecondary(g, true);
@@ -74,7 +79,7 @@ TEST_CASE("bank roundtrip is byte-identical and field-faithful")
   CHECK(g_stack.getNumParticleInSecondStack() == 3);
 
   std::vector<char> blob1 = g_stack.dumpSecondStack();
-  REQUIRE(blob1.size() == 12 + 3 * 84u); // header + 3 packed records
+  REQUIRE(blob1.size() == 12 + 3 * 88u); // header + 3 packed records
 
   g_stack.importSecondStack(blob1, 3);
   std::vector<char> blob2 = g_stack.dumpSecondStack();
@@ -92,6 +97,7 @@ TEST_CASE("bank roundtrip is byte-identical and field-faithful")
   CHECK(p->getTime() == doctest::Approx(7.0e-6).scale(0.));
   CHECK(p->getWeight() == doctest::Approx(2.0).scale(0.));
   CHECK(p->getSurviveP() == doctest::Approx(0.25).scale(0.));
+  CHECK(p->getGeneration() == 11u);
   CHECK(p->getDirection() == pt::Vector(-0.28, -0.96, 0.0));
   CHECK(p->getPosition() == pt::Vector(4.0, 4.0, 0.0));
   // the bank had three particles; two remain (now in the transport stack;
@@ -232,7 +238,7 @@ TEST_CASE("extractSecondStack picks records by local index, order preserved")
   // record 2 is the photon, record 0 the first neutron: the extracted
   // order {2, 0} round-trips verbatim, LIFO pops record 0 first
   std::vector<char> sub = g_stack.extractSecondStack(blob, {2, 0});
-  REQUIRE(sub.size() == 12 + 2 * 84u);
+  REQUIRE(sub.size() == 12 + 2 * 88u);
   g_stack.importSecondStack(sub, 0);
   g_stack.swapStack();
   std::unique_ptr<pt::Particle> p = g_stack.pop();
@@ -250,20 +256,20 @@ TEST_CASE("extractSecondStack concatenation, duplicates and empty selection")
 
   // an extract of {2, 0} carries the singleton extracts' records, in the
   // index order, behind its own single header (each extract is a complete
-  // blob, so the comparison is over the 84-byte record payloads)
+  // blob, so the comparison is over the 88-byte record payloads)
   std::vector<char> sub = g_stack.extractSecondStack(blob, {2, 0});
   std::vector<char> s2 = g_stack.extractSecondStack(blob, {2});
   std::vector<char> s0 = g_stack.extractSecondStack(blob, {0});
-  REQUIRE(sub.size() == 12 + 2 * 84u);
-  CHECK(memcmp(sub.data() + 12, s2.data() + 12, 84) == 0);
-  CHECK(memcmp(sub.data() + 12 + 84, s0.data() + 12, 84) == 0);
+  REQUIRE(sub.size() == 12 + 2 * 88u);
+  CHECK(memcmp(sub.data() + 12, s2.data() + 12, 88) == 0);
+  CHECK(memcmp(sub.data() + 12 + 88, s0.data() + 12, 88) == 0);
 
   // a duplicate index duplicates the record (with-replacement sampling)
   std::vector<char> dup = g_stack.extractSecondStack(blob, {1, 1});
   std::vector<char> s1 = g_stack.extractSecondStack(blob, {1});
-  REQUIRE(dup.size() == 12 + 2 * 84u);
-  CHECK(memcmp(dup.data() + 12, s1.data() + 12, 84) == 0);
-  CHECK(memcmp(dup.data() + 12 + 84, s1.data() + 12, 84) == 0);
+  REQUIRE(dup.size() == 12 + 2 * 88u);
+  CHECK(memcmp(dup.data() + 12, s1.data() + 12, 88) == 0);
+  CHECK(memcmp(dup.data() + 12 + 88, s1.data() + 12, 88) == 0);
 
   // an empty selection is the valid 12-byte empty bank
   CHECK(g_stack.extractSecondStack(blob, {}) == emptyBankBlob());
