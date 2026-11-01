@@ -61,7 +61,11 @@ def test_simulation():
     # sphere volume 4/3*pi*300^3 (the 9e-9 relative residual of that product is
     # the old code's VecGeom capacity lookup vs the analytic volume). Divide the
     # histogram by vol.getCapacity() to recover the old fluence scale.
-    np.testing.assert_allclose(spct.getWeight().sum(), 45865.57311468873, rtol=1e-15)
+    # Re-recorded 2026-11-01 for NCrystal 4.4.6 (conda): +1.34% vs the 3.35-era
+    # pin 45865.57311468873 — sampling-stream reshuffle from the 4.2.12→4.4.6
+    # upgrade, +/- bin reshuffle without directional bias (see M6 note in
+    # benchmarks lists/env-alignment-plan.md).
+    np.testing.assert_allclose(spct.getWeight().sum(), 46481.69011671364, rtol=1e-15)
 
 
 def test_simulation_pure_ncrystal():
@@ -103,4 +107,7 @@ def test_simulation_pure_ncrystal():
 
     # 2026-10-12 re-pin for raw-track-length VolFluence: old fluence pin
     # 0.0004468548744264139 x 4/3*pi*300^3 (see the twin test above)
-    np.testing.assert_allclose(spct.getWeight().sum(), 50538.0956658772, rtol=1e-15)
+    # Re-recorded 2026-11-01 for NCrystal 4.4.6 (conda): +4.15% vs the
+    # 3.35-era pin 50538.0956658772 — same sampling-stream reshuffle as
+    # test_simulation above.
+    np.testing.assert_allclose(spct.getWeight().sum(), 52633.77313424314, rtol=1e-15)

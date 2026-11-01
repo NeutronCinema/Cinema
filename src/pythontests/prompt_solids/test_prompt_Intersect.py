@@ -66,7 +66,9 @@ def test_simulation():
     # 2026-10-12: VolFluence now accumulates raw track length, so the pins are
     # the 2026-10-11 fluence values times the volume 200^3 = 8e6 mm^3 (Box takes
     # half-lengths). Divide the histogram by vol.getCapacity() for the fluence.
-    np.testing.assert_allclose(sum1, 473843.23441)
+    # 2026-11-01: re-anchored for NCrystal 4.4.6 (conda) sampling reshuffle —
+    # old 4.2.12-era value 473843.23441 (+0.53% shift, no directional bias).
+    np.testing.assert_allclose(sum1, 476334.679741)
 
     # geo reference
     sim.clear()
@@ -76,7 +78,7 @@ def test_simulation():
     sim.simulate(gun, partnum)
     spct = sim.gatherHistData('spct')
     sumref = spct.getWeight().sum()
-    np.testing.assert_allclose(sumref, 473843.2344021093)  # 0.059230404300263766 * 8e6
+    np.testing.assert_allclose(sumref, 476334.679741)  # 0.059541834967625 * 8e6 (4.4.6 re-anchor; 4.2.12-era: 0.059230404300263766 * 8e6)
     # semantic anchor: SolidIntersection must reproduce the equivalent solid.
     # Tightened from rtol=1e-5 (2026-10-11): the old scorer normalised by the
     # VecGeom capacity, whose ~3e-6 numerical error for the intersection shape
