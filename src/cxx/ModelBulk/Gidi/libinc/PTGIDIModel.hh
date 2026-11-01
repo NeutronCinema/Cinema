@@ -21,6 +21,7 @@
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
+#include <vector>
 #include <string>
 #include <memory>
 #include <set>
@@ -54,6 +55,12 @@ namespace Prompt {
 
     virtual double getCrossSection(double ekin) const override;
     virtual double getCrossSection(double ekin, const Vector &dir) const override;
+
+    // Native heated-grid energies of the underlying protare (for the host-side
+    // flat total-xs cache); returns false when the grid is unavailable.
+    bool appendEnergyGrid(std::vector<double> &out) const;
+    // URR probability-table band of this protare (false when none).
+    bool urrDomain(double &lo, double &hi) const;
     virtual const SampledResult& sampleReaction(double ekin, const Vector &dir) const override;
 
   protected:

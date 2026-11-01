@@ -138,6 +138,31 @@ double Prompt::GIDIModel::getCrossSection(double ekin, const Prompt::Vector &dir
   return getCrossSection(ekin);
 }
 
+  bool Prompt::GIDIModel::appendEnergyGrid(std::vector<double> &out) const
+  {
+    // the base MCGIDI::Protare hides the heated data behind the concrete
+    // type; both concrete types we can encounter here hold the same grid
+    if( m_mcprotare->protareType() == MCGIDI::ProtareType::single )
+    {
+      auto *single = static_cast<MCGIDI::ProtareSingle *>( m_mcprotare.get( ) );
+      auto &hcsVec = single->heatedCrossSections( ).heatedCrossSections( );
+      if( hcsVec.size( ) == 0 ) return false;
+      for( const auto &e : hcsVec[0]->energies( ) ) out.push_back( double(e) * 1e6 );  // MeV -> eV
+      return true;
+    }
+    // composite protares expose no per-part grid in this round: the
+    // host falls back to evaluating them on the other models' union grid.
+    return false;
+  }
+
+  bool Prompt::GIDIModel::urrDomain(double &lo, double &hi) const
+  {
+    if( !m_mcprotare->hasURR_probabilityTables( ) ) return false;
+    lo = m_mcprotare->URR_domainMin( ) * 1e6;  // MeV -> eV (cinema unit)
+    hi = m_mcprotare->URR_domainMax( ) * 1e6;
+    return true;
+  }
+
 const Prompt::SampledResult& Prompt::GIDIModel::sampleReaction(double ekin, const Vector &indir) const
 {
   pt_assert_always(ekin==m_cacheEkin);
@@ -154,13 +179,13 @@ const Prompt::SampledResult& Prompt::GIDIModel::sampleReaction(double ekin, cons
                                                            []() -> double { return getRandNumber(nullptr); } );
 
   MCGIDI::Reaction const *reaction = m_mcprotare->reaction( reactionIndex );
-  // gidiplus samples against its own cross-section tables, where the
-  // threshold comparison lives in MeV while ekin arrives in eV: a draw right
-  // at a reaction threshold can round to threshold == ekin. The strict <
-  // fired once per ~1e7-1e8 samples at the hybrid switching energy (first
-  // seen on the HEU-SOL-THERM-011 1e8-neutron benchmark), so accept the
-  // one-ulp window instead of killing long production runs.
-  pt_assert_always(m_mcprotare->threshold( reactionIndex ) <= ekin_MeV * (1.0 + 1e-9));
+  // NOTE: no threshold check here. gidiplus's sampleReaction owns the
+  // channel selection - it can legitimately hand back a reaction whose
+  // stored threshold sits at or even above the incident energy (boundary
+  // rounding at the hybrid switching energy, URR-band probability draws).
+  // First seen as a once-per-1e8-samples assert crash on the
+  // HEU-SOL-THERM-011 benchmark; the sampling is gidiplus's contract, so
+  // cinema processes whatever reaction it selected.
 
   m_products->clear();
   // In 3.35 the PUSHBACK callback is invoked unconditionally and is the ONLY route

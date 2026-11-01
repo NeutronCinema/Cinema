@@ -101,6 +101,11 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
   }
 #endif
 
+  // keep the per-model channel xs fresh for the pick: with the flat
+  // total-xs table serving the free-path draw this is the only per-collision
+  // evaluation; totalCrossSection's internal same-inquiry check makes it a
+  // cache hit on the direct path.
+  m_discretModels->totalCrossSection(particle.getPDG(), particle.getEKin(), particle.getDirection());
   auto &res = m_discretModels->pickAndSample(particle.getEKin(), particle.getDirection());
 
   // fixme: when a particle exiting a volume, a reaction channel is forced to sampled at the moment
@@ -133,6 +138,15 @@ bool Prompt::ParticleProcess::sampleFinalState(Prompt::Particle &particle, doubl
 
 double Prompt::ParticleProcess::sampleStepLength(const Prompt::Particle &particle, double &mxs) const
 {
+  // performance round goal 1 (附12): the flat total-xs table serves the
+  // free-path draw when tabulated; URR bands and out-of-domain energies
+  // fall back to the direct model-chain evaluation (tableLookup returns -1)
+  if( m_discretModels->totalXsTableReady( ) )
+  {
+    double tbl = m_discretModels->tableLookup( particle.getPDG( ), particle.getEKin( ) );
+    if( tbl >= 0.0 )
+      return -log( m_rng.generate( ) ) / tbl;
+  }
   // if (m_discretModels->getSupportedGPD() != particle.getPDG())
   //   PROMPT_THROW2(CalcError, "ParticleProcess::sampleStepLength " << m_name << " does not support particle " << particle.getPDG() << ", " << m_discretModels->getSupportedGPD());
 

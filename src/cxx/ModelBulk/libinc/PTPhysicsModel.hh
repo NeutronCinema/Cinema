@@ -63,6 +63,10 @@ namespace Prompt {
     bool isValid(int pdg, double ekin) {return m_modelvalid.isValid(pdg, ekin); }
     virtual double getCrossSection(double ekin) const ;
     virtual double getCrossSection(double ekin, const Vector &dir) const;
+    // flat-table hooks: a model can contribute its native heated-grid
+    // energies and declare its URR probability-table band; default = none
+    virtual bool appendEnergyGrid(std::vector<double> &) const { return false; }
+    virtual bool urrDomain(double &, double &) const { return false; }
 
     Vector randIsotropicDirection() const;
     Vector randDirectionGivenScatterMu( double mu, const Vector& indir ) const;

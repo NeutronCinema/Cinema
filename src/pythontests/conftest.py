@@ -14,9 +14,24 @@ import sys
 # locate cinemabin/src/cxx/libprompt_core.so. env.sh normally exports it,
 # but a shell that sourced env.sh without export (or any direct pytest run)
 # would leave every test collection dead with a confusing glob IndexError.
-os.environ.setdefault(
-    "CINEMAPATH",
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_cinema_root = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))  # src/pythontests -> src -> repo root
+# validate, don't just default: a stale CINEMAPATH (e.g. .../src) in the
+# environment would survive setdefault and kill every collection
+_probe = os.path.join(
+        os.environ.get("CINEMAPATH", ""), "cinemabin/src/cxx/libprompt_core.so")
+_probe_ok = os.path.isfile(_probe)
+if not _probe_ok:
+    os.environ["CINEMAPATH"] = _cinema_root
+# the Cinema package itself lives in <root>/src/python: make the collection
+# self-sufficient even when the shell did not export PYTHONPATH
+_src_python = os.path.join(_cinema_root, "src", "python")
+if os.path.isdir(_src_python) and _src_python not in sys.path:
+    sys.path.insert(0, _src_python)
+# the repo root hosts the `testsuite` namespace package (prompt_suite imports
+# it) — env.sh normally provides it via PYTHONPATH
+if _cinema_root not in sys.path:
+    sys.path.append(_cinema_root)
 
 collect_ignore = []
 

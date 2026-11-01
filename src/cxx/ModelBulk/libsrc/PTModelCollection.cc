@@ -184,6 +184,60 @@ double Prompt::ModelCollection::unbiasedAbsorptionCrossSection(int pdg, double e
   return 0.;
   }
 
+// ---- flat total-xs table (performance round goal 1, 附12) ----------------
+// Built lazily on the first steady-state query after the gidi models
+// materialise. Union grid of the gidi models' native heated grids (exact
+// resonance points preserved; pure merge, no tolerant dedup) evaluated
+// through the normal model chain, so the stored values are identical to
+// what the direct path would compute. URR bands are EXCLUDED from lookup
+// (stochastic physics stays on the direct path). Oriented models disable
+// the table entirely (direction-dependent xs). The table stores what the
+// model chain returns for the construction-time snapshot; test_prompt_bias
+// gates the bias semantics.
+
+void Prompt::ModelCollection::ensureTotalXsTable(int pdg) const
+{
+  if( m_xsTableReady ) return;
+  m_xsTableReady = true;  // one attempt: a failed build must not retry per step
+  if( m_containsOriented ) return;
+
+  std::vector<double> grid;
+  for( const auto &m : m_models )
+  {
+    std::vector<double> part;
+    if( m->appendEnergyGrid( part ) )
+      grid.insert( grid.end( ), part.begin( ), part.end( ) );
+    double lo, hi;
+    if( m->urrDomain( lo, hi ) ) m_urrBands.emplace_back( lo, hi );
+  }
+  if( grid.size( ) < 8 ) return;  // too sparse to tabulate: keep the direct path
+
+  std::sort( grid.begin( ), grid.end( ) );
+  grid.erase( std::unique( grid.begin( ), grid.end( ) ), grid.end( ) );
+  if( grid.size( ) < 8 ) return;
+
+  m_tableE = grid;
+  m_tableXS.resize( grid.size( ) );
+  Vector dir{0., 0., 1.};
+  for( std::size_t i = 0; i < grid.size( ); ++i )
+    m_tableXS[i] = totalCrossSection( pdg, grid[i], dir );
+}
+
+double Prompt::ModelCollection::tableLookup(int pdg, double ekin) const
+{
+  if( m_tableE.size( ) < 2 ) return -1.0;
+  if( ekin < m_tableE.front( ) || ekin > m_tableE.back( ) ) return -1.0;
+  for( const auto &b : m_urrBands )
+    if( ekin >= b.first && ekin <= b.second ) return -1.0;
+  auto it = std::lower_bound( m_tableE.begin( ), m_tableE.end( ), ekin );
+  if( it == m_tableE.end( ) || it == m_tableE.begin( ) ) return -1.0;
+  std::size_t i = it - m_tableE.begin( );
+  double e0 = m_tableE[i-1], e1 = m_tableE[i];
+  if( e1 <= e0 ) return -1.0;
+  double x = ( ekin - e0 ) / ( e1 - e0 );
+  return m_tableXS[i-1] * ( 1.0 - x ) + m_tableXS[i] * x;
+}
+
 double Prompt::ModelCollection::totalCrossSection(int pdg, double ekin, const Vector &dir) const
 {
   // offline callers (python xs(), unit tests) can reach the collection before

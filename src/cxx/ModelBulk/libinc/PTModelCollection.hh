@@ -23,6 +23,8 @@
 
 #include <string>
 #include <memory>
+#include <vector>
+#include <utility>
 #include "PromptCore.hh"
 #include "PTVector.hh"
 #include "PTRandCanonical.hh"
@@ -96,6 +98,16 @@ namespace Prompt {
 
     double totalCrossSection(int pdg, double ekin, const Vector &dir) const;
 
+    // Flat total-cross-section lookup table over the union of the gidi
+    // models' native heated grids (exact resonance points preserved; pure
+    // merge, no tolerant dedup). Built lazily on the first steady-state
+    // step after the gidi models materialise; stores TRUE cross sections -
+    // the bias multiplies at use time. URR probability-table bands and
+    // oriented models fall back to the direct path.
+    bool totalXsTableReady() const { return m_xsTableReady; }
+    double tableLookup(int pdg, double ekin) const;
+    void ensureTotalXsTable(int pdg) const;
+
     double unbiasedAbsorptionCrossSection(int pdg, double ekin) const;
     double calculateWeight(double lengthRho, bool hitWall);
     SampledResult&  pickAndSample(double ekin, const Vector &dir) const;
@@ -109,6 +121,10 @@ namespace Prompt {
     mutable XSCache m_cache;
     bool m_containsOriented;
     int m_forgpd;
+    // flat total-xs table (true xs; union grid)
+    mutable std::vector<double> m_tableE, m_tableXS;
+    mutable bool m_xsTableReady{false};
+    mutable std::vector<std::pair<double,double>> m_urrBands;
     mutable Vector m_localdir;
     mutable SampledResult m_res;
 
