@@ -242,6 +242,15 @@ def _validateNccfgContent(cfg):
         # side decide (at the cost of its uncatchable abort behaviour)
         return
     if hasError:
+        # File-resolution errors fail open: file existence is already
+        # checked by _validateNccfgFiles against the real search roots, and
+        # since NCrystal 4.x the raw C API keeps every data source disabled
+        # by default, so its "FileNotFound" no longer implies the file is
+        # missing. The C++ core retains the authoritative (and aborting)
+        # load, which is what this pre-check exists to anticipate; a stale
+        # FileNotFound here must not block valid configurations.
+        if errType == 'FileNotFound':
+            return
         raise ValueError(
             f"NCrystal rejected the material config '{cfg}': "
             f"[{errType}] {errMsg.splitlines()[0] if errMsg else errMsg}. "
