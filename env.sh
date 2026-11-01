@@ -52,5 +52,14 @@ if [ -z "${NCRYSTAL_LIB:-}" ] && [ -n "${NCRYSTAL_PLUGINMANAGER:-}" ]; then
 fi
 
 alias pull='git pull --recurse-submodules'
-# ln -s
+
+# Repo-root paths the test suite relies on (geonav/gidi ctest cases read data
+# relative to these): CINEMAPATH locates libprompt_core.so, NCRYSTAL_DATA_PATH
+# exposes the bundled ncmat files. Explicit exports win over the implicit
+# fallbacks; unset them to override with your own locations.
+_root="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+export CINEMAPATH="${CINEMAPATH:-$_root}"
+export NCRYSTAL_DATA_PATH="${NCRYSTAL_DATA_PATH:-$_root/ncmat}"
+unset _root
+
 echo -e "Enjoy!"
