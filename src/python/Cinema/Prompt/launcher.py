@@ -291,7 +291,7 @@ class Launcher():
         idx = np.asarray(local_indices, dtype=np.uint64)
         if idx.ndim != 1:
             raise ValueError('local_indices must be one-dimensional')
-        out = ctypes.create_string_buffer(12 + idx.size * 84)
+        out = ctypes.create_string_buffer(12 + idx.size * 88)  # PKB2 record
         written = type_sizet()
         raiseOnBridgeError(_pt_Launcher_extractSecondStack(
             self.cobj, blob, len(blob),
