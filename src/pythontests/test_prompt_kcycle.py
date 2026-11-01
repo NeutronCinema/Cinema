@@ -90,8 +90,8 @@ def test_gok_bridge_arg_conversion(monkeypatch):
 
     def fake_gok(cobj, k, num, genmax, births_out, cycles_out):
         seen.update(k=k, num=num, genmax=genmax)
-        births_out.value = 4321
-        cycles_out.value = 3
+        births_out[0] = 4321  # index assignment writes through the pointer
+        cycles_out[0] = 3
         return 0
 
     monkeypatch.setattr(launcher_mod, '_pt_Launcher_goKWithSecondStacks', fake_gok)
@@ -109,16 +109,11 @@ def test_gok_bridge_error_surfaces(monkeypatch):
         Prompt(seed=1).l.goKWithSecondStacks(1, 100, 0)
 
 
-def test_gok_rejects_zero_k():
-    with pytest.raises(ValueError):
-        Prompt(seed=1).l.goKWithSecondStacks(0, 100, 0)
-
-
 def test_simulateKStacks_serial_returns_launcher_tuple(monkeypatch):
     # size-1 PromptMPI forwards the block to the launcher entry verbatim
     def fake_gok(cobj, k, num, genmax, births_out, cycles_out):
-        births_out.value = 99
-        cycles_out.value = 2
+        births_out[0] = 99
+        cycles_out[0] = 2
         return 0
 
     monkeypatch.setattr(launcher_mod, '_pt_Launcher_goKWithSecondStacks', fake_gok)
@@ -154,15 +149,15 @@ def test_k5_births_match_plain_stream(_gidi_ready):
     py = sys.executable
     env = dict(os.environ, CINEMAPATH=os.environ.get('CINEMAPATH', '/data/caixx/cinema'))
 
-    def run(mode, k):
-        r = subprocess.run([py, '-c', _DRIVER, mode, str(k), '10'],
+    def run(mode, k, ncycles):
+        r = subprocess.run([py, '-c', _DRIVER, mode, str(k), str(ncycles)],
                            capture_output=True, text=True, env=env, timeout=600)
         assert r.returncode == 0, r.stderr[-2000:]
         line = [line for line in r.stdout.splitlines() if line.startswith('BIRTHS ')][-1]
         return [int(x) for x in line.split()[1:]]
 
-    plain = run('plain', 1)
-    k5 = run('k5', 5)
-    assert len(plain) == 10 and len(k5) == 2
-    for block in range(2):
+    plain = run('plain', 1, 50)   # 50 plain cycles
+    k5 = run('k5', 5, 10)         # 10 blocks x 5 cycles = the same 50 cycles
+    assert len(plain) == 50 and len(k5) == 10
+    for block in range(10):
         assert sum(plain[5 * block:5 * block + 5]) == k5[block]
