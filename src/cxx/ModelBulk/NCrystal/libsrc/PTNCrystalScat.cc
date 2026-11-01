@@ -116,6 +116,7 @@ Prompt::NCrystalScatComposite::NCrystalScatComposite(const std::string &cfgstrin
     PROMPT_THROW(CalcError, "The default unit of NCrystal is eV");
   // split on '|' at the top level; each part is "[<weight>*]<ncrystal cfg>"
   size_t pos = 0;
+  double ndMain = 0.;
   while(true) {
     size_t sep = cfgstring.find('|', pos);
     std::string part = cfgstring.substr(pos, sep == std::string::npos ? std::string::npos : sep - pos);
@@ -130,10 +131,22 @@ Prompt::NCrystalScatComposite::NCrystalScatComposite(const std::string &cfgstrin
       }
       if(weight <= 0.)
         PROMPT_THROW2(BadInput, "non-positive component weight in composite NCrystal config: " << cfgstring);
-      std::cerr << "[composite] constructing child weight=" << weight << " cfg=" << part << std::endl;
       m_children.push_back(std::make_unique<NCrystalScat>(part, bias, lowerlimt, upperlimt));
-      std::cerr << "[composite] child OK" << std::endl;
-      m_weights.push_back(weight);
+      // NCrystalScat returns the per-atom-average cross section of its own
+      // cfg; the superposed material wants component_i's MACROSCOPIC share,
+      // w_i * nd_i, expressed on the main component's per-atom basis
+      // (transport multiplies the composite sum by nd_main only). The ratio
+      // nd_i/nd_main is unit-invariant, so raw NCrystal number densities.
+      auto info = NCrystal::createInfo(NCrystal::MatCfg(part));
+      double nd = info->getNumberDensity().get();
+      if(ndMain == 0.) {
+        ndMain = nd;  // first component = main
+        m_weights.push_back(weight);
+      } else {
+        if(ndMain <= 0. || nd <= 0.)
+          PROMPT_THROW2(CalcError, "composite NCrystal component has no number density: " << part);
+        m_weights.push_back(weight * nd / ndMain);
+      }
     }
     if(sep == std::string::npos)
       break;

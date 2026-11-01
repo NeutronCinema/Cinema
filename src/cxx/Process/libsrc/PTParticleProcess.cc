@@ -217,7 +217,10 @@ std::vector<CompositeComp> splitComposite(const std::string &inner)
 // material is the superposition main@own-density + w_i*component_i@own-
 // density, so component isotope fractions enter scaled by
 // w_i * numdensity_i / numdensity_main (the transport number density is
-// main's), and duplicate isotopes across components merge by name.
+// main's). Main wins on overlap: a phase file's copy of an isotope the main
+// already carries is the same physical atom (TSL phase files mark such
+// carriers 'sterile' in their own composition) and must not double-count —
+// only isotopes absent from the main are added.
 std::vector<Prompt::IsotopeComposition> decomposeComposite(
     const std::vector<CompositeComp> &comps, Prompt::PhysicsFactory &pfact,
     Prompt::MaterialDecomposer &nm, double ndMain, double &temperature)
@@ -231,12 +234,13 @@ std::vector<Prompt::IsotopeComposition> decomposeComposite(
     auto part = nm.decompose(comps[i].cfg, tDummy);
     double scale = comps[i].weight * nd / ndMain;
     for (auto &iso : part) {
+      bool known = false;
+      for (const auto &dst : isotopes)
+        if (dst.name == iso.name) { known = true; break; }
+      if (known)
+        continue;  // main wins: same physical atom, already counted
       iso.frac *= scale;
-      bool merged = false;
-      for (auto &dst : isotopes)
-        if (dst.name == iso.name) { dst.frac += iso.frac; merged = true; break; }
-      if (!merged)
-        isotopes.push_back(std::move(iso));
+      isotopes.push_back(std::move(iso));
     }
   }
   return isotopes;
@@ -287,9 +291,14 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
     m_numdensity = pfact.nccalNumDensity("physics=ncrystal;nccfg='" + main_cfg + "'");
     double scatter_bias = 1., abs_bias = 1.;
     {
-      CfgParser::StringCfg cfg = Singleton<CfgParser>::getInstance().parse(cfgstr);
-      cfg.getDoubleIfExist("scatter_bias", scatter_bias);
-      cfg.getDoubleIfExist("abs_bias", abs_bias);
+      // raw configs (bare 'file.ncmat[;temp=...]' strings) have no key=value
+      // sections and CfgParser rejects them: biases only exist on wrapped
+      // cfgs, raw ones keep the defaults
+      try {
+        CfgParser::StringCfg cfg = Singleton<CfgParser>::getInstance().parse(cfgstr);
+        cfg.getDoubleIfExist("scatter_bias", scatter_bias);
+        cfg.getDoubleIfExist("abs_bias", abs_bias);
+      } catch (const Prompt::Error::BadInput &) {}
     }
 
     #ifdef ENABLE_GIDI
