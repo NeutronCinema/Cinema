@@ -337,6 +337,10 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
     else
     #endif
     {
+      if (cfgstr.find('|') != std::string::npos)
+        PROMPT_THROW(BadInput,
+          "composite ('|') NCrystal configs currently require gidi mode "
+          "(enableGidi); the non-gidi plugin route does not decompose them");
       // plugin #0: the same Abs+Scat pair in the same order, at unit bias,
       // produced through the registry instead of direct construction
       cfgNCrystalViaPlugin(cfgstr, 1.0, 1.0);
@@ -398,6 +402,10 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
     else
     #endif
     {
+      if (cfgstr.find('|') != std::string::npos)
+        PROMPT_THROW(BadInput,
+          "composite ('|') NCrystal configs currently require gidi mode "
+          "(enableGidi); the non-gidi plugin route does not decompose them");
       // plugin #0: the factory applies the same channel-enablement rule
       // (bias <= 0 skips, before construction) and the Scat-then-Abs order
       cfgNCrystalViaPlugin(cfgstr, scatter_bias, abs_bias);
