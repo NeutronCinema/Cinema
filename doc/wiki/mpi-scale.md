@@ -524,6 +524,61 @@ artefact: the per-cycle collectives and bank exchange measure only
 microseconds per cycle at these sizes (section 4).
 
 
+## 11. K-cycle batched power iteration: one bank exchange per block
+
+Verified 2026-11-01 on the 88-core development box, eigenvalue mode
+(`PromptMPI.simulateKStacks`). The per-cycle power iteration
+(`simulateSecondStack`) synchronises every generation: a births allreduce
+plus the nearest-neighbour fission-bank exchange, in lockstep across all
+ranks. `simulateKStacks(num, k)` runs `k` transport cycles rank-locally
+between exchanges — the same delayed-synchronisation structure OpenMC
+batches have — so the collective cost per cycle drops by ~k. Every bank
+neutron carries its fission generation (blob format PKB2); `genMax`
+optionally ends a block early when a rank's in-bank generation spread
+exceeds the bound.
+
+Measured on the HEU-SOL-THERM-011 solution benchmark (200 source cycles of
+20000 after 50 discards), cycle phase of the run:
+
+| ranks | K=1 wall (s) | K=20 wall (s) | K=1 transport / reduce / exchange (s) | K=20 transport / reduce / exchange (s) |
+|---:|---:|---:|---|---|
+| 8  | 120.1 | 120.4 | 115.9 / 2.5 / 0.6 | 118.4 / 1.7 / 0.0 |
+| 16 | 63.8  | 65.1  | 61.2 / 1.7 / 0.5  | 59.0 / 4.8 / 0.0  |
+| 32 | 35.8  | 33.7  | 31.2 / 3.2 / 0.5  | 31.6 / 1.2 / 0.0  |
+| 64 | 27.4  | 25.9  | 18.2 / 3.8 / 0.6  | 17.6 / 3.1 / 0.1  |
+| 80 | 28.2  | 29.5  | 15.9 / 5.0 / 0.8  | 15.7 / 3.7 / 0.1  |
+
+Reading of the numbers:
+
+- **keff is unaffected**: all arms land at 1.0043–1.0069 with the same
+  statistical error (~0.0006); the K=20 arms sit within 1.7σ of the K=1
+  reference, consistent with OpenMC's batch-mode behaviour.
+- **The bank exchange is eliminated** (0.5–0.8 s → ~0.1 s), as designed.
+- **The births allreduce does not shrink proportionally** (5.0 → 3.7 s at
+  80 ranks): what it costs is not message volume but the barrier wait for
+  the slowest rank — batching amortises the *number* of barriers, each
+  block still ends with one max-wait.
+- At ≤80 ranks transport is 70–80% of the cycle, so K-batching buys ~5–10%
+  of wall here. The target regime is beyond: per-cycle exchange latency
+  grows with rank count (alltoall across 1000 peers), while per-rank
+  transport shrinks — extrapolating the measured exchange (~4 ms/cycle at
+  80 ranks, ~10× growth to 1000) puts K=1 exchange at ~5× the entire
+  transport cost at 1000 ranks, versus ~0.25× for K=20. The remaining
+  lever at that scale is load balance at the barrier, not the exchange.
+
+Use it as:
+
+```python
+for block in range(n_blocks):
+    births, cycles = sim.simulateKStacks(num=20000, k=20)
+    k_eff = keff_from_block(births, cycles, num)  # births/(num*cycles)
+```
+
+`k=1` is bit-identical to `simulateSecondStack` (same RNG stream — the
+generation bookkeeping reads but never draws), which makes it the
+regression anchor for the batched path.
+
+
 ## Where to go next
 
 - [Your first simulation](first-simulation) — the single-process pattern this page scales out
