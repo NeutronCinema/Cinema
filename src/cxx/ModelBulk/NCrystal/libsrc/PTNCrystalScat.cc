@@ -95,9 +95,21 @@ const Prompt::SampledResult& Prompt::NCrystalScat::sampleReaction(double ekin, c
 
 #include <stdexcept>
 
+namespace {
+// model names key transport-channel lookups: strip separators that the
+// composite syntax introduces (quotes, '|' weights, spaces)
+std::string compositeModelName(const std::string &cfgstring)
+{
+  std::string out;
+  for(char c : cfgstring)
+    out.push_back((c=='\'' || c=='|' || c==' ' || c=='*') ? '_' : c);
+  return out;
+}
+}
+
 Prompt::NCrystalScatComposite::NCrystalScatComposite(const std::string &cfgstring, double bias,
     double lowerlimt, double upperlimt)
-:Prompt::DiscreteModel(cfgstring+"_scat", const_neutron_pgd,
+:Prompt::DiscreteModel(compositeModelName(cfgstring)+"_scat", const_neutron_pgd,
                       lowerlimt, upperlimt, bias)
 {
   if(Unit::eV != 1.)
@@ -139,8 +151,16 @@ Prompt::NCrystalScatComposite::~NCrystalScatComposite()
 double Prompt::NCrystalScatComposite::getCrossSection(double ekin) const
 {
   double total = 0.;
-  for(size_t i = 0; i < m_children.size(); ++i)
-    total += m_weights[i] * m_children[i]->getCrossSection(ekin);
+  const bool first = !m_dbgDone;
+  for(size_t i = 0; i < m_children.size(); ++i) {
+    double xs = m_children[i]->getCrossSection(ekin);
+    if(first)
+      std::cerr << "[composite dbg] E=" << ekin << " child" << i
+                << " w=" << m_weights[i] << " xs=" << xs
+                << " contrib=" << m_weights[i] * xs << std::endl;
+    total += m_weights[i] * xs;
+  }
+  m_dbgDone = true;
   return total;
 }
 

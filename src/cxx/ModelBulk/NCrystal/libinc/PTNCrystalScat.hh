@@ -69,6 +69,7 @@ namespace Prompt {
   private:
     std::vector<std::unique_ptr<NCrystalScat>> m_children;
     std::vector<double> m_weights;
+    mutable bool m_dbgDone = false;
   };
 
 }

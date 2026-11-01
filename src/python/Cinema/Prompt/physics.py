@@ -413,6 +413,42 @@ class Material(ConfigString):
         _validateNccfgFiles(cfg)
         _validateNccfgContent(cfg)
         self.cfg_nccfg = cfg
+
+    @classmethod
+    def fuse(cls, components, temp=293.6):
+        """Fuse several NCrystal configs into one material (OpenMC-style
+        per-material TSL composition: macroscopic cross sections add up and
+        each collision is delegated to one component by cross-section share).
+
+        components: sequence of entries, each either a bare NCrystal config
+        string (weight 1) or a (config, weight) tuple; the FIRST entry is the
+        main component. Weights scale the component densities, so a weight is
+        the ratio of the wanted atom density to the density in the file.
+        temp: temperature appended to every component.
+
+        All Material features (setBiasScat/setBiasAbsp/setAbsorpInWeight)
+        work on the returned instance exactly as for a plain config.
+        """
+        parts = []
+        for c in components:
+            if isinstance(c, str):
+                cfg, weight = c, None
+            else:
+                cfg, weight = c
+            if cfg.startswith('ncmat='):
+                # bare paths are the reliable form: paths carrying the
+                # 'ncmat=' prefix resolve through the data-source registry
+                # and fail for plain files in the conda NCrystal builds
+                cfg = cfg[len('ncmat='):]
+            parts.append((weight, cfg))
+        if not parts:
+            raise ValueError("fuse needs at least one component")
+        wire = parts[0][1] + (';temp=%sK' % temp if temp is not None else '')
+        for weight, cfg in parts[1:]:
+            if temp is not None:
+                cfg += ';temp=%sK' % temp
+            wire += '|%r*%s' % (1. if weight is None else weight, cfg)
+        return cls(wire)
     
     @property
     def cfg(self):  # Update this property to include absorp_in_weight

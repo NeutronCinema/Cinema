@@ -183,6 +183,64 @@ std::string compositeMain(const std::string &inner)
   size_t pipe = inner.find('|');
   return pipe == std::string::npos ? inner : inner.substr(0, pipe);
 }
+
+// split a composite inner cfg into its weighted components; same grammar as
+// NCrystalScatComposite ('[<weight>*]<cfg>' separated by '|', weights
+// default to 1)
+struct CompositeComp { std::string cfg; double weight; };
+std::vector<CompositeComp> splitComposite(const std::string &inner)
+{
+  std::vector<CompositeComp> out;
+  size_t pos = 0;
+  while (true) {
+    size_t sep = inner.find('|', pos);
+    std::string part = inner.substr(pos, sep == std::string::npos ? std::string::npos : sep - pos);
+    if (!part.empty()) {
+      double weight = 1.;
+      size_t star = part.find('*');
+      if (star != std::string::npos) {
+        try {
+          weight = std::stod(part.substr(0, star));
+          part = part.substr(star + 1);
+        } catch (const std::invalid_argument &) { /* no weight prefix */ }
+      }
+      out.push_back(CompositeComp{part, weight});
+    }
+    if (sep == std::string::npos)
+      break;
+    pos = sep + 1;
+  }
+  return out;
+}
+
+// gidi isotope decomposition of a (possibly composite) inner cfg. The
+// material is the superposition main@own-density + w_i*component_i@own-
+// density, so component isotope fractions enter scaled by
+// w_i * numdensity_i / numdensity_main (the transport number density is
+// main's), and duplicate isotopes across components merge by name.
+std::vector<Prompt::IsotopeComposition> decomposeComposite(
+    const std::vector<CompositeComp> &comps, Prompt::PhysicsFactory &pfact,
+    Prompt::MaterialDecomposer &nm, double ndMain, double &temperature)
+{
+  auto isotopes = nm.decompose(comps[0].cfg, temperature);
+  if (comps.size() == 1)
+    return isotopes;
+  for (size_t i = 1; i < comps.size(); ++i) {
+    double nd = pfact.nccalNumDensity("physics=ncrystal;nccfg='" + comps[i].cfg + "'");
+    double tDummy = 0.;  // components must share the main temperature
+    auto part = nm.decompose(comps[i].cfg, tDummy);
+    double scale = comps[i].weight * nd / ndMain;
+    for (auto &iso : part) {
+      iso.frac *= scale;
+      bool merged = false;
+      for (auto &dst : isotopes)
+        if (dst.name == iso.name) { dst.frac += iso.frac; merged = true; break; }
+      if (!merged)
+        isotopes.push_back(std::move(iso));
+    }
+  }
+  return isotopes;
+}
 }
 
 
@@ -227,6 +285,12 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
     const std::string inner = innerNccfg(cfgstr);
     const std::string main_cfg = compositeMain(inner);
     m_numdensity = pfact.nccalNumDensity("physics=ncrystal;nccfg='" + main_cfg + "'");
+    double scatter_bias = 1., abs_bias = 1.;
+    {
+      CfgParser::StringCfg cfg = Singleton<CfgParser>::getInstance().parse(cfgstr);
+      cfg.getDoubleIfExist("scatter_bias", scatter_bias);
+      cfg.getDoubleIfExist("abs_bias", abs_bias);
+    }
 
     #ifdef ENABLE_GIDI
     if(enablegidi)
@@ -239,21 +303,25 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
       if(gidithreshold>0)
       {
         if( inner.find('|') != std::string::npos )
-          m_discretModels->addPhysicsModel(std::make_shared<NCrystalScatComposite>(inner, 1.0, 0, gidithreshold));
+          m_discretModels->addPhysicsModel(std::make_shared<NCrystalScatComposite>(inner, scatter_bias, 0, gidithreshold));
         else
-          m_discretModels->addPhysicsModel(std::make_shared<NCrystalScat>(inner, 1.0, 0, gidithreshold));
+          m_discretModels->addPhysicsModel(std::make_shared<NCrystalScat>(inner, scatter_bias, 0, gidithreshold));
       }
 
       // GIDI models: decompose now (cheap, front-loads config errors) but
       // defer the GNDS parsing to the first transport event (P2.1); the
-      // settings below are frozen here (P2.2)
+      // settings below are frozen here (P2.2). Composite configs decompose
+      // every weighted component: the stripped main file has no H, so the
+      // gidi-side moderation above the threshold lives in the weighted
+      // component's isotopes.
       auto &nm = Prompt::Singleton<Prompt::MaterialDecomposer>::getInstance();
       double temperature(0.);
-      auto isotopes = nm.decompose(main_cfg, temperature);
+      auto isotopes = decomposeComposite(splitComposite(inner), pfact, nm,
+                                         m_numdensity, temperature);
       for(const auto &v: isotopes)
         std::cout << v << std::endl;
 
-      m_discretModels->registerPendingGidi(std::move(isotopes), temperature, 1.,
+      m_discretModels->registerPendingGidi(std::move(isotopes), temperature, abs_bias,
                                            gidithreshold<=0.?0.:gidithreshold, cd.getGammaTransport(),
                                            cd.getGidiSampleNTP());
     }
@@ -291,10 +359,12 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
 
       // GIDI models: decompose now (cheap, front-loads config errors) but
       // defer the GNDS parsing to the first transport event (P2.1); the
-      // settings below are frozen here (P2.2)
+      // settings below are frozen here (P2.2). Composite configs decompose
+      // every weighted component (see the NC_RAW branch note).
       auto &nm = Prompt::Singleton<Prompt::MaterialDecomposer>::getInstance();
       double temperature (0);
-      auto isotopes = nm.decompose(main_cfg, temperature);
+      auto isotopes = decomposeComposite(splitComposite(nccfg), pfact, nm,
+                                         m_numdensity, temperature);
       for(const auto &v: isotopes)
         std::cout << v << std::endl;
 
