@@ -21,6 +21,7 @@
 ################################################################################
 
 import functools
+import time
 import os
 import sys
 
@@ -452,6 +453,7 @@ class PromptMPI(Prompt):
         self._bank_exchange = bank_exchange
         self._base_seed = int(seed)
         self._keff_cycle = 0
+        self._prof_acc = {'transport': 0.0, 'reduce': 0.0, 'exchange': 0.0, 'wall': 0.0, 'cycles': 0}
         if MPI is None:
             raise ImportError(
                 'PromptMPI requires the mpi4py package, which is not installed '
@@ -558,16 +560,34 @@ class PromptMPI(Prompt):
                                'so every rank banks fissions')
         lo, hi = _nn_windows(num, self._size)[self._rank]
         local = hi - lo
+        _t_prof = os.environ.get('PROMPT_MPI_PROFILE')
+        _t_a = time.perf_counter() if _t_prof else 0.0
         births = self.l.goWithSecondStack(local)
+        _t_b = time.perf_counter() if _t_prof else 0.0
         total = self.comm.allreduce(births, op=MPI.SUM)
+        _t_c = time.perf_counter() if _t_prof else 0.0
+        if _t_prof:
+            st = self._prof_acc
+            st['transport'] += _t_b - _t_a
+            st['reduce'] += _t_c - _t_b
+            st['cycles'] += 1
+            if st['cycles'] % 50 == 0:
+                import sys as _s
+                print(f'PROF-TICK rank={self.comm.Get_rank()} cycles={st["cycles"]} '
+                      f'transport={st["transport"]:.1f} env={bool(_t_prof)}', file=_s.stderr, flush=True)
         if total == 0:
             # the serial clean stop, raised in lockstep on every rank: the
             # bank is empty everywhere, there is no next cycle
             raise RuntimeError('secondary stack is empty')
+        _t_d = time.perf_counter() if _t_prof else 0.0
         if self._bank_exchange == 'nearest':
             self._exchangeBankNearestNeighbour(num, local)
         else:
             self._exchangeBankPooled(local)
+        _t_e = time.perf_counter() if _t_prof else 0.0
+        if _t_prof:
+            st['exchange'] += _t_e - _t_d
+            st['wall'] += _t_e - _t_a
         # drives the shared sampling of the nearest-neighbour exchange;
         # identical across ranks because every rank calls in lockstep
         self._keff_cycle += 1
