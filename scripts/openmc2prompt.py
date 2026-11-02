@@ -42,7 +42,13 @@ import os
 import sys
 import xml.etree.ElementTree as ET
 
-AVOGADRO = 0.602214  # 1e24 atoms per mol (at/cm3 per g/cm3 per g/mol)
+# Avogadro from CODATA (SI-2019 exact value); never hand-roll constants.
+try:
+    from scipy.constants import N_A as _N_A          # mol^-1
+except ImportError:                                   # scipy-free fallback
+    _N_A = 6.02214076e23
+ND_TO_RHO = 1e24 / _N_A   # g/cm3 per (1e24 atoms/cm3 * g/mol) = 1.66054...
+RHO_TO_ND = 1.0 / ND_TO_RHO
 M_H = 1.008          # H molar mass, g/mol
 
 
@@ -230,7 +236,7 @@ def hphase_from_water(water_path):
             "dyninfo with a fraction)")
     # absolute H atom density of the phase population (1e24/at/cm3):
     m_avg_all = h_frac * M_H + msum_nonh
-    n_tot = rho / m_avg_all * AVOGADRO
+    n_tot = rho / m_avg_all * RHO_TO_ND
     abs_h = h_frac * n_tot
     out = []
     for ln in header:
@@ -272,7 +278,7 @@ def absH_of_hphase(hphase_path):
     if rho is None or h_frac is None:
         die(f"{hphase_path}: not a usable H-phase file")
     m_avg_all = h_frac * M_H + msum_nonh
-    n_tot = rho / m_avg_all * AVOGADRO
+    n_tot = rho / m_avg_all * RHO_TO_ND
     return h_frac * n_tot
 
 
@@ -317,7 +323,7 @@ def write_plain_ncmat(mat, outdir):
     if mat["rho"] is not None:
         lines.append(f"  {mat['rho']} g_per_cm3")
     else:
-        rho = sum(f * _mass_number(n) for n, f in nucs) * AVOGADRO
+        rho = sum(f * _mass_number(n) for n, f in nucs) * ND_TO_RHO
         lines.append("# total atom density %.6e 1e24/at/cm3; mass density"
                      " from nuclide masses" % total_ao)
         lines.append(f"  {rho:.6g} g_per_cm3")
@@ -510,18 +516,17 @@ def main():
             keep_sum = sum(f for _, f in keep)
             m_avg = sum(f * _mass_number(n) for n, f in m["nucs"]) / total_ao
             if m["rho"] is None:
-                rho_total = sum(f * _mass_number(n) for n, f in m["nucs"]) * 1.66054
+                rho_total = sum(f * _mass_number(n) for n, f in m["nucs"]) * ND_TO_RHO
             else:
                 rho_total = m["rho"]
             abs_h = h_ao      # absolute H atom density of the material (1e24/cm3)
-            rho_main = rho_total - abs_h * M_H * 1.66054
+            rho_main = rho_total - abs_h * M_H * ND_TO_RHO
 
             main_path = os.path.join(outdir, "mat%d_%s_main.ncmat" % (m["id"], m["name"]))
             write_main_ncmat(m, main_path, keep, keep_sum, rho_main)
             written.append(main_path)
             weight = abs_h / abs_h_phase
 
-            matcfgs.append(f"        c.setGidiThreshold({a.gidi_threshold:g})  # {tag} composite")
             matcfgs.append(f"        {tag} = Material.fuse([")
             matcfgs.append(f"            {relpath(main_path)!r},")
             matcfgs.append(f"            ({hp_rel!r}, {weight!r}),")
@@ -530,14 +535,21 @@ def main():
             nc = write_plain_ncmat(m, outdir)
             written.append(nc)
             cfg = f"{relpath(nc)};temp={a.temp:g}K"
-            matcfgs.append(f"        c.setGidiThreshold(-1)  # {tag}")
             matcfgs.append(f'        {tag} = Material("{cfg}")')
 
+    # gidi-threshold singleton leak (2026-11-02 lesson): the threshold lives
+    # on the shared GidiSetting and is read when a Volume's physics models
+    # are constructed - it must be (re)set immediately before EVERY Volume
+    # creation, or a plain material's -1 leaks into later composites.
+    thr_by_material = {m["id"]: (a.gidi_threshold if m["sab"] else -1.0)
+                       for m in materials}
     volumes = []
     for depth, c in enumerate(onion):
         sid = int(c["region"].split()[-1][1:])
         r = surfaces[sid]["coeffs"][3] * 10.0  # cm -> mm
         ident = " " * 8
+        volumes.append(f"{ident}c.setGidiThreshold("
+                       f"{thr_by_material[c['material']]:g})")
         if depth == 0:
             volumes.append(f"{ident}world = Volume(\"cell{c['id']}\", "
                            f"Sphere(0, {r!r}), matCfg=mat{c['material']})")
