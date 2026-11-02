@@ -316,6 +316,18 @@ void Prompt::ParticleProcess::cfgPhysicsModel(const std::string &cfgstr)
         else
           m_discretModels->addPhysicsModel(std::make_shared<NCrystalScat>(inner, scatter_bias, 0, gidithreshold));
       }
+      else if( inner.find('|') != std::string::npos )
+      {
+        // a composite exists to blend TSL components below the gidi
+        // threshold; with a non-positive threshold it would be silently
+        // dropped and the material would silently run pure-ENDF freegas
+        // (the 032 comp@full incident). Fail loudly instead.
+        PROMPT_THROW2(BadInput, "composite NCrystal config '" << cfgstr
+                      << "' requires a positive gidi threshold (got "
+                      << gidithreshold << " eV from the global GidiSetting; "
+                      << "check for a later setGidiThreshold leaking over "
+                      << "this material's Volume construction)");
+      }
 
       // GIDI models: decompose now (cheap, front-loads config errors) but
       // defer the GNDS parsing to the first transport event (P2.1); the
