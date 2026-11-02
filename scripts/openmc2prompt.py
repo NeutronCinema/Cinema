@@ -2,41 +2,82 @@
 """openmc2prompt: convert an OpenMC benchmark case into a Cinema/Prompt driver.
 
 Reads the classic OpenMC XML inputs (materials.xml, geometry.xml, settings.xml)
-from an OpenMC case directory and emits, into --outdir:
+from an OpenMC case directory and emits, into <casedir>/prompt:
 
-  <prefix>.py           standalone Cinema/PromptMPI keff driver
-  mat<N>_<name>.ncmat   one plain-text NCMAT per material (free-gas dynamics,
-                        exact nuclide atom fractions, the OpenMC density)
+  <prefix>.py                    standalone Cinema/PromptMPI keff driver
+  mat<N>_<name>_main.ncmat       per-sab-material NCMAT, TSL nuclides REMOVED
+                                 (fractions renormalised, density reduced by
+                                 the removed mass - absolute densities of the
+                                 remaining nuclides are preserved exactly)
+  mat<N>_<name>.ncmat            plain free-gas NCMAT for non-sab materials
+  run.sh                         runner (cd to the conversion root; cinema env)
 
-Supported geometry (round 1): concentric spheres centred on the origin — the
-solution-benchmark family (HEU-SOL-*/LEU-SOL-*/PU-SOL-*). Cells must be
-simple +-surface intersections; nesting is derived from the sphere radii
-(largest = world, inner cells = children). Lattices, non-concentric and
-non-sphere arrangements are rejected with a clear message for now.
+Thermal-scattering route (round 2): materials carrying <sab .../> are emitted
+as OpenMC-style COMPOSITE configs (Material.fuse): the main NCMAT above plus a
+shared H-phase NCMAT derived from the mapped water file (carrier atoms sterile,
+H kernel kept) through which NCrystal's native S(alpha,beta) sampler runs.
+Component weights are absorption-ratio bookkeeping
+(w = absH_material / absH_Hphase), so no big kernel data is ever duplicated.
 
-Materials carrying <sab name="c_H_in_H2O"/> are emitted as free-gas by
-default; pass --water-ncmat FILE to replace the thermal treatment of ALL such
-materials with a water NCMAT (CAB or CDFT kernels) — NCrystal then supplies
-the thermal scattering law below the gidi threshold while everything else
-stays on the gidi route.
+Mapping: pass --tsl-map <sab_name>=<water.ncmat> (repeatable).  A material
+whose sab name has no mapping is a hard error listing the missing names.
+The H-phase file is derived automatically next to the mapped water file on
+first use and shared by all cases (never per-case copies).  Wire paths are
+relative to the conversion root (= cwd at conversion time); run.sh cds there.
 
-Example:
-  python3 openmc2prompt.py icsbep/heu-sol-therm-011/openmc/case-1 \
-      --outdir /tmp/heu11 --prefix heu11 --temp 293.6 \
-      --water-ncmat data/water_cab_T293.6K.ncmat
-  CINEMAPATH=/path/to/cinema <venv>/python /tmp/heu11/heu11.py
+Supported geometry (round 1): concentric spheres centred on the origin - the
+solution-benchmark family (HEU-SOL-*/LEU-SOL-*/PU-SOL-*).  Cells must be
+simple +-surface intersections; nesting is derived from the sphere radii.
+Lattices, non-concentric and non-sphere arrangements are rejected with a
+clear message for now.
+
+Example (from the benchmarks repo root):
+  python3 /data/caixx/cinema/scripts/openmc2prompt.py \
+      icsbep/heu-sol-therm-032/openmc/case-1 \
+      --tsl-map c_H_in_H2O=indc-usa-107/prompt/data/water_cab_T293.6K.ncmat
+  bash icsbep/heu-sol-therm-032/openmc/prompt/run.sh
 """
 import argparse
 import os
 import sys
 import xml.etree.ElementTree as ET
 
+AVOGADRO = 0.602214  # 1e24 atoms per mol (at/cm3 per g/cm3 per g/mol)
+M_H = 1.008          # H molar mass, g/mol
+
 
 def die(msg):
     sys.exit("openmc2prompt: " + msg)
 
 
-def parse_materials(path, temp_k, water_ncmat):
+_ELEMENT_MASSES = {
+    "H": 1.008, "D": 2.014, "C": 12.011, "N": 14.007, "O": 15.999,
+    "Al": 26.982, "Si": 28.085, "Mn": 54.938, "Fe": 55.845, "Cu": 63.546,
+    "V": 50.942, "Zr": 91.224, "Pb": 207.2, "U": 238.029,
+}
+
+
+def _mass_number(nuclide):
+    """Approximate molar mass from the mass number (H1->1.008 kept special);
+    good to <0.15%, only used to convert OpenMC 'sum' atom densities."""
+    base = nuclide.split("_")[0]
+    for k in ("H1", "H2", "H3"):
+        if base == k:
+            return float(k[1:]) + 0.008
+    digits = "".join(ch for ch in base if ch.isdigit())
+    if digits:
+        return float(digits)
+    if base in _ELEMENT_MASSES:
+        return _ELEMENT_MASSES[base]
+    die(f"cannot infer molar mass for nuclide/element {nuclide!r}")
+
+
+def _frac_value(frac_str):
+    num, _, den = frac_str.partition("/")
+    return float(num) / float(den) if den else float(num)
+
+
+def parse_materials(path):
     tree = ET.parse(path)
     out = []
     for m in tree.getroot().findall("material"):
@@ -47,8 +88,8 @@ def parse_materials(path, temp_k, water_ncmat):
             die(f"material {mid} has no <density>")
         units = dens.get("units")
         if units == "sum":
-            # atom-sum density: total nuclide atom density in 1e24/at/cm3 ...
-            # OpenMC writes no value; the number densities themselves carry it.
+            # atom-sum density: the ao values ARE the nuclide atom densities
+            # in 1e24/at/cm3 (absolute). This is what all ICSBEP cases use.
             rho = None
         else:
             rho = float(dens.get("value"))
@@ -64,58 +105,6 @@ def parse_materials(path, temp_k, water_ncmat):
             sab = s.get("name")
         out.append(dict(id=mid, name=name, rho=rho, nucs=nucs, sab=sab))
     return out
-
-
-def _mass_number(nuclide):
-    """Approximate molar mass from the mass number (H1->1.008 kept special);
-    good to <0.15%, only used to convert OpenMC 'sum' atom densities."""
-    base = nuclide.split("_")[0]
-    for k in ("H1", "H2", "H3"):
-        if base == k:
-            return float(k[1:]) + 0.008
-    return float("".join(ch for ch in base if ch.isdigit()))
-
-
-def write_ncmat(mat, outdir, temp_k):
-    """Emit a free-gas NCMAT with one DYNINFO entry per nuclide. The NCMAT
-    grammar has no `nuclide` key in this NCrystal build, but `element` accepts
-    isotope labels directly (verified: element U235/U238 load fine)."""
-    total_ao = sum(f for _, f in mat["nucs"])
-    fracs = [(n, f / total_ao) for n, f in mat["nucs"]]
-    lines = ["NCMAT v3",
-             "# Autogenerated by cinema scripts/openmc2prompt.py",
-             f"# from OpenMC material {mat['id']} ({mat['name']})",
-             "@DENSITY"]
-    if mat["rho"] is not None:
-        lines.append(f"  {mat['rho']} g_per_cm3")
-    else:
-        # OpenMC <density units="sum"/>: the ao values ARE the nuclide atom
-        # densities in 1e24/at/cm3. Mass density = sum(ao_i * M_i) * 1.66054.
-        rho = sum(f * _mass_number(n) for n, f in mat["nucs"]) * 1.66054
-        lines.append("# total atom density %.6e 1e24/at/cm3; mass density"
-                     " from nuclide masses" % total_ao)
-        lines.append(f"  {rho:.6g} g_per_cm3")
-    for n, f in fracs:
-        lines.append("@DYNINFO")
-        lines.append(f"  element {n}")
-        lines.append(f"  fraction {f!r}")
-        lines.append("  type freegas")
-    # isotopes missing from NCrystal's internal atom db need an @ATOMDB entry
-    # (mass u, coherent scat length fm, incoherent xs b, absorption xs b at
-    # 2200 m/s); tabulated: ENDF/B-VIII.0 U234/U236 thermal capture, U b_coh
-    atomdb = {
-        "U234": "234.04095u 0.942fm 0.0b 102.5b",
-        "U236": "236.04568u 0.868fm 0.0b 5.15b",
-    }
-    missing = [n for n, _ in fracs if n in atomdb]
-    if missing:
-        lines.append("@ATOMDB")
-        for n in missing:
-            lines.append(f"  {n}  {atomdb[n]}")
-    path = os.path.join(outdir, "mat%d_%s.ncmat" % (mat["id"], mat["name"]))
-    with open(path, "w") as f:
-        f.write("\n".join(lines) + "\n")
-    return path, total_ao
 
 
 def parse_geometry(path):
@@ -137,15 +126,14 @@ def parse_geometry(path):
     return surfaces, cells
 
 
-def nested_onion(surfaces, cells, materials_by_id):
+def nested_onion(surfaces, cells):
     """Validate the concentric-sphere pattern and return cells sorted
-    outside-in with their bounding radii."""
+    outside-in."""
     radius_of_cell = {}
     for c in cells:
         terms = c["region"].split()
         if not terms:
             die("cell %d: empty region" % c["id"])
-        rmin = None
         for t in terms:
             if t[0] in "+-":
                 sense, sids = t[0], t[1:]
@@ -158,17 +146,11 @@ def nested_onion(surfaces, cells, materials_by_id):
             if s["type"] != "sphere" or tuple(s["coeffs"][:3]) != (0.0, 0.0, 0.0):
                 die("unsupported surface %d (type %s): round-1 converter only "
                     "handles origin-centred spheres" % (sid, s["type"]))
-            r = s["coeffs"][3]
-            if t in ("-%d" % sid,) and s["boundary"]:
-                pass
-            rmin = r if rmin is None else min(rmin, r) if sense == "-" else rmin
-        # outer radius of the cell = the largest radius among its surfaces
         def term_sid(t):
             return int(t[1:]) if t[0] in "+-" else int(t)
         rout = max(surfaces[term_sid(t)]["coeffs"][3] for t in terms)
         radius_of_cell[c["id"]] = rout
     order = sorted(cells, key=lambda c: -radius_of_cell[c["id"]])
-    # verify strict nesting
     for a, b in zip(order, order[1:]):
         if radius_of_cell[a["id"]] <= radius_of_cell[b["id"]]:
             die("cells %d and %d are not strictly nested; round-1 converter "
@@ -179,14 +161,194 @@ def nested_onion(surfaces, cells, materials_by_id):
     return order
 
 
+def split_ncmat_blocks(text):
+    """Split NCMAT text into (header_lines, blocks); a block starts at a line
+    whose first character is '@'."""
+    header, blocks, cur = [], [], None
+    for ln in text.splitlines() + ["@END"]:
+        stripped = ln.strip()
+        if stripped.startswith("@"):
+            if cur is not None:
+                blocks.append(cur)
+            if stripped == "@END":
+                cur = None
+                break
+            cur = [ln]
+        elif cur is None:
+            header.append(ln)
+        else:
+            cur.append(ln)
+    return header, blocks
+
+
+def hphase_from_water(water_path):
+    """Derive the shared H-phase NCMAT from a mapped water NCMAT: carrier
+    atoms (everything except H) become sterile, so the phase contributes only
+    the H kernel (with its own absorption).  The file keeps the water file's
+    own density - the composite weight absorbs it.  Returns (path, absH)."""
+    text = open(water_path).read()
+    header, blocks = split_ncmat_blocks(text)
+    rho, h_frac, msum_nonh = None, None, 0.0
+    out_blocks = []
+    for b in blocks:
+        kind = b[0].strip()
+        if kind == "@DENSITY":
+            for ln in b:
+                t = ln.split("#")[0].strip()
+                if t.endswith("g_per_cm3"):
+                    rho = float(t.split()[0])
+            out_blocks.append(b)
+        elif kind == "@DYNINFO":
+            el, frac = None, "1"  # missing fraction: relative weight 1
+            for ln in b:
+                t = ln.strip()
+                if t.startswith("element "):
+                    el = t.split()[1]
+                elif t.startswith("fraction"):
+                    frac = "%.17g" % _frac_value(t.split()[1])
+            is_h = el is not None and el.split("_")[0] in ("H", "H1", "H2")
+            if is_h:
+                h_frac = _frac_value(frac)
+            else:
+                msum_nonh += _frac_value(frac) * _mass_number(el)
+            nb = []
+            for ln in b:
+                t = ln.strip()
+                if t.startswith("element "):
+                    nb.append("  element " + el)
+                elif t.startswith("fraction"):
+                    nb.append("  fraction " + frac)
+                elif t.startswith("type"):
+                    nb.append("  type sterile" if not is_h else ln)
+                else:
+                    nb.append(ln)
+            out_blocks.append(nb)
+        else:
+            out_blocks.append(b)
+    if rho is None or h_frac is None:
+        die(f"{water_path}: cannot derive an H-phase (need @DENSITY and an H "
+            "dyninfo with a fraction)")
+    # absolute H atom density of the phase population (1e24/at/cm3):
+    m_avg_all = h_frac * M_H + msum_nonh
+    n_tot = rho / m_avg_all * AVOGADRO
+    abs_h = h_frac * n_tot
+    out = []
+    for ln in header:
+        out.append(ln)
+    for b in out_blocks:
+        out.extend(b)
+        out.append("")
+    hp = os.path.splitext(water_path)[0] + "_Hphase.ncmat"
+    with open(hp, "w") as f:
+        f.write("\n".join(out) + "\n")
+    return hp, abs_h
+
+
+def absH_of_hphase(hphase_path):
+    """Absolute H atom density (1e24/at/cm3) of an H-phase file."""
+    text = open(hphase_path).read()
+    _, blocks = split_ncmat_blocks(text)
+    rho, h_frac, msum_nonh = None, None, 0.0
+    for b in blocks:
+        kind = b[0].strip()
+        if kind == "@DENSITY":
+            for ln in b:
+                t = ln.split("#")[0].strip()
+                if t.endswith("g_per_cm3"):
+                    rho = float(t.split()[0])
+        elif kind == "@DYNINFO":
+            el, frac = None, "1"  # missing fraction: relative weight 1
+            for ln in b:
+                t = ln.strip()
+                if t.startswith("element "):
+                    el = t.split()[1]
+                elif t.startswith("fraction"):
+                    frac = t.split()[1]
+                    f = _frac_value(frac)
+                    if el.split("_")[0] in ("H", "H1", "H2"):
+                        h_frac = f
+                    else:
+                        msum_nonh += f * _mass_number(el)
+    if rho is None or h_frac is None:
+        die(f"{hphase_path}: not a usable H-phase file")
+    m_avg_all = h_frac * M_H + msum_nonh
+    n_tot = rho / m_avg_all * AVOGADRO
+    return h_frac * n_tot
+
+
+def write_main_ncmat(mat, path, keep, keep_frac_sum, rho_main):
+    """Emit the main NCMAT: TSL-carried nuclides removed, remaining fractions
+    renormalised, density = rho_total - rho_H so every remaining nuclide keeps
+    its ABSOLUTE atom density (gidi's validated mat1_main_v3 form)."""
+    lines = ["NCMAT v3",
+             "# Autogenerated by cinema scripts/openmc2prompt.py",
+             f"# from OpenMC material {mat['id']} ({mat['name']}) - composite",
+             "# main: TSL-carried H nuclides removed, fractions renormalised,",
+             "# density reduced by the removed H mass (absolute densities of",
+             "# the remaining nuclides are preserved exactly).",
+             "@DENSITY",
+             f"  {rho_main:.17g} g_per_cm3"]
+    for n, f in keep:
+        lines.append("@DYNINFO")
+        lines.append(f"  element {n}")
+        lines.append(f"  fraction {f / keep_frac_sum:.17g}")
+        lines.append("  type freegas")
+    atomdb = {
+        "U234": "234.04095u 0.942fm 0.0b 102.5b",
+        "U236": "236.04568u 0.868fm 0.0b 5.15b",
+    }
+    missing = [n for n, _ in keep if n in atomdb]
+    if missing:
+        lines.append("@ATOMDB")
+        for n in missing:
+            lines.append(f"  {n}  {atomdb[n]}")
+    with open(path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+
+def write_plain_ncmat(mat, outdir):
+    """Non-sab material: free-gas NCMAT with all nuclides (round-1 form)."""
+    nucs = mat["nucs"]
+    total_ao = sum(f for _, f in nucs)
+    lines = ["NCMAT v3",
+             "# Autogenerated by cinema scripts/openmc2prompt.py",
+             f"# from OpenMC material {mat['id']} ({mat['name']})",
+             "@DENSITY"]
+    if mat["rho"] is not None:
+        lines.append(f"  {mat['rho']} g_per_cm3")
+    else:
+        rho = sum(f * _mass_number(n) for n, f in nucs) * AVOGADRO
+        lines.append("# total atom density %.6e 1e24/at/cm3; mass density"
+                     " from nuclide masses" % total_ao)
+        lines.append(f"  {rho:.6g} g_per_cm3")
+    for n, f in nucs:
+        lines.append("@DYNINFO")
+        lines.append(f"  element {n}")
+        lines.append(f"  fraction {f / total_ao:.17g}")
+        lines.append("  type freegas")
+    atomdb = {
+        "U234": "234.04095u 0.942fm 0.0b 102.5b",
+        "U236": "236.04568u 0.868fm 0.0b 5.15b",
+    }
+    missing = [n for n, _ in nucs if n in atomdb]
+    if missing:
+        lines.append("@ATOMDB")
+        for n in missing:
+            lines.append(f"  {n}  {atomdb[n]}")
+    path = os.path.join(outdir, "mat%d_%s.ncmat" % (mat["id"], mat["name"]))
+    with open(path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    return path
+
+
 EMITTED = """#!/usr/bin/env python3
 # Autogenerated by cinema scripts/openmc2prompt.py from {src}
 # Case: {case}
 # Geometry: concentric spheres (outside-in): {onion}
-#
-# Neutron route: per-material threshold snapshot - moderator materials use
-# NCrystal below {thr} eV (thermal scattering law), everything else pure gidi
-# (ENDF/B-VIII.0). Cinema units: mm, eV.
+# Composite TSL route: sab materials are Material.fuse() of a main NCMAT
+# (TSL nuclides removed, absolute densities preserved) and shared H-phase
+# NCMATs (absorption-ratio weights); NCrystal's native S(alpha,beta) sampler
+# runs inside each component. Cinema units: mm, eV.
 import os, sys, time
 sys.path.insert(0, os.environ.get("CINEMA_SRC", "/data/caixx/cinema/src/python"))
 import numpy as np
@@ -196,8 +358,6 @@ from Cinema.Prompt.solid import Sphere
 from Cinema.Prompt.physics import Material
 from Cinema.Prompt.gun import IsotropicGun
 from Cinema.Prompt.GidiSetting import GidiSetting
-
-WATER_NCMAT = {waternc!r}
 
 
 class Sim(PromptMPI):
@@ -236,12 +396,26 @@ def main():
     sigma = keff / np.sqrt(births) if births else float("inf")
     print("RESULT keff = %.6f +/- %.6f (%d cycles x %d) in %.0fs"
           % (keff, sigma, cycles, {particles}, time.time() - t0))
-    tag = "{prefix}_keff.txt"
-    open(tag, "w").write("%.6f %.6f\\n" % (keff, sigma))
+    here = os.path.dirname(os.path.abspath(__file__))
+    open(os.path.join(here, "{prefix}_keff.txt"), "w").write(
+        "%.6f %.6f\\n" % (keff, sigma))
 
 
 if __name__ == "__main__":
     main()
+"""
+
+
+RUNSH = """#!/usr/bin/env bash
+# Autogenerated by cinema scripts/openmc2prompt.py - reproducible runner.
+# Conversion root (all ncmat paths in the driver are relative to this dir):
+ROOT={root!r}
+cd "$ROOT"
+export CINEMAPATH=${{CINEMAPATH:-/data/caixx/cinema}}
+export NCRYSTAL_LIB=${{NCRYSTAL_LIB:-/data/caixx/miniconda3/envs/cinema/lib/libNCrystal.so}}
+export PYTHONPATH=/data/caixx/cinema/src/python${{PYTHONPATH:+:$PYTHONPATH}}
+export OMP_NUM_THREADS=${{OMP_NUM_THREADS:-8}}
+exec /data/caixx/miniconda3/envs/cinema/bin/python {relpy!r} "$@"
 """
 
 
@@ -252,9 +426,10 @@ def main():
     p.add_argument("--outdir", default=None, help="output dir (default: <casedir>/prompt)")
     p.add_argument("--prefix", default="prompt")
     p.add_argument("--temp", type=float, default=293.6, help="material temperature, K")
-    p.add_argument("--water-ncmat", default=None,
-                   help="water NCMAT replacing the c_H_in_H2O sab treatment "
-                        "(CAB/CDFT kernels); omit for free-gas H")
+    p.add_argument("--tsl-map", action="append", default=[], metavar="SAB=FILE",
+                   help="map an OpenMC sab name to a water NCMAT file whose H "
+                        "kernel serves that component (repeatable). A sab "
+                        "without a mapping is a hard error.")
     p.add_argument("--cycles", type=int, default=None)
     p.add_argument("--inactive", type=int, default=None)
     p.add_argument("--particles", type=int, default=None)
@@ -265,6 +440,14 @@ def main():
     casedir = a.casedir.rstrip("/")
     outdir = a.outdir or os.path.join(casedir, "prompt")
     os.makedirs(outdir, exist_ok=True)
+    root = os.getcwd()  # conversion root: wire paths are relative to this
+
+    tsl_map = {}
+    for item in a.tsl_map:
+        sab, _, path = item.partition("=")
+        if not sab or not path:
+            die(f"bad --tsl-map entry {item!r} (expected SAB=FILE)")
+        tsl_map[sab] = path
 
     def find(name):
         path = os.path.join(casedir, name)
@@ -274,12 +457,11 @@ def main():
     if not (mf and gf and sf):
         die(f"{casedir} lacks materials/geometry/settings.xml")
 
-    materials = parse_materials(mf, a.temp, a.water_ncmat)
-    surfaces, cells = parse_geometry(gf)
-    onion = nested_onion(surfaces, cells, materials)
+    materials = parse_materials(mf)
     mat_by_id = {m["id"]: m for m in materials}
+    surfaces, cells = parse_geometry(gf)
+    onion = nested_onion(surfaces, cells)
 
-    # settings
     st = ET.parse(sf).getroot()
     def integer(tag, default):
         e = st.find(tag)
@@ -295,97 +477,62 @@ def main():
             vals = [float(x) for x in ee.find("parameters").text.split()]
             gunekin = vals[-1] * 1e6  # OpenMC source energies are eV already
 
-    # material cfgs: per-material threshold routing (user mandate: NCrystal
-    # only for moderator materials, everything else pure gidi). sab materials
-    # get the water thermal-scattering kernel SPLICED into their own NCMAT
-    # (replacing the H free-gas entry with the kernel's scatknl entry) so the
-    # non-water nuclides keep their exact composition.
-    def splice_water_kernel(mat_ncmat_text, water_ncmat_path):
-        wtext = open(water_ncmat_path).read()
-        # split the water ncmat into top-level blocks (lines from '@' to the
-        # next '@'); find the @DYNINFO block holding the H scatknl kernel
-        blocks, cur = [], None
-        for ln in wtext.splitlines() + ["@END"]:
-            if ln.startswith("@"):
-                if cur is not None:
-                    blocks.append(cur)
-                cur = [ln]
-            elif cur is not None:
-                cur.append(ln)
-        kernel = None
-        for b in blocks:
-            txt = " ".join(" ".join(b).split())  # whitespace-normalised
-            if b[0].strip() == "@DYNINFO" and "type scatknl" in txt \
-                    and "element H" in txt:
-                kernel = b
-        if kernel is None:
-            die(f"{water_ncmat_path} carries no H scatknl @DYNINFO block")
-        klines = []
-        for ln in kernel:
-            if ln.strip().startswith("element "):
-                klines.append("  element H")
-            elif ln.strip().startswith("fraction"):
-                klines.append("  fraction FRACTION_PLACEHOLDER")
-            else:
-                klines.append(ln)
-        if klines[-1].strip() == "@END":
-            klines = klines[:-1]
-        # splice it over the H free-gas @DYNINFO block of the material ncmat
-        mlines = mat_ncmat_text.splitlines() + ["@END"]
-        out, skip, is_h_block, h_replaced = [], False, False, False
-        hdr_at = None
-        for ln in mlines:
-            if ln.startswith("@"):
-                if skip:
-                    if is_h_block and not h_replaced:
-                        del out[hdr_at]        # drop the bare header: klines carry their own
-                        out.extend(klines)
-                        h_replaced = True
-                    skip = False
-                if ln.strip() == "@DYNINFO":
-                    skip = True
-                    is_h_block = False
-                    hdr_at = len(out)
-                    out.append(ln)
-                    continue
-                if ln.strip() == "@END":
-                    continue
-                out.append(ln)
-                continue
-            if skip:
-                if ln.strip().startswith("element H"):
-                    is_h_block = True
-                if not is_h_block:
-                    out.append(ln)  # keep non-H dyninfo lines verbatim
-                continue
-            out.append(ln)
-        if not h_replaced:
-            die("material NCMAT has no H entry to splice the kernel into")
-        return "\n".join(out) + "\n"
+    seen_sabs = {m["sab"] for m in materials if m["sab"]}
+    unmapped = sorted(seen_sabs - set(tsl_map))
+    if unmapped:
+        die("unmapped sab names (pass --tsl-map for each): "
+            + ", ".join(unmapped))
 
-    matcfgs, ncmat_files = [], {}
+    def relpath(path):
+        return os.path.relpath(os.path.abspath(path), root)
+
+    hphase_cache = {}   # mapped water file -> (hphase relpath, absH_phase)
+    matcfgs, written = [], []
     for m in materials:
         tag = "mat%d" % m["id"]
-        nc, _ = write_ncmat(m, outdir, a.temp)
-        thr = -1.0
-        if m["sab"] and a.water_ncmat:
-            path = os.path.join(outdir, "mat%d_%s.ncmat" % (m["id"], m["name"]))
-            merged = splice_water_kernel(open(path).read(), a.water_ncmat)
-            hfrac = None
-            for n, f in m["nucs"]:
-                if n.startswith("H"):
-                    hfrac = f / sum(x for _, x in m["nucs"])
-            merged = merged.replace("FRACTION_PLACEHOLDER", repr(hfrac))
-            open(path, "w").write(merged)
-            thr = a.gidi_threshold
-        elif m["sab"]:
-            thr = a.gidi_threshold
-        cfg = f"{nc};temp={a.temp:g}K"
-        matcfgs.append(f"        c.setGidiThreshold({thr:g})  # {tag}")
-        matcfgs.append(f'        {tag} = Material("{cfg}")')
-    matcfgs.append(f"        c.setGidiThreshold({a.gidi_threshold:g})")
+        if m["sab"]:
+            tsl = tsl_map[m["sab"]]
+            if tsl not in hphase_cache:
+                if not os.path.isfile(tsl):
+                    die(f"--tsl-map target does not exist: {tsl}")
+                hp_abs, abs_h_phase = hphase_from_water(tsl)
+                hphase_cache[tsl] = (relpath(hp_abs), abs_h_phase)
+            hp_rel, abs_h_phase = hphase_cache[tsl]
 
-    # nested volumes, outside-in
+            # split the material: main (non-H) + TSL component
+            total_ao = sum(f for _, f in m["nucs"])
+            h_ao = sum(f for n, f in m["nucs"] if n.split("_")[0].startswith("H"))
+            keep = [(n, f) for n, f in m["nucs"]
+                    if not n.split("_")[0].startswith("H")]
+            if not keep:
+                die(f"material {m['id']}: every nuclide is TSL-carried (H) - "
+                    "cannot build a main file")
+            keep_sum = sum(f for _, f in keep)
+            m_avg = sum(f * _mass_number(n) for n, f in m["nucs"]) / total_ao
+            if m["rho"] is None:
+                rho_total = sum(f * _mass_number(n) for n, f in m["nucs"]) * 1.66054
+            else:
+                rho_total = m["rho"]
+            abs_h = h_ao      # absolute H atom density of the material (1e24/cm3)
+            rho_main = rho_total - abs_h * M_H * 1.66054
+
+            main_path = os.path.join(outdir, "mat%d_%s_main.ncmat" % (m["id"], m["name"]))
+            write_main_ncmat(m, main_path, keep, keep_sum, rho_main)
+            written.append(main_path)
+            weight = abs_h / abs_h_phase
+
+            matcfgs.append(f"        c.setGidiThreshold({a.gidi_threshold:g})  # {tag} composite")
+            matcfgs.append(f"        {tag} = Material.fuse([")
+            matcfgs.append(f"            {relpath(main_path)!r},")
+            matcfgs.append(f"            ({hp_rel!r}, {weight!r}),")
+            matcfgs.append(f"        ], temp={a.temp:g})")
+        else:
+            nc = write_plain_ncmat(m, outdir)
+            written.append(nc)
+            cfg = f"{relpath(nc)};temp={a.temp:g}K"
+            matcfgs.append(f"        c.setGidiThreshold(-1)  # {tag}")
+            matcfgs.append(f'        {tag} = Material("{cfg}")')
+
     volumes = []
     for depth, c in enumerate(onion):
         sid = int(c["region"].split()[-1][1:])
@@ -409,7 +556,6 @@ def main():
         for c in onion)
 
     text = EMITTED.format(src=casedir, case=case, onion=onion_desc,
-                          thr=a.gidi_threshold, waternc=a.water_ncmat,
                           seed=a.seed, matcfgs="\n".join(matcfgs),
                           volumes="\n".join(volumes), gunekin=gunekin,
                           particles=particles, cycles=cycles,
@@ -417,15 +563,22 @@ def main():
     outpy = os.path.join(outdir, a.prefix + ".py")
     with open(outpy, "w") as f:
         f.write(text)
-    # self-check the emitted file compiles
     compile(text, outpy, "exec")
+
+    runsh_path = os.path.join(outdir, "run.sh")
+    with open(runsh_path, "w") as f:
+        f.write(RUNSH.format(root=os.path.abspath(root),
+                             relpy=relpath(outpy)))
+    os.chmod(runsh_path, 0o755)
+
     print("wrote", outpy)
-    for f in sorted(ncmat_files.values()):
+    for f in sorted(set(written)):
         print("wrote", f)
+    print("wrote", runsh_path)
     print("geometry:", onion_desc)
-    if any(m["sab"] for m in materials) and not a.water_ncmat:
-        print("NOTE: sab materials emitted as free-gas; pass --water-ncmat "
-              "for a thermal scattering law (keff will differ).")
+    if seen_sabs:
+        print("composite TSL route: w = absH(material)/absH(H-phase); "
+              "main files keep absolute non-H densities.")
 
 
 if __name__ == "__main__":
