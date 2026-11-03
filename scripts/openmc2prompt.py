@@ -244,7 +244,11 @@ def hphase_from_water(water_path):
     for b in out_blocks:
         out.extend(b)
         out.append("")
-    hp = os.path.splitext(water_path)[0] + "_Hphase.ncmat"
+    stem = os.path.splitext(water_path)[0]
+    if stem.endswith("_Hphase"):
+        #already an H-phase file: return as-is (no double derivation)
+        return water_path, absH_of_hphase(water_path)
+    hp = stem + "_Hphase.ncmat"
     with open(hp, "w") as f:
         f.write("\n".join(out) + "\n")
     return hp, abs_h
@@ -429,7 +433,10 @@ def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("casedir", help="OpenMC case dir (materials/geometry/settings.xml)")
-    p.add_argument("--outdir", default=None, help="output dir (default: <casedir>/prompt)")
+    p.add_argument("--root", default=None,
+                   help="conversion root for wire-path resolution (default: CWD)")
+    p.add_argument("--outdir", default=None,
+                   help="output dir (relative to root; default: <casedir>/prompt)")
     p.add_argument("--prefix", default="prompt")
     p.add_argument("--temp", type=float, default=293.6, help="material temperature, K")
     p.add_argument("--tsl-map", action="append", default=[], metavar="SAB=FILE",
@@ -446,7 +453,9 @@ def main():
     casedir = a.casedir.rstrip("/")
     outdir = a.outdir or os.path.join(casedir, "prompt")
     os.makedirs(outdir, exist_ok=True)
-    root = os.getcwd()  # conversion root: wire paths are relative to this
+    root = a.root or os.getcwd()
+    if root and not os.path.isdir(root):
+        die(f'root {root!r} is not a valid directory')  # conversion root: wire paths relative to this
 
     tsl_map = {}
     for item in a.tsl_map:
