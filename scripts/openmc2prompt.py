@@ -303,15 +303,12 @@ def write_main_ncmat(mat, path, keep, keep_frac_sum, rho_main):
         lines.append(f"  element {n}")
         lines.append(f"  fraction {f / keep_frac_sum:.17g}")
         lines.append("  type freegas")
-    atomdb = {
-        "U234": "234.04095u 0.942fm 0.0b 102.5b",
-        "U236": "236.04568u 0.868fm 0.0b 5.15b",
-    }
-    missing = [n for n, _ in keep if n in atomdb]
-    if missing:
-        lines.append("@ATOMDB")
-        for n in missing:
-            lines.append(f"  {n}  {atomdb[n]}")
+    # @ATOMDB full coverage: every nuclide gets an entry with the OpenMC
+    # mass to permanently eliminate mass-table inconsistency (user mandate)
+    lines.append("@ATOMDB")
+    for n, f in keep:
+        m = _mass_number(n)
+        lines.append(f"  {n}  {m:.8f}u")
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
 
@@ -336,15 +333,10 @@ def write_plain_ncmat(mat, outdir):
         lines.append(f"  element {n}")
         lines.append(f"  fraction {f / total_ao:.17g}")
         lines.append("  type freegas")
-    atomdb = {
-        "U234": "234.04095u 0.942fm 0.0b 102.5b",
-        "U236": "236.04568u 0.868fm 0.0b 5.15b",
-    }
-    missing = [n for n, _ in nucs if n in atomdb]
-    if missing:
-        lines.append("@ATOMDB")
-        for n in missing:
-            lines.append(f"  {n}  {atomdb[n]}")
+    lines.append("@ATOMDB")
+    for n, f in nucs:
+        m = _mass_number(n)
+        lines.append(f"  {n}  {m:.8f}u")
     path = os.path.join(outdir, "mat%d_%s.ncmat" % (mat["id"], mat["name"]))
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
@@ -502,6 +494,8 @@ def main():
         return os.path.relpath(os.path.abspath(path), root)
 
     hphase_cache = {}   # mapped water file -> (hphase relpath, absH_phase)
+    # material ao table for density=Σao computation:
+    mat_nucs = {m["id"]: m["nucs"] for m in materials}
     matcfgs, written = [], []
     for m in materials:
         tag = "mat%d" % m["id"]
@@ -536,8 +530,11 @@ def main():
             written.append(main_path)
             weight = abs_h / abs_h_phase
 
+            # density=Σao(heavy)perAa3: cfgstring density overrides the
+            # file's @DENSITY (which becomes irrelevant); Σao from materials.xml
+            nd_heavy = sum(ao for n, ao in mat_nucs[mat["id"]] if not n.startswith("H"))
             matcfgs.append(f"        {tag} = Material.fuse([")
-            matcfgs.append(f"            {relpath(main_path)!r},")
+            matcfgs.append(f"            {relpath(main_path)!r};density={nd_heavy:.10g}perAa3,")
             matcfgs.append(f"            ({hp_rel!r}, {weight!r}),")
             matcfgs.append(f"        ], temp={a.temp:g})")
         else:
