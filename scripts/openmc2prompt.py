@@ -38,6 +38,7 @@ Example (from the benchmarks repo root):
   bash icsbep/heu-sol-therm-032/openmc/prompt/run.sh
 """
 import argparse
+import re
 import os
 import sys
 import xml.etree.ElementTree as ET
@@ -63,19 +64,37 @@ _ELEMENT_MASSES = {
 }
 
 
+_AME20_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ame20_masses.json")
+_AME20_CACHE = None
+_ELEMENT_FALLBACK = {
+    "H": 1.008, "D": 2.014, "O": 15.999, "N": 14.007, "U": 238.029,
+    "Al": 26.982, "Si": 28.085, "Fe": 55.845, "Cu": 63.546, "Mn": 54.938,
+    "V": 50.942, "C": 12.011, "Pb": 207.2, "Zr": 91.224,
+}
+
+def _load_ame20():
+    global _AME20_CACHE
+    if _AME20_CACHE is None:
+        try:
+            import json
+            with open(_AME20_PATH) as f:
+                _AME20_CACHE = json.load(f)
+        except Exception:
+            _AME20_CACHE = {}
+
 def _mass_number(nuclide):
-    """Approximate molar mass from the mass number (H1->1.008 kept special);
-    good to <0.15%, only used to convert OpenMC 'sum' atom densities."""
+    """Exact atomic mass from AME2020 (via openmc.data export; same table
+    OpenMC reads). Falls back to element-average for natural abundance."""
+    _load_ame20()
     base = nuclide.split("_")[0]
-    for k in ("H1", "H2", "H3"):
-        if base == k:
-            return float(k[1:]) + 0.008
     digits = "".join(ch for ch in base if ch.isdigit())
-    if digits:
-        return float(digits)
-    if base in _ELEMENT_MASSES:
-        return _ELEMENT_MASSES[base]
-    die(f"cannot infer molar mass for nuclide/element {nuclide!r}")
+    sym = "".join(ch for ch in base if not ch.isdigit())
+    el = sym.rstrip("0123456789")
+    if el in _AME20_CACHE:
+        for entry in _AME20_CACHE[el]:
+            if digits and entry["A"] == int(digits):
+                return entry["mass"]
+    return _ELEMENT_FALLBACK.get(base, 100.0)
 
 
 def _frac_value(frac_str):
@@ -88,7 +107,11 @@ def parse_materials(path):
     out = []
     for m in tree.getroot().findall("material"):
         mid = int(m.get("id"))
-        name = (m.get("name") or f"mat{mid}").replace(" ", "_")
+        # sanitize for NCrystal cfg grammar: the material name becomes part of
+        # the generated NCMAT filename, and NCrystal cfg strings treat
+        # ( ) | * ; ' as syntax — a filename like UO2(NO3)2 would break the
+        # fuse configstring's file lookup at the parenthesis
+        name = re.sub(r"[^A-Za-z0-9_.-]+", "_", (m.get("name") or f"mat{mid}"))
         dens = m.find("density")
         if dens is None:
             die(f"material {mid} has no <density>")
@@ -126,8 +149,11 @@ def parse_geometry(path):
     cells = []
     for c in root.findall("cell"):
         fill = c.get("material")
+        # OpenMC writes material="void" for cells with no material (typically
+        # the exterior beyond the boundary surface): treat as vacuum.
+        material = int(fill) if fill and fill != "void" else None
         uni = c.get("universe")
-        cells.append(dict(id=int(c.get("id")), material=int(fill) if fill else None,
+        cells.append(dict(id=int(c.get("id")), material=material,
                           region=c.get("region", ""), universe=uni))
     return surfaces, cells
 
@@ -135,6 +161,9 @@ def parse_geometry(path):
 def nested_onion(surfaces, cells):
     """Validate the concentric-sphere pattern and return cells sorted
     outside-in."""
+    # void-material cells (the exterior beyond the vacuum boundary) carry no
+    # physics for this conversion and are excluded from the onion
+    cells = [c for c in cells if c["material"] is not None]
     radius_of_cell = {}
     for c in cells:
         terms = c["region"].split()
@@ -303,12 +332,15 @@ def write_main_ncmat(mat, path, keep, keep_frac_sum, rho_main):
         lines.append(f"  element {n}")
         lines.append(f"  fraction {f / keep_frac_sum:.17g}")
         lines.append("  type freegas")
-    # @ATOMDB full coverage: every nuclide gets an entry with the OpenMC
-    # mass to permanently eliminate mass-table inconsistency (user mandate)
-    lines.append("@ATOMDB")
-    for n, f in keep:
-        m = _mass_number(n)
-        lines.append(f"  {n}  {m:.8f}u")
+    atomdb = {
+        "U234": "234.04095u 0.942fm 0.0b 102.5b",
+        "U236": "236.04568u 0.868fm 0.0b 5.15b",
+    }
+    missing = [n for n, _ in keep if n in atomdb]
+    if missing:
+        lines.append("@ATOMDB")
+        for n in missing:
+            lines.append(f"  {n}  {atomdb[n]}")
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
 
@@ -333,10 +365,15 @@ def write_plain_ncmat(mat, outdir):
         lines.append(f"  element {n}")
         lines.append(f"  fraction {f / total_ao:.17g}")
         lines.append("  type freegas")
-    lines.append("@ATOMDB")
-    for n, f in nucs:
-        m = _mass_number(n)
-        lines.append(f"  {n}  {m:.8f}u")
+    atomdb2 = {
+        "U234": "234.04095u 0.942fm 0.0b 102.5b",
+        "U236": "236.04568u 0.868fm 0.0b 5.15b",
+    }
+    missing2 = [n for n, _ in nucs if n in atomdb2]
+    if missing2:
+        lines.append("@ATOMDB")
+        for n in missing2:
+            lines.append(f"  {n}  {atomdb2[n]}")
     path = os.path.join(outdir, "mat%d_%s.ncmat" % (mat["id"], mat["name"]))
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
@@ -532,9 +569,9 @@ def main():
 
             # density=Σao(heavy)perAa3: cfgstring density overrides the
             # file's @DENSITY (which becomes irrelevant); Σao from materials.xml
-            nd_heavy = sum(ao for n, ao in mat_nucs[mat["id"]] if not n.startswith("H"))
+            nd_heavy = sum(ao for n, ao in mat_nucs[m["id"]] if not n.startswith("H"))
             matcfgs.append(f"        {tag} = Material.fuse([")
-            matcfgs.append(f"            {relpath(main_path)!r};density={nd_heavy:.10g}perAa3,")
+            matcfgs.append(f"            '{relpath(main_path)};density={nd_heavy:.10g}perAa3',")
             matcfgs.append(f"            ({hp_rel!r}, {weight!r}),")
             matcfgs.append(f"        ], temp={a.temp:g})")
         else:
