@@ -255,8 +255,14 @@ def hphase_from_water(water_path):
                     nb.append("  fraction " + frac)
                 elif t.startswith("type"):
                     nb.append("  type sterile" if not is_h else ln)
-                else:
-                    nb.append(ln)
+                elif is_h:
+                    nb.append(ln)  # H keeps its full kernel payload
+                elif t.startswith("@"):
+                    nb.append(ln)  # block header (@DYNINFO) stays for carriers
+                # other non-H payload lines (alphagrid/betagrid/sab/...) are
+                # dropped: a sterile block accepts only element/fraction/type,
+                # and carrying scatknl fields over makes the file invalid
+                # (verified: medium-water case)
             out_blocks.append(nb)
         else:
             out_blocks.append(b)
