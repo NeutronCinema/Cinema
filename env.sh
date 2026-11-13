@@ -1,4 +1,21 @@
 #!/bin/bash
+# --- deprecated -----------------------------------------------------------
+# The legacy source-install flow (env.sh + install.sh + cimbuild) is being
+# retired. To USE prompt:  conda install -c csns cinema-prompt
+# To DEVELOP on the source tree: pixi (README, "Developers guidelines").
+# Source this file only if you deliberately need the legacy flow.
+# Non-interactive stdin (CI) defaults to abort.
+echo "WARNING: env.sh (legacy source-install environment) is deprecated."
+echo "         Use 'conda install -c csns cinema-prompt' to run prompt, or the"
+echo "         pixi workflow in README.md (Developers guidelines) to develop."
+read -r -p "Continue with the deprecated env.sh flow anyway? [y/N] " _envsh_ack || true
+case "${_envsh_ack:-}" in
+    [yY]|[yY][eE][sS]) ;;
+    *) echo "Aborted."
+       return 1 2>/dev/null || exit 1
+       ;;
+esac
+unset _envsh_ack
 OPENMCIN=0
 DOCKER=false
 while getopts hi:x:do option

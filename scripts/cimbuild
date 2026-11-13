@@ -26,6 +26,21 @@ def main():
 
     args = parser.parse_args()
 
+    # The legacy cmake/make wrapper is deprecated: develop with pixi instead
+    # (README, "Developers guidelines"); to just USE prompt, install the
+    # conda package (conda install -c csns cinema-prompt). Non-interactive
+    # stdin (CI) defaults to abort.
+    print("WARNING: cimbuild (legacy build wrapper) is deprecated.")
+    print("         Develop with pixi (README 'Developers guidelines'), or install the")
+    print("         conda package to use prompt: conda install -c csns cinema-prompt")
+    try:
+        _ack = input("Continue with the deprecated cimbuild flow anyway? [y/N] ")
+    except EOFError:
+        _ack = ''
+    if _ack.strip().lower() not in ('y', 'yes'):
+        print("Aborted.")
+        sys.exit(1)
+
     cinema_path = os.environ.get('CINEMAPATH')
     if not cinema_path:
         print("Error: CINEMAPATH environment variable is not set.")

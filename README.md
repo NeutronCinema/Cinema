@@ -47,43 +47,76 @@ Without the last two lines the run leaves no persistent output: results live in 
 A complete, runnable version of this example (a Germanium single-crystal slab with a TOF scorer) is [doc/example_basic.py](https://code.ihep.ac.cn/cinema-developers/cinema/-/blob/master/doc/example_basic.py). The full documentation — your first simulation, geometry, guns, scorers, histogram analysis — lives in the [wiki](https://code.ihep.ac.cn/cinema-developers/cinema/-/wikis/home).
 
 ## Installation 
-### Install pre-built conda package on linux
+
+Pick a package by use case (all from the csns channel):
+
+- **With visualization (desktop)** — adds pyvista with the Qt VTK flavor:
+  interactive windows and GPU rendering when a display is available.
+
+  ```
+  conda install -c csns cinema-prompt-viz
+  ```
+
+- **Headless / server (x86)** — software-rendered VTK (osmesa) plus the
+  trame web stack; works without X11, and `prompt ... --web` serves the
+  visualisation in a browser.
+
+  ```
+  conda install -c csns cinema-prompt-viz-headless
+  ```
+
+- **Compute only, no visualization.**
+
+  ```
+  conda install -c csns cinema-prompt
+  ```
+
+Developers working on the source tree should use the [pixi workflow](#developers-guidelines) instead.
+
+## Developers guidelines
+
+The repository ships a `pixi.toml` that turns a fresh clone into a working dev
+environment with two commands — no manual dependency installs. Dependencies
+come from the same channel set as the conda package (csns + conda-forge), the
+C++ extension builds incrementally, and the test suite runs hermetically.
+
+Install pixi once (standalone binary, no conda required):
 
 ```
-conda install csns::cinema-prompt
+curl -fsSL https://pixi.sh/install.sh | sh
 ```
 
-### Install from source on Linux(Ubuntu)
-
-#### Use native linux envrionment manager `apt`
-
-Use `apt` cml to manage prerequisites:
-```
-sudo apt install g++ cmake python3-dev python3-pip python3-venv libxml2-dev libhdf5-dev libfftw3-dev libopenmpi-dev libgl1
-```
-
-Clone the source and compile it as
+This puts `pixi` into `~/.pixi/bin`; reopen the shell so it is on `PATH`.
+Then, from the repository root:
 
 ```
-git clone https://code.ihep.ac.cn/cinema-developers/cinema.git
-cd cinema
-. env.sh
-cimbuild -r
+pixi install     # create .pixi/envs/default (re-installs are cache-fast)
+pixi run build   # editable install + compile libprompt_core.so (ninja, incremental)
+pixi run plugins # source-build the 3 NCrystal plugins (bzscope, sascsns, SANSND)
+pixi run test    # full pytest suite (depends on build; runs with --forked)
 ```
 
-#### Use conda envrionment manager `conda`
+Everyday commands:
 
-Use `conda` cml to manage prerequisites:
-```
-conda create -n pt python=3.10 
-conda activate pt
-conda install cxx-compiler=1.10 cmake make=4.3 fftw unzip openmpi libxml2 xerces-c=3.2.4 mpi4py hdf5=1.12 matplotlib pyvista vtkbool vtk=*=qt*
-```
+| Command | Purpose |
+|:--------|:--------|
+| `pixi run build` | Rebuild after C++ edits; also stages the fresh `.so` into `src/python/Cinema/` so the loader never falls back to a stale build |
+| `pixi run test` | `pytest src/pythontests -q --forked` with `CINEMAPATH`/`NCRYSTAL_DATA_PATH` preset — repo data and `ncmat/` files resolve automatically |
+| `pixi run pytest src/pythontests/test_units.py -q --forked` | Run a single test file (skips the automatic rebuild of `test`) |
+| `pixi run plugins` | (Re)install the NCrystal plugins; the two `code.ihep.ac.cn` ones need git credentials |
+| `pixi shell` | Interactive shell with everything activated (compiler env vars included) |
+| `pixi clean` | Remove the environment; `pixi install` recreates it quickly from the package cache |
 
-Then source `env.sh`
-```
-. env.sh
-```
+Notes for this repository:
+
+- `gcc` is pinned `<14` and `pytest` to `8.*` in `pixi.toml` — GCC 14+ breaks
+  the current include set, and pytest 9 breaks `pytest-forked` (details in the
+  manifest comments). Do not delete `pixi.lock` casually: a fresh solve jumps
+  the toolchain to channel-latest and hits those breakages.
+- All tasks scrub `PYTHONPATH`: one exported by an older source install would
+  shadow this environment's numpy with a foreign Python build.
+- `ncmat/` data files (e.g. `Cd.ncmat`) resolve through `NCRYSTAL_DATA_PATH`,
+  which pixi activation exports for every task and for `pixi shell`.
 
 ## Runing simulations
 

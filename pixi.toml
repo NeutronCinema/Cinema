@@ -1,0 +1,108 @@
+# Cinema/Prompt source-tree dev environment.
+#
+# Dependency truth = the feedstock recipe
+# (external/cinema-prompt-feedstock/recipes/cinema-prompt/meta.yaml, host+run
+# sections); this file is its dev-loop translation. Packaging/publication
+# stays with the feedstock - pixi only owns the day-to-day develop/build/test
+# cycle. The legacy env.sh/install.sh source-install route is untouched.
+#
+#   pixi install && pixi run build     # first setup (deps + editable ext)
+#   pixi run test                      # after python-only edits
+#   pixi run build && pixi run test    # after C++ edits (incremental ninja)
+#   pixi shell                         # interactive, properly activated
+
+[workspace]
+name = "cinema"
+description = "Cinema/Prompt Monte Carlo neutron transport (source dev env)"
+channels = ["csns/label/dev", "csns", "conda-forge"]
+# Virtual packages per platform (replaces the deprecated [system-requirements]):
+# the solver's __glibc defaults to the 2.17 compatibility floor, and on pixi
+# 0.84.2 the detected system glibc was not picked up by install/lock (pixi info
+# shows it) - without the explicit 2.39 floor, gidiplus's `__glibc >=2.34`
+# constraint finds no candidates.
+platforms = [{ platform = "linux-64", glibc = "2.39" }]
+
+[dependencies]
+# --- build side (recipe: build/host) --------------------------------------
+python = "3.12.*"
+pip = "*"
+git = "*"
+cxx-compiler = "*"          # conda cross-named toolchain; pixi activation
+                           # exports CC/CXX, so CMake always finds it
+# GCC 15 breaks this tree twice: libstdc++ 15+ no longer transitively
+# includes <cstdint> (src/cxx/Rand PTRandEngine.hh relies on it), and the new
+# -Wtemplate-body diagnostic makes the vendored VecCore ScalarWrapper.h
+# `val_ptr` latent bug (vecgeom 2.0.0rc2 fork) a hard error. Stay on 14 until
+# the include fix lands in-tree and VecCore is patched in the fork package.
+gcc = "<14"
+cmake = ">=3.28"
+ninja = "*"
+scikit-build-core = "*"     # backend for the editable-install build task
+# --- link targets (recipe: host) ------------------------------------------
+hdf5 = { version = ">=1.14.4,<1.14.5", build = "*openmpi*" }
+h5py = { version = "*", build = "*openmpi*" }
+ncrystal = "4.2.*"          # meta -> core -> lib, transitively one version
+mcpl = "*"
+fftw = "*"
+vecgeom = "==2.0.0rc2"        # the fork (csns only; conda-forge carries the
+                            # UPSTREAM 2.0.0 - exact pin keeps the fork)
+kdsource = "==0.1.0.dev0"     # ditto: our feedstock's dev line
+gidiplus = "*"
+# --- runtime (recipe: run) ------------------------------------------------
+mpi4py = "*"
+mpi = { version = "*", build = "openmpi" }  # flavor pin: bare mpi4py can
+                                            # solve to Intel MPI builds
+matplotlib = "*"
+scipy = "*"
+psutil = "*"
+tqdm = "*"
+pyvista = "*"               # desktop/qt vtk flavor; the headless/web stack
+                            # is the cinema-prompt-viz-headless package
+pytest = "8.*"             # pytest-forked 1.7.5 is broken under pytest 9
+                            # (every forked child dies EXITED with status 3,
+                            # even a bare assert; no upper bound is declared
+                            # upstream, so pin it here)
+pytest-forked = "*"         # sim tests close the geometry world; every test
+                            # must run in a forked child (pytest --forked)
+pydantic = "*"              # Cinema.Service (JobSpec, #53 branch work); will
+                            # migrate into the feedstock run deps on release
+# pyproject [project.optional-dependencies]: service + client extras (Service
+# imports them lazily, so a static import scan misses them) and optuna for
+# Prompt/parameterOptimizer (test_cov_lifecycle)
+fastapi = "*"
+uvicorn = "*"
+requests = "*"
+optuna = "*"
+
+# pypi-only pieces (the post-link hook installs the same set at package
+# install time). The two NCrystal plugins are NOT here: they are C++
+# source builds -> see the `plugins` task.
+[pypi-dependencies]
+gvar = "*"
+mpmath = "*"
+ncrystal-pypluginmgr = "*"
+
+# NCrystal file data (Cd.ncmat, B4C.ncmat, ...) ships in the repo's ncmat/ dir.
+# The legacy install.sh flow exported NCRYSTAL_DATA_PATH into shell rc files -
+# fresh terminals (and this dev env's users) don't carry it, so NCrystal
+# [FileNotFound]s on any "Cd.ncmat"-style config. Export it for EVERY pixi
+# command (tasks + shell). NCrystal semantics are additive: its standard data
+# library is still searched separately, so stdlib files keep resolving.
+[activation.env]
+NCRYSTAL_DATA_PATH = "$PIXI_PROJECT_ROOT/ncmat"
+
+# env -u PYTHONPATH: the legacy source-install flow exports the dev tree (and
+# an old conda env's site-packages) on PYTHONPATH, which shadows this env's own
+# numpy with a py3.10 build. Tasks stay hermetic against that leak.
+[tasks]
+# After the editable install, stage the built extension into the source tree:
+# scikit-build-core's editable mode maps Cinema/ to this tree, but the loader
+# (_getPromptLib in Cinema/Interface) finds libprompt_core.so next to the
+# package dir. Without this copy it falls through to the CINEMAPATH/cinemabin
+# legacy branch and can dlopen a stale build from another env. (*.so is
+# gitignored, so the tree stays clean.)
+build = "env -u PYTHONPATH -u CXXFLAGS -u CFLAGS -u CPPFLAGS bash -ec 'CINEMA_FETCH_DEPS=OFF pip install -e . -v --no-build-isolation --no-deps && cp -f \"$(ls .pixi/envs/*/lib/python3.12/site-packages/Cinema/libprompt_core.so)\" src/python/Cinema/'"
+plugins = "env -u PYTHONPATH pip install --no-deps git+https://code.ihep.ac.cn/cinema-developers/ncplugin-bzscope git+https://code.ihep.ac.cn/cinema-developers/ncplugin-sascsns.git git+https://github.com/highness-eu/ncplugin-SANSND.git"
+# CINEMAPATH: some tests resolve shipped data (data/MPI2022Exp) through it at
+# import time - default it to the project root so the task needs no shell setup.
+test = { cmd = "env -u PYTHONPATH pytest src/pythontests -q --forked", depends-on = ["build"], env = { CINEMAPATH = "$PIXI_PROJECT_ROOT" } }
